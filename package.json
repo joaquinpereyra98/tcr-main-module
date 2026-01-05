@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "createSymlinks": "node tools/create-symlinks.mjs",
+    "build": "npm run db:pack && npm run build:code",
+    "build:code": "rollup -c",
+    "db:pack": "node tools/pack-level-db.mjs package pack",
+    "db:unpack": "node tools/pack-level-db.mjs package unpack"
+  },
+  "author": "JoaquinP",
+  "dependencies": {
+    "@foundryvtt/foundryvtt-cli": "github:foundryvtt/foundryvtt-cli",
+    "rollup": "^4.36.0"
+  },
+  "devDependencies": {
+    "@eslint/css": "^0.12.0",
+    "@eslint/json": "^0.13.2",
+    "@eslint/markdown": "^7.4.0",
+    "@html-eslint/eslint-plugin": "^0.47.0",
+    "@html-eslint/parser": "^0.47.0",
+    "eslint": "^9.37.0",
+    "globals": "^16.4.0"
+  }
+}

@@ -1,0 +1,313 @@
+.tcr-main-module {
+  --hud-black-01: rgba(0, 0, 0, 0.1);
+  --hud-black-03: rgba(0, 0, 0, 0.3);
+  --hud-black-05: rgba(0, 0, 0, 0.5);
+
+  --wow-gold: #c79c6e;
+  --wow-gold-bright: #fcd6a0;
+  --wow-panel-bg: rgba(20, 15, 25, 0.75);
+  --wow-panel-border: rgba(199, 156, 110, 0.3);
+  --wow-text-green: #40ff40;
+  --wow-glow: 0 0 15px rgba(199, 156, 110, 0.2);
+
+  .flex1 {
+    flex: 1;
+  }
+
+  .grid {
+    display: grid;
+    grid-gap: 10px
+  }
+
+  .grid-2col {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .editor.prosemirror.active {
+    height: 300px;
+
+    .editor-content.ProseMirror {
+      overflow: hidden auto;
+    }
+  }
+
+  &.hud-config {
+    a.fa-regular:hover {
+      font-weight: bold;
+    }
+
+    .accordion-container {
+      border-radius: 4px;
+      background: #242731;
+      margin-top: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+
+      &.expanded {
+        .accordion-content {
+          grid-template-rows: 1fr;
+          padding: 10px;
+        }
+
+        .accordion-header .icon {
+          transform: rotate(-180deg);
+        }
+      }
+    }
+
+    .accordion-header {
+      align-items: center;
+      gap: 0.4rem;
+      padding: 4px 8px;
+
+      .icon {
+
+        transition: transform 0.3s ease;
+      }
+
+      input {
+        background-color: var(--hud-black-01);
+        transition: all 300ms;
+        font-size: var(--font-size-16);
+
+        &:hover {
+          background-color: var(--hud-black-05);
+        }
+      }
+    }
+
+
+    .accordion-content {
+      background: #1c1e26;
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: all 0.3s ease;
+
+
+      >.wrapper {
+        overflow: hidden;
+        margin-top: 5px;
+        min-height: 0;
+
+        .form-group {
+          margin: 2px;
+        }
+      }
+
+      .tab-buttons-container {
+        margin: 0 5px;
+        padding: 10px;
+        background-color: var(--hud-black-03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+    }
+
+    label {
+      font-weight: bold;
+      font-size: var(--font-size-13);
+    }
+
+    .segment {
+      margin: 2px;
+      gap: 5px;
+
+      &:hover {
+        background: var(--hud-black-01);
+      }
+
+      .segment-name {
+        font-size: var(--font-size-15);
+      }
+
+      .segment-anchor {
+        font-size: var(--font-size-12);
+      }
+
+
+    }
+
+    .segments-header {
+      justify-content: center;
+      padding-bottom: 2px;
+      margin-bottom: 2px;
+      border-bottom: 1px solid;
+
+      span.title {
+        font-size: var(--font-size-16);
+        font-weight: bold;
+      }
+
+
+    }
+
+    .form-footer {
+      display: flex;
+      gap: 5px;
+      flex-wrap: nowrap;
+      margin-top: 5px;
+    }
+  }
+
+  &.main-hud {
+    background-size: cover;
+    background-position: center;
+    transition: background-image 0.5s ease;
+
+    .window-header {
+      background: none;
+      border: none;
+
+      button.header-control {
+        color: rgba(255, 0, 0, 0.66);
+        box-shadow: none;
+        transition: color 300ms;
+
+        &:hover {
+          color: rgba(255, 0, 0, 1);
+        }
+      }
+    }
+
+
+
+    .hud-background-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+
+      .bg-video,
+      .bg-image {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.5s ease-in-out;
+
+        &.visible {
+          opacity: 1;
+        }
+      }
+    }
+
+    .background-blur {
+      height: 100%;
+      width: 100%;
+      position: absolute;
+      background-color: var(--hud-black-01);
+      filter: blur(5px);
+    }
+
+    .window-content {
+      padding-top: 0;
+      backdrop-filter: blur(0px);
+    }
+
+    .hud-tabs {
+      margin: 4px 0;
+      padding: 0;
+      list-style: none;
+      text-align: center;
+      text-transform: uppercase;
+      justify-content: flex-start;
+      position: relative;
+      text-shadow: 0 0 10px light-dark(var(--color-dark-1), var(--color-light-1));
+
+      a {
+        margin: 5px 10px;
+        margin-bottom: 0;
+        line-height: 25px;
+        text-decoration: none;
+        padding: 2px 5px;
+        position: relative;
+
+        &:after {
+          background: none repeat scroll 0 0 transparent;
+          bottom: 0;
+          content: "";
+          display: block;
+          height: 2px;
+          left: 50%;
+          position: absolute;
+          background: var(--color-text-primary);
+          transition: width 0.3s ease 0s, left 0.3s ease 0s;
+          width: 0;
+        }
+
+        &:hover:after,
+        &.active:after {
+          width: 100%;
+          left: 0;
+        }
+      }
+    }
+
+    .grid-container {
+      display: grid;
+      gap: 10px;
+      justify-content: center;
+      align-content: start;
+    }
+
+    .body {
+      flex: 1;
+      margin-top: 5px;
+      display: block;
+
+      .tab {
+        height: 100%;
+
+      }
+
+      .content {
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+        height: 100%;
+      }
+
+      .segment {
+        margin: 5px;
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--wow-panel-border);
+        border-radius: 4px;
+        box-shadow: 0 0 20px var(--hud-black-05), var(--wow-glow);
+        transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
+        padding: 10px;
+
+        .wrappler {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100%;
+          text-align: center;
+        }
+
+        &:hover {
+          border-color: var(--wow-gold-bright);
+          box-shadow: 0 10px 15px -3px var(--hud-black-03), var(--wow-glow);
+
+          &.clickable {
+            cursor: pointer;
+            transform: translateY(-2px) scale(1.02);
+          }
+        }
+      }
+    }
+  }
+
+}

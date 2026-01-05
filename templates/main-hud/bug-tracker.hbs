@@ -1,0 +1,58 @@
+<div
+    class="tab {{tabs.bugTracker.cssClass}}"
+    data-group="primary"
+    data-tab="bugTracker"
+>
+
+    <button type="button" id="myCustomTrigger"> TEST</button>
+
+    <div class="bug-tracker-container">
+        <div class="bug-table">
+            {{!-- Table Header --}}
+            <div class="bug-header">
+                <div class="col-id">#</div>
+                <div class="col-score">Score</div>
+                <div class="col-subject">Subject / Priority</div>
+                <div class="col-category">Category</div>
+                <div class="col-status">Status</div>
+                <div class="col-update">Last Update</div>
+            </div>
+
+            {{!-- Bug Rows --}}
+            {{#each bugs}}
+            <div class="bug-row">
+                <a class="row-link" href="/bugtracker/view/{{id}}"></a>
+      
+                <div class="col-id">{{id}}</div>
+      
+                <div class="col-score">
+                    <div class="vote-controls">
+                        <button class="vote-up"><i class="fa-solid fa-triangle"></i></button>
+                        <span class="score-value">{{score}}</span>
+                        <button class="vote-down"><i class="fa-solid fa-triangle fa-rotate-180"></i></button>
+                    </div>
+                </div>
+
+                <div class="col-subject">
+                    <div class="subject-content">
+                        <div class="badge-row">
+                            <span class="priority-badge {{priorityClass}}">{{priority}}</span>
+                        </div>
+                        <h3 class="bug-title">{{title}}</h3>
+                        <div class="bug-snippet">{{{descriptionSnippet}}}</div>
+                    </div>
+                </div>
+
+                <div class="col-category">{{category}}</div>
+
+                <div class="col-status">
+                    <i class="status-indicator fa-solid fa-circle"></i>
+                    <span class="status-text">{{status}}</span>
+                </div>
+
+                <div class="col-update">{{lastUpdate}}</div>
+            </div>
+            {{/each}}
+        </div>
+    </div>
+</div>

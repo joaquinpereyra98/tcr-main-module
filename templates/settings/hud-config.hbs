@@ -1,0 +1,50 @@
+<div class="scrollable flex1">
+    {{#each setting as |tab id|}}
+    <div class="accordion-container" data-tab-id="{{tab.id}}">
+        <div class="accordion-header flexrow">
+            <a class="icon flex0 fa-solid fa-chevron-down fa-lg" data-action="toggleAccordion"></a>
+            {{formInput tab.schema.fields.label name=(concat id ".label") value=tab.label}}
+            <a
+                class="flex0 fa-regular fa-trash fa-xs"
+                data-tooltip="Delete Tab"
+                data-action="deleteTab"
+            ></a>
+        </div>
+        <div class="accordion-content">
+            <div class="standard-form wrapper">
+                {{formGroup tab.schema.fields.icon name=(concat id ".icon") value=tab.icon}}
+                {{formGroup tab.schema.fields.rows name=(concat id ".rows") value=tab.rows}}
+                {{formGroup tab.schema.fields.columns name=(concat id ".columns") value=tab.columns}}
+                {{formGroup tab.schema.fields.background.fields.color name=(concat id ".background.color")
+                value=tab.background.color}}
+                {{formGroup tab.schema.fields.background.fields.src name=(concat id ".background.src")
+                value=tab.background.src}}
+                <div class="segments-container">
+                    <div class="segments-header flexrow">
+                        <span class="title">Segments</span>
+                        <a
+                            class="fa-light fa-square-plus flex0"
+                            data-action="addSegment"
+                        ></a>
+                    </div>
+                    {{#each tab.segments as |segment idx|}}
+                    <div class="segment flexrow" data-segment-id="{{segment.id}}">
+                        <span class="segment-name">
+                            {{segment.name}}
+                        </span>
+                        <a
+                            class="segment-anchor fa-regular fa-pen-to-square flex0"
+                            data-action="editSegment"
+                        ></a>
+                        <a
+                            class="segment-anchor fa-regular fa-trash flex0"
+                            data-action="deleteSegment"
+                        ></a>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+        </div>
+    </div>
+    {{/each}}
+</div>

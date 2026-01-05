@@ -1,0 +1,39 @@
+<div class="scrollable standard-form">
+    {{formGroup fields.name value=segment.name}}
+
+    {{!-- Display Section --}}
+    <fieldset>
+        <legend><i class="fa-solid fa-palette"></i> Display</legend>
+        {{formGroup fields.display.fields.textColor value=segment.display.textColor}}
+        {{formGroup fields.display.fields.textSize value=segment.display.textSize}}
+    </fieldset>
+
+    {{!-- Geometry Section --}}
+    <fieldset>
+        <legend><i class="fa-solid fa-grid-2"></i> Grid Geometry</legend>
+        <div class="grid grid-2col">
+            {{formGroup fields.geometry.fields.col stacked=true value=segment.geometry.col}}
+            {{formGroup fields.geometry.fields.row stacked=true value=segment.geometry.row}}
+            {{formGroup fields.geometry.fields.colSpan stacked=true value=segment.geometry.colSpan}}
+            {{formGroup fields.geometry.fields.rowSpan stacked=true value=segment.geometry.rowSpan}}
+        </div>
+    </fieldset>
+
+    {{!-- Content Section --}}
+    <fieldset>
+        <legend><i class="fa-solid fa-file-code"></i> Visual Content</legend>
+
+        {{formGroup fields.content.fields.src value=segment.content.src}}
+        {{formGroup fields.content.fields.raw value=segment.content.raw}}
+
+    </fieldset>
+
+    {{!-- Actions Section (Scripts) --}}
+    <fieldset>
+        <legend><i class="fa-solid fa-terminal"></i> Interaction Scripts</legend>
+
+        {{formGroup fields.actions.fields.click value=segment.actions.click}}
+        {{formGroup fields.actions.fields.contextMenu value=segment.actions.contextMenu}}
+
+    </fieldset>
+</div>
