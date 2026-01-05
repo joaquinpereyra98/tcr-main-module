@@ -28,6 +28,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
         handler: MainHud.#onClickSegment,
         buttons: [0, 2],
       },
+      toggleGrid: MainHud.#onToggleGrid,
+      openSetting: MainHud.#onOpenSetting,
     },
   };
 
@@ -175,5 +177,33 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const segment = tab.segments.find((s) => s.id === segmentId);
 
     segment.onClickAction(event);
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this {MainHud}
+   */
+  static #onToggleGrid(_event, target) {
+    /**@type {HTMLElement} */
+    const gridContainer = this.element.querySelector(".grid-container");
+    const haveClass = gridContainer.classList.toggle("show-grid");
+    target.classList.toggle("active", haveClass);
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this {MainHud}
+   */
+  static async #onOpenSetting(_event) {
+    const menu = game.settings.menus.get(
+      `${MODULE_ID}.${SETTINGS.TAB_CONFIGURATION}`
+    );
+
+    if (!menu)
+      return void ui.notifications.error(
+        "No submenu found for the provided key"
+      );
+    const app = new menu.type();
+    await app.render(true);
   }
 }

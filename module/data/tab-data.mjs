@@ -61,8 +61,8 @@ export default class TabData extends foundry.abstract.DataModel {
     }
 
     // Handle Columns & Rows
-    styles.push(`grid-template-columns: repeat(${this.columns}, 1fr)`);
-    styles.push(`grid-template-rows: repeat(${this.rows}, 1fr)`);
+    styles.push(`--hud-columns: ${this.columns}`);
+    styles.push(`--hud-rows: ${this.rows}`);
 
     return styles.join("; ");
   }
