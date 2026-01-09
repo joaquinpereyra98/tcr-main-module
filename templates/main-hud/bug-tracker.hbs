@@ -3,56 +3,40 @@
     data-group="primary"
     data-tab="bugTracker"
 >
-
-    <button type="button" id="myCustomTrigger"> TEST</button>
-
-    <div class="bug-tracker-container">
-        <div class="bug-table">
-            {{!-- Table Header --}}
-            <div class="bug-header">
-                <div class="col-id">#</div>
-                <div class="col-score">Score</div>
-                <div class="col-subject">Subject / Priority</div>
-                <div class="col-category">Category</div>
-                <div class="col-status">Status</div>
-                <div class="col-update">Last Update</div>
-            </div>
-
-            {{!-- Bug Rows --}}
-            {{#each bugs}}
-            <div class="bug-row">
-                <a class="row-link" href="/bugtracker/view/{{id}}"></a>
-      
-                <div class="col-id">{{id}}</div>
-      
-                <div class="col-score">
-                    <div class="vote-controls">
-                        <button class="vote-up"><i class="fa-solid fa-triangle"></i></button>
-                        <span class="score-value">{{score}}</span>
-                        <button class="vote-down"><i class="fa-solid fa-triangle fa-rotate-180"></i></button>
-                    </div>
-                </div>
-
-                <div class="col-subject">
-                    <div class="subject-content">
-                        <div class="badge-row">
-                            <span class="priority-badge {{priorityClass}}">{{priority}}</span>
+    <div class="tracker-container">
+        <table class="issue-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Score</th>
+                    <th>Subject / Priority</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Last Update</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each issue}}
+                <tr>
+                    <td class="col-id">{{this.id}}</td>
+                    <td class="col-score">
+                        <div class="vote-arrows">
+                            <span>▲</span>
+                            <span>{{this.score}}</span>
+                            <span>▼</span>
                         </div>
-                        <h3 class="bug-title">{{title}}</h3>
-                        <div class="bug-snippet">{{{descriptionSnippet}}}</div>
-                    </div>
-                </div>
-
-                <div class="col-category">{{category}}</div>
-
-                <div class="col-status">
-                    <i class="status-indicator fa-solid fa-circle"></i>
-                    <span class="status-text">{{status}}</span>
-                </div>
-
-                <div class="col-update">{{lastUpdate}}</div>
-            </div>
-            {{/each}}
-        </div>
+                    </td>
+                    <td class="col-subject">
+                        <span class="priority-tag {{this.priority}}">{{this.priority}}</span>
+                        <div class="subject-title">{{this.title}}</div>
+                        <div class="subject-desc">{{this.description}}</div>
+                    </td>
+                    <td>{{this.category}}</td>
+                    <td><span class="status-open">● {{this.status}}</span></td>
+                    <td>{{this.lastUpdate}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
     </div>
 </div>

@@ -18,6 +18,13 @@
   --wow-panel-border: rgba(199, 156, 110, 0.3);
   --wow-glow: 0 0 15px rgba(199, 156, 110, 0.2);
 
+  --bg-dark: #121212;
+  --card-bg: #1e1e1e;
+  --accent-gold: #c2a373;
+  --text-main: #e0e0e0;
+  --text-dim: #888;
+  --priority-high: #d32f2f;
+
   .flex1 {
     flex: 1;
   }
@@ -179,8 +186,12 @@
       pointer-events: none;
       overflow: hidden;
 
-      .bg-video,
-      .bg-image {
+      transition: background-color 0.3s ease;
+
+      background-color: var(--bg-color, transparent);
+
+       .bg-video,
+       .bg-image {
         position: absolute;
         top: 0;
         left: 0;
@@ -381,6 +392,33 @@
           }
         }
       }
+    }
+
+    .tracker-container {
+
+      /* Table Styling */
+      table.issue-table {
+        margin: 0;
+
+        th {
+          text-align: center;
+          color: var(--accent-gold);
+          padding: 10px;
+          font-size: 0.9rem;
+          text-transform: uppercase;
+        }
+
+        tbody tr {
+          background-color: var(--card-bg);
+        }
+
+        td {
+          padding: 15px 10px;
+          vertical-align: top;
+        }
+      }
+
+
     }
   }
 

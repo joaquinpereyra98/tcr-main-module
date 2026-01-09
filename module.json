@@ -37,7 +37,7 @@
         "hbs"
       ],
       "paths": [
-        "styles",
+        "styles/",
         "templates/"
       ]
     }

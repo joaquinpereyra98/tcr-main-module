@@ -37,6 +37,23 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     },
   };
 
+  /**
+   * Define tabs that should always exist regardless of settings.
+   * @returns {Record<string, ApplicationTabsConfiguration}
+   */
+  static TABS = {
+    primary: {
+      tabs: [
+        {
+          id: "bugTracker",
+          icon: "fa-solid fa-bug",
+          label: "Bug Tracker",
+          background: { color: "#121416", src: undefined },
+        },
+      ],
+    },
+  };
+
   /** @override */
   static PARTS = {
     tabs: {
@@ -51,7 +68,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   get setting() {
     return game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION);
   }
-  
+
   /**
    * @type {Boolean}
    */
@@ -113,25 +130,30 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       ...context,
       setting: enrichedTabs,
       showGrid: this._showGrid,
-      user: game.user,
+      showFixedButtons: game.user.isGM && Object.keys(this.setting).includes(this.tabGroups.primary),
     };
   }
 
   /**@inheritdoc */
   async _renderFrame(options) {
     const frame = await super._renderFrame(options);
-    const tabData = this.setting[this.tabGroups.primary];
-    const src = tabData.background.src;
-    const content = VideoHelper.hasVideoExtension(src)
+    const tabsConfig = this._getTabsConfig("primary");
+    const tabData = tabsConfig.tabs.find(
+      (t) => t.id === this.tabGroups.primary
+    );
+    const { color, src } = tabData.background ?? {};
+
+    const content = src ? VideoHelper.hasVideoExtension(src)
       ? `<video src="${src}" autoplay loop muted playsinline class="bg-video visible"></video>`
-      : `<img src="${src}" class="bg-image visible" alt="" >`;
+      : `<img src="${src}" class="bg-image visible" alt="" >` : "";
 
     frame
       .querySelector(".window-content")
       ?.insertAdjacentHTML(
         "beforeBegin",
-        `<div class="hud-background-layer">${content}</div>`
+        `<div class="hud-background-layer" style="--bg-color: ${color}">${content}</div>`
       );
+
     return frame;
   }
 
@@ -142,7 +164,12 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     this.render();
   }
 
-  /** @inheritdoc */
+  /**
+   * Get the configuration for a tabs group.
+   * @param {string} group The ID of a tabs group
+   * @returns {ApplicationTabsConfiguration|null}
+   * @protected
+   */
   _getTabsConfig(group) {
     return group === "primary"
       ? this._getPrimaryTabs()
@@ -154,17 +181,11 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    * @returns {ApplicationTabsConfiguration}
    */
   _getPrimaryTabs() {
-    const setting = foundry.utils.duplicate(
-      game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION)
-    );
+    const setting = this.setting;
 
     const tabs = [
       ...Object.values(setting),
-      {
-        id: "bugTracker",
-        icon: "fa-solid fa-bug",
-        label: "Bug Tracker",
-      },
+      ...this.constructor.TABS.primary.tabs,
     ];
 
     return {
@@ -178,12 +199,13 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    * @param {string} tabId
    */
   _updateBackground(tabId) {
-    const tabData = this.setting[tabId];
+    const tabsConfig = this._getTabsConfig("primary");
+    const tabData = tabsConfig.tabs.find((t) => t.id === tabId);
 
     const container = this.element.querySelector(".hud-background-layer");
     const oldElement = container.querySelector(".bg-video, .bg-image");
 
-    const src = tabData?.background?.src;
+    const { src, color } = tabData?.background ?? {};
     if (src) {
       const isVideo = VideoHelper.hasVideoExtension(src);
       const htmlString = isVideo
@@ -203,6 +225,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
         oldElement.remove();
       }, 500);
     }
+
+    container.setAttribute("style", `--bg-color: ${color}`);
   }
 
   /**

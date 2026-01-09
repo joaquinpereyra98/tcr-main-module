@@ -55,11 +55,6 @@ export default class TabData extends foundry.abstract.DataModel {
   get styleAttr() {
     const styles = [];
 
-    // Handle Background Color
-    if (this.background.color) {
-      styles.push(`background-color: ${this.background.color}`);
-    }
-
     // Handle Columns & Rows
     styles.push(`--hud-columns: ${this.columns}`);
     styles.push(`--hud-rows: ${this.rows}`);
