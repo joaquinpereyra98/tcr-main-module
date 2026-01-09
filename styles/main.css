@@ -5,9 +5,12 @@
   --hud-white-01: rgba(255, 255, 255, 0.1);
   --hud-white-03: rgba(255, 255, 255, 0.3);
   --hud-white-05: rgba(255, 255, 255, 0.5);
-
   --hud-green-05: rgba(0, 255, 0, 0.5);
   --hud-green-1: rgba(0, 255, 0, 1);
+
+  --hud-blue: #246ab9;
+  --hud-red: #b92e24;
+
 
   --wow-gold: #c79c6e;
   --wow-gold-bright: #fcd6a0;
@@ -21,7 +24,7 @@
 
   .grid {
     display: grid;
-    grid-gap: 10px
+    grid-gap: 10px;
   }
 
   .grid-2col {
@@ -66,7 +69,6 @@
       padding: 4px 8px;
 
       .icon {
-
         transition: transform 0.3s ease;
       }
 
@@ -81,13 +83,11 @@
       }
     }
 
-
     .accordion-content {
       background: #1c1e26;
       display: grid;
       grid-template-rows: 0fr;
       transition: all 0.3s ease;
-
 
       >.wrapper {
         overflow: hidden;
@@ -127,8 +127,6 @@
       .segment-anchor {
         font-size: var(--font-size-12);
       }
-
-
     }
 
     .segments-header {
@@ -141,8 +139,6 @@
         font-size: var(--font-size-16);
         font-weight: bold;
       }
-
-
     }
 
     .form-footer {
@@ -172,8 +168,6 @@
         }
       }
     }
-
-
 
     .hud-background-layer {
       position: absolute;
@@ -261,8 +255,6 @@
       justify-content: center;
       align-content: start;
       position: relative;
-
-      /* Dynamically set columns and rows */
       grid-template-columns: repeat(var(--hud-columns), 1fr);
       grid-template-rows: repeat(var(--hud-rows), 1fr);
 
@@ -272,15 +264,10 @@
         inset: 0;
         pointer-events: none;
         border: 1px solid var(--hud-white-03);
-
-        /* Simplified gradients for dynamic repeating */
         background-image:
           linear-gradient(to right, var(--hud-white-03) 1px, transparent 1px),
           linear-gradient(to bottom, var(--hud-white-03) 1px, transparent 1px);
-
-        /* This calculates the size of one cell automatically */
         background-size: calc(100% / var(--hud-columns)) calc(100% / var(--hud-rows));
-
         opacity: 0;
         transition: opacity 0.3s ease-in-out;
       }
@@ -306,7 +293,6 @@
           opacity: 1;
         }
 
-        /* Target direct children to show their boundaries */
         >* {
           outline-color: var(--hud-green-1);
           background-color: rgba(0, 255, 0, 0.05);
@@ -324,7 +310,6 @@
 
       .tab {
         height: 100%;
-
       }
 
       .content {
@@ -372,12 +357,10 @@
       right: 0;
 
       a.fixed-anchor {
-        /* Styling */
         width: 1.5em;
         height: 1.5em;
         font-size: var(--font-size-18);
         opacity: 0.5;
-
         transition: all 300ms;
 
         &.active {
@@ -397,10 +380,356 @@
             font-weight: bold;
           }
         }
+      }
+    }
+  }
 
+  &.compendium-browser {
+    .interactions-containers {
+      height: 20px;
+
+      .sidebar-toggle {
+        position: absolute;
+        left: 215px;
+        cursor: pointer;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+        transform: rotate(180deg);
+        opacity: 0.3;
+
+        &:hover {
+          opacity: 1;
+        }
+      }
+
+      .result-view-toggle {
+        position: absolute;
+        right: 25px;
+
+        .icon {
+          opacity: 0.3;
+          transform: scale(0.9);
+          transition: all 0.3s;
+
+          &.active {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
       }
     }
 
-  }
+    .filter-range {
+      margin: 0;
+      min-width: 150px;
 
+      .form-fields {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        border: 1px solid var(--dnd5e-color-blue-gray-2);
+
+        input[type="number"] {
+          background: transparent;
+          border: none;
+          color: white;
+          text-align: center;
+          width: 100px;
+          font-size: var(--font-size-12);
+
+          &:focus {
+            box-shadow: none;
+            color: var(--dnd5e-color-gold);
+          }
+        }
+
+        span.sep {
+          color: var(--dnd5e-color-gold);
+          font-size: 15px;
+        }
+      }
+    }
+
+    .type-tag {
+      background: var(--dnd5e-color-iron-gray);
+      border: 1px solid black;
+      border-radius: 3px;
+      padding: 2px 8px;
+      margin: 1px;
+      cursor: pointer;
+      font-family: var(--dnd5e-font-roboto-condensed);
+      font-size: var(--font-size-12);
+      transition: background 0.2s ease, box-shadow 0.2s ease;
+
+      span {
+        color: var(--color-text-dark-primary);
+      }
+
+      label {
+        cursor: pointer;
+        display: block;
+        margin: 0;
+      }
+
+      &:hover {
+        box-shadow: 0 0 5px var(--hud-blue);
+      }
+
+      &.active {
+        background: var(--hud-blue);
+        color: black;
+
+        span {
+          color: black;
+          font-weight: bold;
+        }
+      }
+    }
+
+    filter-state {
+      --filter-state-size: 0px;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .stateful-tag {
+      &:has(.indicator[data-value="1"]) {
+        background-color: var(--hud-blue);
+        border-color: black;
+
+        span {
+          font-weight: bold;
+          color: black;
+        }
+      }
+
+      &:has(.indicator[data-value="-1"]) {
+        background-color: var(--hud-red);
+        border-color: black;
+
+        span {
+          color: black;
+          font-weight: bold;
+        }
+      }
+    }
+
+    .window-content {
+      grid-template-areas:
+        "header"
+        "results";
+      grid-template-columns: 100%;
+      grid-template-rows: auto 1fr;
+      transition: all 0.3s ease;
+
+      .header {
+        font-family: var(--dnd5e-font-roboto-condensed);
+
+        .collapsible-filters {
+          background: var(--dnd5e-background-card);
+          margin-top: 10px;
+          display: flex;
+
+          .filter-sections-header {
+            font-size: var(--font-size-20);
+            color: var(--dnd5e-color-gold);
+            padding: 5px;
+            background-color: var(--hud-black-03);
+          }
+
+          .toggle-icon {
+            transition: transform 0.3s ease;
+          }
+
+          .filter-sections-wrapper {
+            transition: all 0.3s ease;
+          }
+
+          &.collapsed {
+            .filter-sections-wrapper {
+              margin-left: 5px;
+              display: flex;
+              align-items: center;
+              gap: 5px;
+            }
+
+            .toggle-icon {
+              transform: rotate(-90deg);
+            }
+
+            .header-part {
+              gap: 5px;
+              display: flex;
+            }
+          }
+
+          .padding-part {
+            padding: 5px 8px;
+
+            &:not(:first-child) {
+              border-top: 1px solid var(--dnd5e-color-gold);
+            }
+          }
+
+          .filter-part .filter {
+            border-top: 1px solid var(--dnd5e-color-gold);
+            padding: 5px 8px;
+
+            &.collapsed {
+              .filter-counters {
+                opacity: 1;
+              }
+            }
+          }
+
+          .filter-header {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+
+            label {
+              flex: 1;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              cursor: pointer;
+              color: var(--dnd5e-color-gold);
+
+              span {
+                font-weight: bold;
+                letter-spacing: 0.05em;
+              }
+            }
+
+            .filter-counters {
+              font-size: 1rem;
+              opacity: 0;
+              transition: opacity 300ms;
+              font-weight: bold;
+              font-family: var(--font-primary);
+
+              .pos {
+                color: var(--hud-blue);
+                margin: 0 1px;
+              }
+
+              .neg {
+                color: var(--hud-red);
+              }
+            }
+
+            .logic-group {
+              gap: 5px;
+              padding: 2px 0;
+
+              .logic-btn {
+                font-size: var(--font-size-10);
+                line-height: 8px;
+                width: 30px;
+
+                &.pos {
+                  border-color: var(--hud-blue);
+                  color: var(--hud-blue);
+
+                  &:hover {
+                    color: white;
+                    background-color: var(--hud-blue);
+                  }
+                }
+
+                &.neg {
+                  border-color: var(--hud-red);
+                  color: var(--hud-red);
+
+                  &:hover {
+                    color: white;
+                    background-color: var(--hud-red);
+                  }
+                }
+
+              }
+            }
+          }
+
+          .filter-tag-container {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 5px;
+          }
+        }
+      }
+
+      ol.item-list.grid-mode {
+        transition: all 0.3s;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 12px;
+        padding: 10px;
+        list-style: none;
+
+        .item.grid-card {
+          display: flex;
+          flex-direction: column;
+          background: rgba(0, 0, 0, 0.2);
+          border: 1px solid var(--dnd5e-color-gold);
+          border-radius: 5px;
+          overflow: hidden;
+          transition: transform 0.3s ease, box-shadow 0.3s ease;
+
+          &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            background: rgba(0, 0, 0, 0.3);
+          }
+
+          .card-image-wrapper {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            background: rgba(255, 255, 255, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+
+            img {
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              border: none !important;
+            }
+          }
+        }
+      }
+
+      .card-content {
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        flex-grow: 1;
+        text-align: center;
+
+        .title {
+          font-size: var(--font-size-13);
+          font-weight: bold;
+          display: block;
+          line-height: 1.2;
+        }
+
+        .subtitle {
+          font-size: var(--font-size-10);
+          opacity: 0.7;
+          display: block;
+        }
+
+        .item-source {
+          margin-top: auto;
+          font-size: var(--font-size-10);
+          border-top: 1px dotted var(--dnd5e-color-gold);
+          padding-top: 4px;
+        }
+      }
+    }
+  }
 }

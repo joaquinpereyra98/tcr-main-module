@@ -5,6 +5,10 @@ import TabData from "../data/tab-data.mjs";
 const { ApplicationV2 } = foundry.applications.api;
 
 /**
+ * @import {ApplicationTabsConfiguration} from "./_types.mjs"
+ */
+
+/**
  * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationRenderContext, ApplicationRenderOptions} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  */
 
@@ -47,6 +51,11 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   get setting() {
     return game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION);
   }
+  
+  /**
+   * @type {Boolean}
+   */
+  _showGrid = false;
 
   /**
    * Initialize configuration options for the Application instance.
@@ -103,6 +112,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     return {
       ...context,
       setting: enrichedTabs,
+      showGrid: this._showGrid,
+      user: game.user,
     };
   }
 
@@ -129,6 +140,37 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     if (group === "primary") this._updateBackground(tab);
     super.changeTab(tab, group, options);
     this.render();
+  }
+
+  /** @inheritdoc */
+  _getTabsConfig(group) {
+    return group === "primary"
+      ? this._getPrimaryTabs()
+      : this.constructor.TABS[group] ?? null;
+  }
+
+  /**
+   *
+   * @returns {ApplicationTabsConfiguration}
+   */
+  _getPrimaryTabs() {
+    const setting = foundry.utils.duplicate(
+      game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION)
+    );
+
+    const tabs = [
+      ...Object.values(setting),
+      {
+        id: "bugTracker",
+        icon: "fa-solid fa-bug",
+        label: "Bug Tracker",
+      },
+    ];
+
+    return {
+      tabs,
+      initial: tabs[0].id,
+    };
   }
 
   /**
@@ -187,6 +229,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     /**@type {HTMLElement} */
     const gridContainer = this.element.querySelector(".grid-container");
     const haveClass = gridContainer.classList.toggle("show-grid");
+    this._showGrid = haveClass;
     target.classList.toggle("active", haveClass);
   }
 

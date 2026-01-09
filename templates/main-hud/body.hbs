@@ -5,7 +5,7 @@
         data-group="primary"
         data-tab="{{tab.id}}"
     >
-        <div class="content grid-container" style="{{tab.style}}">
+        <div class="content grid-container {{ifThen @root.showGrid "show-grid" ""}}" style="{{tab.style}}">
             {{#each segments as |segment|}}
             <div
                 class="segment {{ifThen segment.model.isClickable 'clickable' ''}}"
@@ -27,6 +27,7 @@
     
     {{> "modules/tcr-main-module/templates/main-hud/bug-tracker.hbs"}}
 
+    {{#if game.user.isGM}}
     <div class="fixed-buttons">
         <a
             class="icon fa-regular fa-wrench fixed-anchor"
@@ -34,10 +35,11 @@
             data-tooltip="Open Setting"
         ></a>
         <a
-            class="icon fa-regular fa-grid fixed-anchor"
+            class="icon fa-regular fa-grid fixed-anchor {{ifThen showGrid "active" ""}}"
             data-action="toggleGrid"
             data-tooltip="Toggle Grid"
         ></a>
     </div>
+    {{/if}}
 
 </section>

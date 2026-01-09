@@ -1,0 +1,42 @@
+<li
+    class="item grid-card"
+    data-uuid="{{entry.uuid}}"
+    draggable="true"
+>
+    
+    {{#if entry.img}}
+    <div
+        class="card-image-wrapper"
+        data-action="openLink"
+        role="button"
+    >
+        <img
+            class="item-image gold-icon"
+            loading="lazy"
+            src="{{entry.img}}"
+            alt="{{entry.name}}"
+            draggable="false"
+        >
+            </div>
+    {{/if}}
+
+    <div
+        class="card-content"
+        data-action="openLink"
+        role="button"
+    >
+        <div class="name name-stacked">
+            <span class="title">{{entry.name}}</span>
+            {{#if entry.subtitle}}
+            <span class="subtitle">{{localize entry.subtitle}}</span>
+            {{/if}}
+        </div>
+
+        {{#if entry.source}}
+        <div class="item-source">
+            <span class="condensed">{{entry.source}}</span>
+        </div>
+        {{/if}}
+    </div>
+
+</li>

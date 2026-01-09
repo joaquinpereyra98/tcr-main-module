@@ -1,0 +1,48 @@
+{{!-- Main Layout --}}
+{{#if headerCollapsed}}
+{{!-- Only show selected items when collapsed --}}
+<div class="filter-tag-container flexrow">
+    {{#each sources}}
+    {{#if selected}}
+    {{> "source-entry" source=this}}
+    {{/if}}
+    {{/each}}
+</div>
+{{else}}
+{{!-- Show full collapsible section when expanded --}}
+<div class="flexcol padding-part">
+    <section class="filter filter-set collapsible">
+        <div class="filter-header">
+            <label data-action="toggleCollapse">
+                <span class="roboto-upper">{{localize "DND5E.Source"}}</span>
+                <i class="fa-solid fa-caret-down"></i>
+            </label>
+        </div>
+        <div class="collapsible-content">
+            <div class="wrapper filter-tag-container">
+                {{#each sources}}
+                {{> "source-entry" source=this}}
+                {{/each}}
+            </div>
+        </div>
+    </section>
+</div>
+{{/if}}
+
+{{!-- Individual Source Entry --}}
+{{#*inline "source-entry"}}
+<div class="type-tag {{#if source.selected}}active{{/if}}">
+    <label>
+        <i class="tag-icon fa-solid fa-passport"></i>
+        <input
+            type="checkbox"
+            name="sources.{{source.id}}"
+            data-source="{{source.id}}"
+            data-action="setSource"
+            {{checked source.selected}}
+            hidden
+        >
+        <span>{{source.label}}</span>
+    </label>
+</div>
+{{/inline}}

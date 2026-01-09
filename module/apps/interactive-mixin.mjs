@@ -6,11 +6,6 @@ const { HandlebarsApplicationMixin } = foundry.applications.api;
  * @import {ApplicationTabsConfiguration} from "./_types.mjs"
  */
 
-/**
- *
- * @param {foundry.applications.api.ApplicationV2} BaseApplication
- * @returns {foundry.applications.api.ApplicationV2}
- */
 export default function InteractiveMixin(BaseApplication) {
   /**
    * @extends {foundry.applications.api.ApplicationV2}
@@ -130,33 +125,7 @@ export default function InteractiveMixin(BaseApplication) {
      * @protected
      */
     _getTabsConfig(group) {
-      return group === "primary"
-        ? this._getPrimaryTabs()
-        : this.constructor.TABS[group] ?? null;
-    }
-
-    /**
-     *
-     * @returns {ApplicationTabsConfiguration}
-     */
-    _getPrimaryTabs() {
-      const setting = foundry.utils.duplicate(
-        game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION)
-      );
-
-      const tabs = [
-        ...Object.values(setting),
-        {
-          id: "bugTracker",
-          icon: "fa-solid fa-bug",
-          label: "Bug Tracker",
-        },
-      ];
-
-      return {
-        tabs,
-        initial: tabs[0].id,
-      };
+      return this.constructor.TABS[group] ?? null;
     }
 
     /* -------------------------------------------- */
