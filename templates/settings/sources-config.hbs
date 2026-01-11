@@ -1,0 +1,52 @@
+<section class="standard-form scrollable flex1">    
+    <div class="sources-grid">
+        {{!-- Header Row --}}
+        <div class="grid-header">
+            <div class="col-id">ID</div>
+            <div class="col-label">{{localize "Pseudonym"}}</div>
+            <div class="col-actions"></div>
+        </div>
+
+        {{!-- Data Body --}}
+        <div class="grid-body">
+            {{#each sources}}
+            <div class="grid-row" data-key="{{@key}}">
+                <div class="col-id" data-tooltip="{{@key}}">
+                    {{@key}}
+                </div>
+                <div class="col-label" data-tooltip="{{ifThen label label name }}">
+                    <input
+                        type="text"
+                        name="{{@key}}.label"
+                        placeholder="{{name}}"
+                        value="{{label}}"
+                    >
+                </div>
+                <div class="col-actions">
+                    <a
+                        class="icon-button danger"
+                        data-action="removeCompendium"
+                        data-tooltip="Remove Compendium"
+                    >
+                        <i class="fa-solid fa-trash"></i>
+                    </a>
+                </div>
+            </div>
+            {{/each}}
+
+            {{!-- Footer/Add Row --}}
+            <div class="grid-row add-row">
+                <div class="col-id span-2">
+                    <select class="new-sources">
+                        {{selectOptions sourcesOptions}}
+                    </select>
+                </div>
+                <div class="col-actions">
+                    <a class="icon-button" data-action="addCompenidum">
+                        <i class="fa-solid fa-square-plus"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

@@ -17,5 +17,6 @@ Hooks.on("init", () => {
   CONFIG.ui[MAIN_HUD_KEY] = module.api.apps.MainHud;
 
   settings.HUDConfig.registerSetting();
+  settings.SourcesConfig.registerSetting();
 });
 

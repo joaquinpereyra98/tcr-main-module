@@ -46,6 +46,7 @@
     }
   }
 
+
   &.hud-config {
     a.fa-regular:hover {
       font-weight: bold;
@@ -53,9 +54,9 @@
 
     .accordion-container {
       border-radius: 4px;
-      background: #242731;
+      background: var(--card-bg);
       margin-top: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--hud-white-01);
       overflow: hidden;
 
       &.expanded {
@@ -91,7 +92,7 @@
     }
 
     .accordion-content {
-      background: #1c1e26;
+      background: var(--hud-black-03);
       display: grid;
       grid-template-rows: 0fr;
       transition: all 0.3s ease;
@@ -110,7 +111,7 @@
         margin: 0 5px;
         padding: 10px;
         background-color: var(--hud-black-03);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid var(--hud-white-01);
       }
     }
 
@@ -156,6 +157,77 @@
     }
   }
 
+  &.sources-config {
+    .sources-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border-radius: 4px;
+      background: var(--card-bg);
+      border: 1px solid var(--hud-white-01);
+    }
+
+    .grid-header,
+    .grid-row {
+      display: grid;
+      grid-template-columns:minmax(0, 150px) 1fr 40px;
+      gap: 5px;
+      align-items: center;
+
+      .span-2 {
+        grid-column: span 2;
+      }
+    }
+
+    .grid-header {
+      height: 2rem;
+      font-weight: bold;
+      border-bottom: 1px solid #777;
+      padding-bottom: 5px;
+      margin-bottom: 5px;
+
+      >* {
+        border-right: 1px solid #777;
+      }
+    }
+
+    .grid-body {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .grid-row {
+
+      input,
+      select {
+        width: 100%;
+        margin: 0;
+        text-overflow: ellipsis;
+        &::placeholder {
+          opacity: 0.5;
+        }
+      }
+    }
+
+    .col-actions {
+      text-align: center;
+
+      .icon-button {
+        font-size: var(--font-size-18);
+        color: #777;
+      }
+    }
+
+    .add-row {
+      border-top: 1px solid var(--hud-white-01);
+      padding-top: 5px;
+    }
+
+
+  }
+
   &.main-hud {
     background-size: cover;
     background-position: center;
@@ -166,12 +238,13 @@
       border: none;
 
       button.header-control {
-        color: rgba(255, 0, 0, 0.66);
+        color: red;
+        opacity: 0.5;
         box-shadow: none;
-        transition: color 300ms;
+        transition: opacity 300ms;
 
         &:hover {
-          color: rgba(255, 0, 0, 1);
+          opacity: 1;
         }
       }
     }
@@ -190,8 +263,8 @@
 
       background-color: var(--bg-color, transparent);
 
-       .bg-video,
-       .bg-image {
+      .bg-video,
+      .bg-image {
         position: absolute;
         top: 0;
         left: 0;
@@ -395,7 +468,6 @@
     }
 
     .tracker-container {
-
       /* Table Styling */
       table.issue-table {
         margin: 0;
@@ -418,44 +490,10 @@
         }
       }
 
-
     }
   }
 
   &.compendium-browser {
-    .interactions-containers {
-      height: 20px;
-
-      .sidebar-toggle {
-        position: absolute;
-        left: 215px;
-        cursor: pointer;
-        border-radius: 4px;
-        transition: all 0.3s ease;
-        transform: rotate(180deg);
-        opacity: 0.3;
-
-        &:hover {
-          opacity: 1;
-        }
-      }
-
-      .result-view-toggle {
-        position: absolute;
-        right: 25px;
-
-        .icon {
-          opacity: 0.3;
-          transform: scale(0.9);
-          transition: all 0.3s;
-
-          &.active {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-      }
-    }
 
     .filter-range {
       margin: 0;
@@ -579,7 +617,7 @@
           }
 
           .filter-sections-wrapper {
-            transition: all 0.3s ease;
+            flex: 1;
           }
 
           &.collapsed {
@@ -698,7 +736,7 @@
         }
       }
 
-      ol.item-list.grid-mode {
+      ol.item-list {
         transition: all 0.3s;
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

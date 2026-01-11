@@ -1,4 +1,6 @@
 import { MODULE_ID } from "../constants.mjs";
+import SourcesConfig from "../settings/sources-config.mjs";
+import { getRankFolderNames, hasDocumentsInFolder } from "../utils.mjs";
 
 /**
  * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationFormConfiguration, ApplicationRenderContext} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
@@ -43,7 +45,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       setSource: CompendiumBrowser.#onSetSource,
       toggleCollapse: CompendiumBrowser.#onToggleCollapse,
       toggleHeader: CompendiumBrowser.#onToggleHeader,
-      toggleResultView: CompendiumBrowser.#onToggleResultView,
       toggleLogic: CompendiumBrowser.#onToggleLogic,
     },
     form: {
@@ -104,17 +105,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       templates: ["systems/dnd5e/templates/compendium/browser-entry.hbs"],
       scrollable: [""],
     },
-  };
-
-  /* -------------------------------------------- */
-
-  /**
-   * Available view modes for Results entries.
-   * @enum {number}
-   */
-  static RESULT_VIEW_MODES = {
-    LIST: 1,
-    GRID: 2,
   };
 
   /* -------------------------------------------- */
@@ -205,11 +195,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   /**@type {Boolean} */
   _headerCollapsed = false;
 
-  _resultViewMode = CompendiumBrowser.RESULT_VIEW_MODES.GRID;
-
-  get isListViewMode() {
-    return this._resultViewMode === CompendiumBrowser.RESULT_VIEW_MODES.LIST;
-  }
   /* -------------------------------------------- */
 
   /**
@@ -246,30 +231,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       ...this.element.querySelectorAll(".header-part")
     );
     searchContainer.replaceChildren(this.element.querySelector(".search-part"));
-
-    const itemsList = this.element.querySelector("ol.item-list");
-    itemsList.classList.toggle("grid-mode", !this.isListViewMode);
-    if (!this.isListViewMode) {
-      const itemsHeader = this.element.querySelector(".items-header.header");
-      itemsHeader.innerHTML = "";
-    }
-  }
-
-  /** @override */
-  _syncPartState(partId, newElement, priorElement, state) {
-    super._syncPartState(partId, newElement, priorElement, state);
-
-    if (partId === "header") {
-      /*
-    newElement.animate([
-      { height: `${prevHeight}px`, opacity: 0.5, overflow: "hidden" },
-      { height: `${nextHeight}px`, opacity: 1, overflow: "hidden" }
-    ], {
-      duration: 300,
-      easing: "ease-in-out"
-    });
-    */
-    }
   }
 
   /* -------------------------------------------- */
@@ -296,17 +257,59 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           return CompendiumBrowser.intersectFilters(first, second);
         }, null) ?? new Map();
 
-    context.isList = this.isListViewMode;
+    //TODO context.sources = this._getSourcesOptions();
 
-    context.sources = game.packs
-      .map((p) => ({
-        id: p.metadata.id,
-        label: p.metadata.label,
-        selected: this.#sources.has(p.metadata.id),
+    context.sources = Object.entries(SourcesConfig.SETTING)
+      .map(([id, { label }]) => ({
+        id,
+        label: label ?? game.packs.get(id)?.metadata.label,
+        selected: this.#sources.has(id),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
 
     return context;
+  }
+
+  /**
+   * Generates a sorted list of available compendium sources based on user rank and folder content.
+   * @returns {Object[]} An array of formatted and sorted source options.
+   */
+  _getSourcesOptions() {
+    // 1. Get rank-based folder names from settings, filtering by what the user actually has access to
+    const allowedNames = getRankFolderNames()
+
+    // 2. Iterate through all defined settings to build the final list
+    return Object.entries(SourcesConfig.SETTING)
+      .reduce((acc, [id, { label }]) => {
+        const pack = game.packs.get(id);
+        if (!pack) return acc;
+
+        // Check conditions for visibility:
+        // A. Always show to GM if pack is not empty
+        // B. Show if there are documents not inside any folder (loose items)
+        // C. Show if user has rank-access to at least one top-level folder that contains documents
+        const isVisible =
+          (game.user.isGM && pack.index.size > 0) ||
+          pack.index.some((i) => !i.folder) ||
+          (allowedNames.length > 0 &&
+            pack.folders.some(
+              (f) =>
+                f.depth === 1 &&
+                allowedNames.includes(f.name) &&
+                hasDocumentsInFolder(f)
+            ));
+
+        if (isVisible) {
+          acc.push({
+            id,
+            label: label ?? pack.metadata.label,
+            selected: this.#sources.has(id),
+          });
+        }
+
+        return acc;
+      }, [])
+      .sort((a, b) => a.label.localeCompare(b.label)); // Alphabetical sort by label
   }
 
   /* -------------------------------------------- */
@@ -315,14 +318,12 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   async _preparePartContext(partId, context, options) {
     await super._preparePartContext(partId, context, options);
     switch (partId) {
-      case "documentClass":
+      case "header":
       case "types":
       case "filters":
-        return this._prepareSidebarContext(partId, context, options);
+        return this._prepareHeaderContext(partId, context, options);
       case "results":
         return this._prepareResultsContext(context, options);
-      case "header":
-        return this._prepareHeaderContext(context, options);
     }
     return context;
   }
@@ -331,27 +332,13 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
   /**
    * Prepare the header context.
-   * @param {ApplicationRenderContext} context  Shared context provided by _prepareContext.
-   * @param {HandlebarsRenderOptions} options   Options which configure rendering behavior.
-   * @returns {Promise<ApplicationRenderContext>}
+   * @param {string} partId - The part being rendered.
+   * @param {ApplicationRenderContext} context - Shared context provided by _prepareContext.
+   * @param {HandlebarsRenderOptions} options - Options which configure application rendering behavior.
+   * @returns {Promise<ApplicationRenderContext>} - Context data for a specific part.
    * @protected
    */
-  async _prepareHeaderContext(context, options) {
-    context.headerCollapsed = this._headerCollapsed;
-    return context;
-  }
-
-  /* -------------------------------------------- */
-
-  /**
-   * Prepare the sidebar context.
-   * @param {string} partId                        The part being rendered.
-   * @param {ApplicationRenderContext} context     Shared context provided by _prepareContext.
-   * @param {HandlebarsRenderOptions} options      Options which configure application rendering behavior.
-   * @returns {Promise<ApplicationRenderContext>}  Context data for a specific part.
-   * @protected
-   */
-  async _prepareSidebarContext(partId, context, options) {
+  async _prepareHeaderContext(partId, context, options) {
     context.headerCollapsed = this._headerCollapsed;
 
     context.isLocked = { documentClass: true };
@@ -493,23 +480,22 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       entry: { img, name, subtitle, uuid },
       displaySelection: this.displaySelection,
     };
-    const path = this.isListViewMode
-      ? "systems/dnd5e/templates/compendium/browser-entry.hbs"
-      : `modules/${MODULE_ID}/templates/compendium/browser-entry-grid.hbs`;
+    const path = `modules/${MODULE_ID}/templates/compendium/browser-entry-grid.hbs`;
     const html = await renderTemplate(path, context);
     const template = document.createElement("template");
     template.innerHTML = html;
     const element = template.content.firstElementChild;
-    /* TODO
     if (documentClass !== "Item") return element;
-    element.dataset.tooltip = `
+    const itemImg = element.querySelector(".item-image");
+
+    itemImg.dataset.tooltip = `
       <section class="loading" data-uuid="${uuid}">
         <i class="fa-solid fa-spinner fa-spin-pulse" inert></i>
       </section>
     `;
-    element.dataset.tooltipClass = "dnd5e2 dnd5e-tooltip item-tooltip";
-    element.dataset.tooltipDirection ??= "RIGHT";
-    */
+    itemImg.dataset.tooltipClass = "dnd5e2 dnd5e-tooltip item-tooltip";
+    itemImg.dataset.tooltipDirection ??= "RIGHT";
+
     return element;
   }
 
@@ -809,23 +795,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this CompendiumBrowser
    */
-  static #onToggleResultView(event, target) {
-    event.preventDefault();
-    const { GRID, LIST } = CompendiumBrowser.RESULT_VIEW_MODES;
-
-    this._resultViewMode = this.isListViewMode ? GRID : LIST;
-
-    target.querySelectorAll(".icon").forEach((i) => {
-      i.classList.toggle("active");
-    });
-
-    this.render({ parts: ["results"] });
-  }
-
-  /**
-   * @type {ApplicationClickAction}
-   * @this CompendiumBrowser
-   */
   static #onToggleLogic(event, target) {
     const key = target.dataset.filter;
     const type = target.dataset.logicType;
@@ -875,7 +844,18 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (filters.length)
       indexFields = indexFields.union(dnd5e.Filter.uniqueKeys(filters));
 
+    // Ensure folder is always indexed
+    if (!indexFields.has("folder")) indexFields.add("folder");
+
+    const isGM = game.user.isGM;
+    
+    // Pre-calculate Rank folder names to avoid repeated setting lookups    
+    const rankNames = getRankFolderNames()
+
+    const ignoreAll = isGM && rankNames === null; //TODO: change this
+
     // Iterate over all packs
+    /** @type {Promise<Document[]>}*/
     let documents = game.packs
       .filter((p) => {
         // Skip packs that have the wrong document class
@@ -895,28 +875,43 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
         return isCorrectType && isVisible && matchesSource && matchesTypes;
       })
-      .map(
-        async (p) =>
-          await Promise.all(
-            (
-              await p
-                .getIndex({ fields: Array.from(indexFields) })
+      .map(async (p) => {
+        
+        const allowedFolderIds = ignoreAll
+          ? null
+          : new Set(
+              rankNames.flatMap((name) => {
+                const parent = p.folders.getName(name);
+                return parent
+                  ? [parent, ...getSubfoldersInCompenidum(parent)].map(
+                      (f) => f.id
+                    )
+                  : [];
+              })
+            );
 
-                // Apply module art to the new index
-                .then((index) => game.dnd5e.moduleArt.apply(index))
-            )
+        // Fetch the index
+        let packIndex = await p.getIndex({ fields: Array.from(indexFields) });
+        // Apply module art to the new index
+        packIndex = game.dnd5e.moduleArt.apply(packIndex);
 
-              // Remove any documents that don't match the specified types or the provided filters
-              .filter(
-                (i) =>
-                  (!types.size || types.has(i.type)) &&
-                  (!filters.length || dnd5e.Filter.performCheck(i, filters))
-              )
+        const filteredIndex = packIndex.filter((i) => {
+          // Remove any documents that don't match the specified types or the provided filters
+          const matchesType = !types.size || types.has(i.type);
+          const matchesFilters =
+            !filters.length || dnd5e.Filter.performCheck(i, filters);
 
-              // If full documents are required, retrieve those, otherwise stick with the indices
-              .map(async (i) => (index ? i : await fromUuid(i.uuid)))
-          )
-      );
+          // Always allow if GM or if item has no folder. Otherwise, check if folder is in the allowed set.
+          const matchesFolder =
+            ignoreAll || !i.folder || allowedFolderIds?.has(i.folder);
+
+          return matchesType && matchesFilters && matchesFolder;
+        });
+
+        return index
+          ? filteredIndex
+          : await Promise.all(filteredIndex.map((i) => fromUuid(i.uuid)));
+      });
 
     // Wait for everything to finish loading and flatten the arrays
     documents = (await Promise.all(documents)).flat();
