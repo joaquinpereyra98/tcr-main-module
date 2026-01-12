@@ -9,22 +9,20 @@
  * @property {string} [labelPrefix] - A localization path prefix for all tabs in the group: if set, a label is generated
  *                                  for each tab using a full path of `${labelPrefix}.${tabId}`.
  */
-
-/**
- * @typedef {ApplicationConfiguration} CompendiumBrowserConfiguration
- * @property {{locked: CompendiumBrowserFilters, initial: CompendiumBrowserFilters}} filters - Filters to set to start.
- *                                              Locked filters won't be able to be changed by the user. Initial filters
- *                                              will be set to start but can be changed.
- * @property {CompendiumBrowserSelectionConfiguration} selection - Configuration used to define document selections.
- */
-
 /**
  * @typedef {object} CompendiumBrowserFilters
- * @property {string} [documentClass] - Document type to fetch (e.g. Actor or Item).
- * @property {Set<string>} [types] - Individual document subtypes to filter upon (e.g. "loot", "class", "npc").
- * @property {object} [additional] - Additional type-specific filters applied.
+ * @property {string} [documentClass] - Document type to fetch (e.g., "Actor" or "Item").
+ * @property {Set<string>} [types] - Individual document subtypes to filter upon (e.g., "loot", "class").
+ * @property {Record<string, unknown>} [additional] - Additional type-specific filters applied.
  * @property {string} [name] - A substring to filter by Document name.
  */
+
+/**
+ * @typedef {object} CompendiumBrowserFilterState
+ * @property {CompendiumBrowserFilters} locked - Filters that are locked and cannot be changed by the user.
+ * @property {CompendiumBrowserFilters} initial - Filters applied at startup that the user can modify.
+ */
+
 
 /**
  * Filter definition object for additional filters in the Compendium Browser.
@@ -33,6 +31,15 @@
  * @property {"boolean"|"range"|"set"} type - Type of filter control to display.
  * @property {object} config - Type-specific configuration data.
  * @property {CompendiumBrowserFilterCreateFilters} [createFilter] - Method that can be called to create filters.
+ */
+
+/**
+ * A filter description.
+ *
+ * @typedef FilterDescription
+ * @property {string} k        Key on the data object to check.
+ * @property {any} v           Value to compare.
+ * @property {string} [o="_"]  Operator or comparison function to use.
  */
 
 /**

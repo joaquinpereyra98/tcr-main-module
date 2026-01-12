@@ -31,15 +31,19 @@
 
 {{!-- Individual Source Entry --}}
 {{#*inline "source-entry"}}
-<div class="type-tag {{#if source.selected}}active{{/if}}">
+{{!-- Added 'locked' class if the source is mandatory --}}
+<div class="type-tag {{#if source.selected}}active{{/if}} {{#if source.locked}}locked{{/if}}">
     <label>
-        <i class="tag-icon fa-solid fa-passport"></i>
+        {{!-- Change icon if locked to show a lock symbol --}}
+        <i class="tag-icon fa-solid {{#if source.locked}}fa-lock{{else}}fa-passport{{/if}}"></i>
+        {{log source.locked}}
         <input
             type="checkbox"
             name="sources.{{source.id}}"
             data-source="{{source.id}}"
             data-action="setSource"
             {{checked source.selected}}
+            {{#if source.locked}}disabled{{/if}}
             hidden
         >
         <span>{{source.label}}</span>

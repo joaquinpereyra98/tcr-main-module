@@ -171,7 +171,7 @@
     .grid-header,
     .grid-row {
       display: grid;
-      grid-template-columns:minmax(0, 150px) 1fr 40px;
+      grid-template-columns: minmax(0, 150px) 1fr 40px;
       gap: 5px;
       align-items: center;
 
@@ -205,6 +205,7 @@
         width: 100%;
         margin: 0;
         text-overflow: ellipsis;
+
         &::placeholder {
           opacity: 0.5;
         }
@@ -468,6 +469,7 @@
     }
 
     .tracker-container {
+
       /* Table Styling */
       table.issue-table {
         margin: 0;
@@ -550,13 +552,24 @@
         box-shadow: 0 0 5px var(--hud-blue);
       }
 
-      &.active {
+      &.active,
+      &.locked {
         background: var(--hud-blue);
         color: black;
 
         span {
           color: black;
           font-weight: bold;
+        }
+      }
+
+      &.locked {
+        opacity: 0.7;
+        cursor: default;
+        border-style: dashed;
+
+        label {
+          cursor: default;
         }
       }
     }

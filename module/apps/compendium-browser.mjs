@@ -7,7 +7,7 @@ import { getRankFolderNames, hasDocumentsInFolder } from "../utils.mjs";
  * @import ApplicationV2 from "../../foundry/resources/app/client-esm/applications/api/application.mjs";
  * @import {HandlebarsRenderOptions} from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
  * @import Document from "../../foundry/resources/app/common/abstract/document.mjs";
- * @import { CompendiumBrowserFilterDefinition, CompendiumBrowserConfiguration } from "./_types.mjs";
+ * @import { CompendiumBrowserFilterDefinition, CompendiumBrowserConfiguration, CompendiumBrowserFilterState, CompendiumBrowserFilters } from "./_types.mjs";
  */
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -23,11 +23,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   constructor(...args) {
     super(...args);
     this.#filters = this.options.filters?.initial ?? {};
+
+    const initialSources = this.options.sources?.initial ?? [];
+    this.#sources = new Set(initialSources);
   }
 
   /* -------------------------------------------- */
 
-  /** @type {ApplicationConfiguration} */
+  /** @type {ApplicationConfiguration & {filters: CompendiumBrowserFilterState}} */
   static DEFAULT_OPTIONS = {
     id: "compendium-browser-{id}",
     classes: ["dnd5e2", "compendium-browser", MODULE_ID, "compendium-browser"],
@@ -39,13 +42,16 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     },
     actions: {
       clearName: CompendiumBrowser.#onClearName,
-      openLink: CompendiumBrowser.#onOpenLink,
       setFilter: CompendiumBrowser.#onSetFilter,
       setType: CompendiumBrowser.#onSetType,
       setSource: CompendiumBrowser.#onSetSource,
       toggleCollapse: CompendiumBrowser.#onToggleCollapse,
       toggleHeader: CompendiumBrowser.#onToggleHeader,
       toggleLogic: CompendiumBrowser.#onToggleLogic,
+      clickEntry: {
+        buttons: [0, 2],
+        handler: CompendiumBrowser.#onClickEntry,
+      },
     },
     form: {
       closeOnSubmit: false,
@@ -55,13 +61,15 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       height: 700,
     },
     filters: {
-      locked: {
-        documentClass: "Item",
-      },
+      locked: {},
       initial: {
         documentClass: "Item",
         operators: {},
       },
+    },
+    sources: {
+      locked: [],
+      initial: [],
     },
     selection: {
       min: null,
@@ -166,6 +174,15 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     return filters;
   }
 
+  /**
+   * The current set of source IDs, merging active selection with locked sources.
+   * @type {Set<string>}
+   */
+  get currentSources() {
+    const locked = this.options.sources?.locked ?? [];
+    return this.#sources.union(new Set(locked));
+  }
+
   /* -------------------------------------------- */
 
   /**
@@ -259,11 +276,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
     //TODO context.sources = this._getSourcesOptions();
 
+    const lockedSources = new Set(this.options.sources?.locked ?? []);
+
     context.sources = Object.entries(SourcesConfig.SETTING)
       .map(([id, { label }]) => ({
         id,
         label: label ?? game.packs.get(id)?.metadata.label,
         selected: this.#sources.has(id),
+        locked: lockedSources.has(id),
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
 
@@ -276,7 +296,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   _getSourcesOptions() {
     // 1. Get rank-based folder names from settings, filtering by what the user actually has access to
-    const allowedNames = getRankFolderNames()
+    const allowedNames = getRankFolderNames();
+
+    const lockedSources = new Set(this.options.sources?.locked ?? []);
 
     // 2. Iterate through all defined settings to build the final list
     return Object.entries(SourcesConfig.SETTING)
@@ -304,6 +326,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             id,
             label: label ?? pack.metadata.label,
             selected: this.#sources.has(id),
+            locked: lockedSources.has(id),
           });
         }
 
@@ -456,7 +479,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       {
         filters,
         types: context.filters.types,
-        sources: this.#sources,
+        sources: this.currentSources,
       }
     );
     context.displaySelection = this.displaySelection;
@@ -677,10 +700,25 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @this {CompendiumBrowser}
    * @type {ApplicationClickAction}
    */
-  static async #onOpenLink(event, target) {
-    (
-      await fromUuid(target.closest("[data-uuid]")?.dataset.uuid)
-    )?.sheet?.render(true);
+  static async #onClickEntry(event, target) {
+    const isContextMenu = event.button === 2;
+    const uuid = target.closest("[data-uuid]")?.dataset.uuid;
+    const doc = await fromUuid(uuid);
+
+    if (!doc) return;
+
+    if (isContextMenu) {
+      if (doc.documentName === "Scene") {
+        return new ImagePopout(doc.texture.src, {
+          title: doc.name,
+          uuid: doc.uuid,
+        }).render(true);
+      } else {
+        return doc.compenidum.render(true);
+      }
+    }
+
+    return doc.sheet.render(true);
   }
 
   /* -------------------------------------------- */
@@ -848,9 +886,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (!indexFields.has("folder")) indexFields.add("folder");
 
     const isGM = game.user.isGM;
-    
-    // Pre-calculate Rank folder names to avoid repeated setting lookups    
-    const rankNames = getRankFolderNames()
+
+    // Pre-calculate Rank folder names to avoid repeated setting lookups
+    const rankNames = getRankFolderNames();
 
     const ignoreAll = isGM && rankNames === null; //TODO: change this
 
@@ -876,7 +914,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         return isCorrectType && isVisible && matchesSource && matchesTypes;
       })
       .map(async (p) => {
-        
         const allowedFolderIds = ignoreAll
           ? null
           : new Set(
