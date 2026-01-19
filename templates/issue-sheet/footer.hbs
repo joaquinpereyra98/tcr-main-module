@@ -1,0 +1,37 @@
+<footer class="footer-part">
+    <section class="comments-section">
+        <form class="new-comment-card detail-card">
+            {{{newCommentField}}}
+            <div class="controls">
+                <button
+                    type="button"
+                    class="send-comment"
+                    data-action="addComment"
+                >
+                    <i class="fa-solid fa-paper-plane"></i>
+                    Comment
+                </button>
+            </div>
+        </form>
+        {{#each issue.comments}}
+        <div class="detail-card" data-id="{{id}}">
+            <div class="flexrow">
+                <div class="flexcol">
+                    <label class="detail-label">{{author}} <span class="subtitle">{{createdLabel.date}} - {{createdLabel.time}}</span></label>
+                    <div class="value">{{{body}}}</div>
+                </div>
+                <div class="sidebar-card">
+                    <div class="comment-id"># {{id}}</div>
+                    {{#if ../user.isGM}}
+                    <a
+                        class="control icon fa-solid fa-trash"
+                        data-action="deleteComment"
+                        data-tooltip="Delete Comment"
+                    ></a>
+                    {{/if}}
+                </div>
+            </div>
+        </div>
+        {{/each}}
+    </section>
+</footer>

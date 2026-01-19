@@ -1,0 +1,38 @@
+<section
+    class="tab dynamic-part {{tab.cssClass}}"
+    data-group="{{tab.group}}"
+    data-tab="{{tab.id}}"
+>
+    <div class="content grid-container {{ifThen showGrid "show-grid" ""}}" style="{{tab.style}}">
+        {{#each tab.segments}}
+        <div
+            class="segment {{ifThen model.isClickable 'clickable' ''}}"
+            style="{{style}}"
+            data-segment-id="{{model.id}}"
+            data-tab-id="{{../id}}"
+            data-action="clickSegment"
+        >
+            <div class="ackground-blur"></div>
+            <div class="wrappler">
+                {{{enrichedHTML}}}
+            </div>
+        </div>
+        {{/each}}
+    </div>
+
+    {{#if user.isGM }}
+    <div class="fixed-buttons">
+        <a
+            class="icon fa-regular fa-wrench fixed-anchor"
+            data-action="openSetting"
+            data-tooltip="Open Setting"
+        ></a>
+        <a
+            class="icon fa-regular fa-grid fixed-anchor {{ifThen showGrid "active" ""}}"
+            data-action="toggleGrid"
+            data-tooltip="Toggle Grid"
+        ></a>
+    </div>
+    {{/if}}
+
+</section>

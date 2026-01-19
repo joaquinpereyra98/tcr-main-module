@@ -36,7 +36,6 @@
     <label>
         {{!-- Change icon if locked to show a lock symbol --}}
         <i class="tag-icon fa-solid {{#if source.locked}}fa-lock{{else}}fa-passport{{/if}}"></i>
-        {{log source.locked}}
         <input
             type="checkbox"
             name="sources.{{source.id}}"

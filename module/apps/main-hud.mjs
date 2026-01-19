@@ -1,18 +1,23 @@
 import InteractiveMixin from "./interactive-mixin.mjs";
 import { MODULE_ID, SETTINGS } from "../constants.mjs";
 import TabData from "../data/tab-data.mjs";
+import JiraIssueManager from "../jira/jira-manager.mjs";
+import IssueData from "../data/issue-data.mjs";
+import Fuse from "../lib/fuse.mjs";
 
 const { ApplicationV2 } = foundry.applications.api;
 
 /**
- * @import {ApplicationTabsConfiguration} from "./_types.mjs"
- */
-
-/**
+ * @import {ApplicationTabsConfiguration} from "./_types.mjs";
  * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationRenderContext, ApplicationRenderOptions} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
+ * @import {HandlebarsRenderOptions, HandlebarsTemplatePart } from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
  */
 
 export default class MainHud extends InteractiveMixin(ApplicationV2) {
+  /* -------------------------------------------- */
+  /*  Static Properties                           */
+  /* -------------------------------------------- */
+
   /**
    * The default configuration options which are assigned to every instance of this Application class.
    * @type {Partial<ApplicationConfiguration>}
@@ -21,7 +26,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     id: `${MODULE_ID}-main-hud`,
     classes: [MODULE_ID, "main-hud"],
     window: {
-      minimizable: false,
+      minimizable: true,
     },
     position: {
       width: 800,
@@ -34,16 +39,32 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       },
       toggleGrid: MainHud.#onToggleGrid,
       openSetting: MainHud.#onOpenSetting,
+      editIssue: MainHud.#onEditIssue,
+      createTicket: MainHud.#onCreateTicket,
+      toggleSelfFilter: MainHud.#onToggleSelfFilter,
+      loginKofi: MainHud.#onLoginKofi,
     },
   };
 
+  /**@type {Record<String, TabData>} */
+  static get SETTING() {
+    return game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION);
+  }
+
   /**
-   * Define tabs that should always exist regardless of settings.
+   * Static Tabs.
    * @returns {Record<string, ApplicationTabsConfiguration}
    */
-  static TABS = {
-    primary: {
+  static _TABS = {};
+
+  /**@override */
+  static get TABS() {
+    const tabsSetting = Object.values(MainHud.SETTING);
+
+    /**@type {ApplicationTabsConfiguration} */
+    const primary = {
       tabs: [
+        ...tabsSetting,
         {
           id: "bugTracker",
           icon: "fa-solid fa-bug",
@@ -51,28 +72,113 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
           background: { color: "#121416", src: undefined },
         },
       ],
-    },
-  };
+      initial: tabsSetting[0]?.id ?? "bugTracker",
+    };
+    return {
+      primary,
+      ...MainHud._TABS,
+    };
+  }
 
   /** @override */
-  static PARTS = {
-    tabs: {
-      template: `modules/${MODULE_ID}/templates/main-hud/tab-navigation.hbs`,
-    },
-    body: {
-      template: `modules/${MODULE_ID}/templates/main-hud/body.hbs`,
-      templates: [`modules/${MODULE_ID}/templates/main-hud/bug-tracker.hbs`],
-    },
-  };
+  static get PARTS() {
+    const tabsSetting = Object.values(
+      game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION) || {},
+    );
 
-  get setting() {
-    return game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION);
+    return tabsSetting.reduce((acc, tab) => {
+      acc[tab.id] = {
+        template: `modules/${MODULE_ID}/templates/main-hud/tab-partial.hbs`,
+        classes: [tab.id],
+      };
+      return acc;
+    }, MainHud.BASE_PARTS);
   }
 
   /**
-   * @type {Boolean}
+   * Configure a registry of template parts which are supported for this application for partial rendering.
+   * @type {Record<string, HandlebarsTemplatePart>}
    */
+  static BASE_PARTS = {
+    tabs: {
+      template: `modules/${MODULE_ID}/templates/main-hud/tab-navigation.hbs`,
+    },
+    bugTracker: {
+      template: `modules/${MODULE_ID}/templates/main-hud/bug-tracker.hbs`,
+      scrollable: [""],
+    },
+  };
+
+  /**
+   * Configuration for result batching and infinite scrolling.
+   * @type {{MARGIN: number, SIZE: number}}
+   */
+  static BATCHING = {
+    /** The number of pixels before reaching the end of the scroll container to begin loading additional entries.*/
+    MARGIN: 50,
+
+    /** The number of entries to load per batch.*/
+    SIZE: 20,
+  };
+
+  /**
+   * The number of milliseconds to delay between user keypresses before executing a search.
+   * @type {number}
+   */
+  static SEARCH_DELAY = 200;
+
+  /* -------------------------------------------- */
+  /*  Instance Properties                         */
+  /* -------------------------------------------- */
+
+  /** @type {Boolean} */
   _showGrid = false;
+
+  /**@type {HTMLElement} */
+  #background;
+
+  get setting() {
+    return MainHud.SETTING;
+  }
+
+  /**
+   * The function to invoke when searching results by name.
+   * @type {Function}
+   */
+  _debouncedSearch = foundry.utils.debounce(
+    this._onSearchName.bind(this),
+    this.constructor.SEARCH_DELAY,
+  );
+
+  /**
+   * The current index of the next issue to be rendered in the batch.
+   * @type {number}
+   * @private
+   */
+  #issueIndex = 0;
+
+  /**
+   * Whether a batch rendering operation is currently in progress.
+   * @type {boolean}
+   * @private
+   */
+  #renderThrottle = false;
+
+  /**
+   * The full list of issues available for rendering, used for slicing batches.
+   * @type {Array<object>}
+   * @private
+   */
+  #filteredIssues = [];
+
+  #filters = {
+    searchQuery: "",
+    showOnlySelf: false,
+  };
+
+  /* -------------------------------------------- */
+  /*  Initialization                              */
+  /* -------------------------------------------- */
 
   /**
    * Initialize configuration options for the Application instance.
@@ -85,17 +191,87 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const isMobile = clientWidth <= 768;
 
     if (isMobile) {
-      const baseWidth = options.position.width;
-      const baseHeight = options.position.height;
-
-      const widthScale = (clientWidth * 0.9) / baseWidth;
-      const heightScale = (clientHeight * 0.8) / baseHeight;
-
+      const widthScale = (clientWidth * 0.9) / options.position.width;
+      const heightScale = (clientHeight * 0.8) / options.position.height;
       options.position.scale = Math.min(1.0, widthScale, heightScale);
     }
 
     return options;
   }
+
+  /* -------------------------------------------- */
+  /*  Rendering                                   */
+  /* -------------------------------------------- */
+
+  /**@inheritdoc */
+  _configureRenderOptions(options) {
+    const tabId = this.tabGroups.primary ?? MainHud.TABS.primary.initial;
+    options.background = MainHud.TABS.primary.tabs.find(
+      (t) => t.id === tabId,
+    ).background;
+    super._configureRenderOptions(options);
+  }
+
+  /** @inheritdoc */
+  async _renderFrame(options) {
+    const frame = await super._renderFrame(options);
+
+    const level = game.membership?.membershipLevel;
+
+    // Simple map: only store the logged-in tiers
+    const rankMap = {
+      0: ["<i class='fa-solid fa-check'></i> Member", "#ffffff"],
+      1: ["<i class='fa-solid fa-check'></i> Benefactor", "#4da6ff"],
+      2: [
+        "<i class='fa-solid fa-check'></i> Benefactor of Knowledge",
+        "#ffac33",
+      ],
+    };
+
+    const [label, spanColor] = rankMap[level] || [
+      "<i class='fa-solid fa-xmark'></i> Not Logged In",
+      "#ff4d4d",
+    ];
+
+    frame
+      .querySelector('.header-control[data-action="close"]')
+      ?.insertAdjacentHTML(
+        "beforebegin",
+        `
+      <span class="login-status" style="color: ${spanColor} ;">${label}</span>
+      <button type="button" class="header-control fa-solid fa-mug"
+              data-tooltip="Kofi" aria-label="kofi" data-action="loginKofi"></button>
+      `,
+      );
+
+    this.#background = document.createElement("div");
+    this.#background.classList.add("background-container");
+    frame.insertAdjacentElement("afterbegin", this.#background);
+
+    const { src, color } = options.background;
+    this.#applyBackgroundTransition(src, color);
+
+    return frame;
+  }
+
+  /** @inheritdoc */
+  _onRender(context, options) {
+    super._onRender(context, options);
+    const tabs = this.element.querySelectorAll('.tab[data-group="primary"]');
+    let tabContainer = this.element.querySelector(".tab-container");
+    if (!tabContainer) {
+      tabContainer = document.createElement("div");
+      tabContainer.classList.add("tab-container");
+    }
+
+    tabContainer.append(...tabs);
+
+    this.element.querySelector(".window-content").append(tabContainer);
+  }
+
+  /* -------------------------------------------- */
+  /*  Context                                     */
+  /* -------------------------------------------- */
 
   /**
    * Prepare application rendering context data for a given render request.
@@ -105,133 +281,259 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
 
-    const enrichedTabs = await Promise.all(
-      Object.values(this.setting).map(async (tabData) => {
-        const tab = new TabData(tabData);
-        const segments = await Promise.all(
-          tab.segments.map(async (segment) => {
-            return {
-              model: segment,
-              style: segment.styleAttr,
-              enrichedHTML: await segment.getEnrichedContent(),
-            };
-          })
-        );
-        return {
-          model: tab,
-          id: tab.id,
-          style: tab.styleAttr,
-          segments: segments,
-        };
-      })
-    );
-
     return {
       ...context,
-      setting: enrichedTabs,
       showGrid: this._showGrid,
-      showFixedButtons: game.user.isGM && Object.keys(this.setting).includes(this.tabGroups.primary),
+      user: game.user,
     };
   }
 
-  /**@inheritdoc */
-  async _renderFrame(options) {
-    const frame = await super._renderFrame(options);
-    const tabsConfig = this._getTabsConfig("primary");
-    const tabData = tabsConfig.tabs.find(
-      (t) => t.id === this.tabGroups.primary
-    );
-    const { color, src } = tabData.background ?? {};
-
-    const content = src ? VideoHelper.hasVideoExtension(src)
-      ? `<video src="${src}" autoplay loop muted playsinline class="bg-video visible"></video>`
-      : `<img src="${src}" class="bg-image visible" alt="" >` : "";
-
-    frame
-      .querySelector(".window-content")
-      ?.insertAdjacentHTML(
-        "beforeBegin",
-        `<div class="hud-background-layer" style="--bg-color: ${color}">${content}</div>`
+  /**
+   * Prepare context that is specific to only a single rendered part.
+   *
+   * @param {string} partId - The part being rendered
+   * @param {ApplicationRenderContext} context - Shared context provided by _prepareContext
+   * @param {HandlebarsRenderOptions} options - Options which configure application rendering behavior
+   * @returns {Promise<ApplicationRenderContext>} - Context data for a specific part
+   * @protected
+   */
+  async _preparePartContext(partId, context, options) {
+    context = await super._preparePartContext(partId, context, options);
+    if (this.setting[partId]) {
+      await this._prepareDynamicTabContext(
+        this.setting[partId],
+        context,
+        options,
       );
-
-    return frame;
-  }
-
-  /**@inheritdoc */
-  changeTab(tab, group, options = {}) {
-    if (group === "primary") this._updateBackground(tab);
-    super.changeTab(tab, group, options);
-    this.render();
+    } else if (partId === "bugTracker")
+      await this._prepareIssueTrackerContext(context, options);
+    return context;
   }
 
   /**
-   * Get the configuration for a tabs group.
-   * @param {string} group The ID of a tabs group
-   * @returns {ApplicationTabsConfiguration|null}
-   * @protected
+   * Prepare render context for the dynamics tabs.
+   * @param {TabData} tabData
+   * @param {ApplicationRenderContext} context
+   * @param {HandlebarsRenderOptions} options
+   * @returns {Promise<void>}
    */
-  _getTabsConfig(group) {
-    return group === "primary"
-      ? this._getPrimaryTabs()
-      : this.constructor.TABS[group] ?? null;
+  async _prepareDynamicTabContext(tabData, context, _options) {
+    const { active, cssClass, group } = context.tabs[tabData.id];
+    const tab = new TabData(tabData);
+
+    const segments = await Promise.all(
+      tab.segments.map(async (model) => ({
+        model,
+        style: model.styleAttr,
+        enrichedHTML: await model.getEnrichedContent(),
+      })),
+    );
+
+    context.tab = {
+      active,
+      cssClass,
+      group,
+      segments,
+      model: tab,
+      id: tab.id,
+      style: tab.styleAttr,
+    };
   }
 
   /**
    *
-   * @returns {ApplicationTabsConfiguration}
+   * @param {ApplicationRenderContext} context
+   * @param {HandlebarsRenderOptions} _options
    */
-  _getPrimaryTabs() {
-    const setting = this.setting;
-
-    const tabs = [
-      ...Object.values(setting),
-      ...this.constructor.TABS.primary.tabs,
-    ];
-
-    return {
-      tabs,
-      initial: tabs[0].id,
-    };
+  async _prepareIssueTrackerContext(context, _options) {
+    context.filters = this.#filters;
   }
 
+  /* -------------------------------------------- */
+  /*  Other Public Methods                        */
+  /* -------------------------------------------- */
+
+  /**@inheritdoc */
+  changeTab(tab, group, options = {}) {
+    if (group === "primary") {
+      const tabsConfig = this._getTabsConfig("primary");
+      const tabData = tabsConfig.tabs.find((t) => t.id === tab);
+      const { src, color } = tabData?.background ?? {};
+      this.#applyBackgroundTransition(src, color);
+    }
+    super.changeTab(tab, group, options);
+  }
+
+  /* -------------------------------------------- */
+  /*  Helper Methods                              */
+  /* -------------------------------------------- */
+
   /**
-   * Updates the application background based on a specific tab's data
-   * @param {string} tabId
+   * Handles the cross-fade transition for any background type (Video, Image, or Color)
    */
-  _updateBackground(tabId) {
-    const tabsConfig = this._getTabsConfig("primary");
-    const tabData = tabsConfig.tabs.find((t) => t.id === tabId);
+  #applyBackgroundTransition(src, color) {
+    if (!this.#background) return;
 
-    const container = this.element.querySelector(".hud-background-layer");
-    const oldElement = container.querySelector(".bg-video, .bg-image");
+    const oldLayers = Array.from(this.#background.children);
 
-    const { src, color } = tabData?.background ?? {};
-    if (src) {
-      const isVideo = VideoHelper.hasVideoExtension(src);
-      const htmlString = isVideo
-        ? `<video src="${src}" autoplay loop muted playsinline class="bg-video"></video>`
-        : `<img src="${src}" class="bg-image" alt="">`;
+    const isVideo = VideoHelper.hasVideoExtension(src);
+    const newLayer = document.createElement(isVideo ? "video" : "div");
 
-      const newElement = foundry.applications.parseHTML(htmlString);
-      container.appendChild(newElement);
-
-      requestAnimationFrame(() => newElement.classList.add("visible"));
+    newLayer.classList.add("bg-layer");
+    if (isVideo) {
+      newLayer.src = src;
+      newLayer.autoplay = true;
+      newLayer.muted = true;
+      newLayer.loop = true;
+      newLayer.playsInline = true;
     }
 
-    if (oldElement) {
-      oldElement.classList.remove("visible");
+    newLayer.style.background = isVideo
+      ? "none"
+      : src
+        ? `url("${src}") center/cover no-repeat`
+        : color;
 
+    this.#background.appendChild(newLayer);
+
+    requestAnimationFrame(() => {
+      newLayer.style.opacity = "1";
+    });
+
+    if (oldLayers.length > 0) {
       setTimeout(() => {
-        oldElement.remove();
-      }, 500);
+        oldLayers.forEach((el) => el.remove());
+      }, 800);
     }
-
-    container.setAttribute("style", `--bg-color: ${color}`);
   }
 
   /**
+   * Renders a single issue entry using a Handlebars template.
+   * @param {object} issue - The Jira issue data model to render.
+   * @returns {Promise<HTMLElement>} - The rendered issue element.
+   */
+  async _renderIssue(issue) {
+    const path = `modules/${MODULE_ID}/templates/main-hud/issue-item.hbs`;
+    const html = await renderTemplate(path, issue);
+    const temp = document.createElement("div");
+    temp.innerHTML = html;
+    return temp.firstElementChild;
+  }
+
+  /**
+   * Renders a specific slice of issues based on the current index and batch size,
+   * then appends them to the DOM.
+   * @returns {Promise<void>}
+   */
+  async _renderIssueBatch() {
+    const container = this.element.querySelector(".bug-tracker.tab .grid-body");
+    const batchEnd = Math.min(
+      this.#issueIndex + MainHud.BATCHING.SIZE,
+      this.#filteredIssues.length,
+    );
+
+    const promises = [];
+    for (let i = this.#issueIndex; i < batchEnd; i++) {
+      promises.push(this._renderIssue(this.#filteredIssues[i]));
+    }
+
+    const elements = await Promise.all(promises);
+    container.append(...elements);
+
+    this.#issueIndex = batchEnd;
+  }
+
+  /**
+   * Prepares the issue list by resetting the batch index and clearing the container,
+   * then triggers the first batch render.
+   * @returns {Promise<void>}
+   */
+  async _renderIssues() {
+    let issues = Array.from(JiraIssueManager.issues.values());
+
+    if (this.#filters.searchQuery) {
+      const fuse = new Fuse(issues, {
+        keys: ["summary"],
+        threshold: 0.4,
+      });
+      
+      const results = fuse.search(this.#filters.searchQuery);
+      issues = results.map((result) => result.item);
+    }
+
+    if (this.#filters.showOnlySelf) {
+      issues = issues.filter((issue) => issue.user?.isSelf === true);
+    }
+
+    this.#filteredIssues = issues.sort((a, b) => (b.created || 0) - (a.created || 0));
+    this.#issueIndex = 0;
+
+    const container = this.element.querySelector(".bug-tracker.tab .grid-body");
+    if (!container) return;
+
+    container.innerHTML = "";
+    await this._renderIssueBatch();
+  }
+
+  /* -------------------------------------------- */
+  /*  Event Listeners and Handlers                */
+  /* -------------------------------------------- */
+
+  /** @inheritDoc */
+  _attachFrameListeners() {
+    super._attachFrameListeners();
+    this.element.addEventListener("scroll", this._onScrollIssues.bind(this), {
+      capture: true,
+      passive: true,
+    });
+
+    this.element.addEventListener("keydown", this._debouncedSearch, {
+      passive: true,
+    });
+  }
+
+  /** @inheritDoc */
+  _attachPartListeners(partId, htmlElement, options) {
+    super._attachPartListeners(partId, htmlElement, options);
+    if (partId === "bugTracker") this._renderIssues();
+  }
+
+  /**
+   * Handles the scroll event on the Bug Tracker container to trigger batch loading
+   * when the user approaches the bottom of the list.
+   * @param {Event} event - The scroll event.
+   * @returns {Promise<void>}
+   */
+  async _onScrollIssues(event) {
+    if (this.#renderThrottle || !event.target.closest(".bug-tracker.tab"))
+      return;
+
+    if (this.#issueIndex >= this.#filteredIssues.length) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = event.target;
+    if (scrollTop + clientHeight < scrollHeight - MainHud.BATCHING.MARGIN)
+      return;
+
+    this.#renderThrottle = true;
+    await this._renderIssueBatch();
+    this.#renderThrottle = false;
+  }
+
+  /**
+   * Handle searching for a Document by name.
+   * @param {KeyboardEvent} event  The triggering event.
+   * @protected
+   */
+  _onSearchName(event) {
+    if (!event.target.matches(".search > input")) return;
+    this.#filters.searchQuery = event.target.value.trim();
+    this._renderIssues();
+  }
+
+  /**
+   * Handle clicking a tab segment to trigger its specific action
    * @type {ApplicationClickAction}
-   * @this {MainHud}
+   * @this MainHud
    */
   static #onClickSegment(event, target) {
     event.preventDefault();
@@ -246,31 +548,90 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   }
 
   /**
+   * Toggle the visibility of the layout grid in the application
    * @type {ApplicationClickAction}
-   * @this {MainHud}
+   * @this MainHud
    */
   static #onToggleGrid(_event, target) {
-    /**@type {HTMLElement} */
-    const gridContainer = this.element.querySelector(".grid-container");
-    const haveClass = gridContainer.classList.toggle("show-grid");
-    this._showGrid = haveClass;
-    target.classList.toggle("active", haveClass);
+    this._showGrid = !this._showGrid;
+    const grid = this.element.querySelector(".grid-container");
+    grid?.classList.toggle("show-grid", this._showGrid);
+    target.classList.toggle("active", this._showGrid);
   }
 
   /**
+   * Open the module configuration menu for tab settings
    * @type {ApplicationClickAction}
-   * @this {MainHud}
+   * @this MainHud
    */
-  static async #onOpenSetting(_event) {
+  static async #onOpenSetting() {
     const menu = game.settings.menus.get(
-      `${MODULE_ID}.${SETTINGS.TAB_CONFIGURATION}`
+      `${MODULE_ID}.${SETTINGS.TAB_CONFIGURATION}`,
     );
 
-    if (!menu)
-      return void ui.notifications.error(
-        "No submenu found for the provided key"
-      );
-    const app = new menu.type();
-    await app.render(true);
+    /**@type {ApplicationV2} */
+    const Cls = menu.type;
+
+    const app =
+      foundry.applications.instances.get(`${MODULE_ID}-hud-config`) ??
+      new Cls();
+
+    return app.render({ force: true });
+  }
+
+  /**
+   * Open the Jira issue editor for a specific issue key
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static #onEditIssue(_event, target) {
+    const key = target.dataset.key;
+    const issue = JiraIssueManager.issues.get(key);
+    issue.app.render({ force: true });
+  }
+
+  /**
+   *
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static #onCreateTicket(_event, target) {
+    const issue = new IssueData({
+      summary: "New Issue",
+    });
+
+    issue.app.render({ force: true });
+  }
+
+  /**
+   * Toggle the visibility of issues assigned to others
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static #onToggleSelfFilter(_event, target) {
+    this.#filters.showOnlySelf = !this.#filters.showOnlySelf;
+
+    const filter = this.#filters.showOnlySelf ? "self" : "all";
+
+    const buttons = target.querySelectorAll(".btn");
+    buttons.forEach((b) =>
+      b.classList.toggle("active", b.dataset.filter === filter),
+    );
+
+    const pill = target.querySelector(".selection-pill");
+    if (pill) {
+      pill.classList.toggle("active", this.#filters.showOnlySelf);
+    }
+
+    this._renderIssues();
+  }
+
+  /**
+   * Toggle the visibility of issues assigned to others
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static #onLoginKofi(_event, target) {
+    document.getElementById("dt-btn")?.click();
   }
 }

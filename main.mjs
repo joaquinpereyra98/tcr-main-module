@@ -2,8 +2,10 @@ import * as apps from "./module/apps/_module.mjs";
 import * as settings from "./module/settings/_module.mjs";
 import * as data from "./module/data/_module.mjs";
 
+import JiraIssueManager from "./module/jira/jira-manager.mjs";
+
 import { moduleToObject } from "./module/utils.mjs";
-import { MAIN_HUD_KEY } from "./module/constants.mjs";
+import { MAIN_HUD_KEY, MODULE_ID } from "./module/constants.mjs";
 
 Hooks.on("init", () => {
   const module = game.modules.get("tcr-main-module");
@@ -18,5 +20,8 @@ Hooks.on("init", () => {
 
   settings.HUDConfig.registerSetting();
   settings.SourcesConfig.registerSetting();
-});
 
+  JiraIssueManager.instance
+    .initialize()
+    .then(() => console.log(`${MODULE_ID} | Jira Issues Loaded!`));
+});

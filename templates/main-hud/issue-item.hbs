@@ -1,0 +1,36 @@
+<div
+    class="grid-row"
+    data-key="{{key}}"
+    data-action="editIssue"
+>
+    <div class="col-score">
+        <div class="flexcol">
+            <a class="score-anchor up fa-solid fa-arrow-up"></a>
+            <span>{{score}}</span>
+            <a class="score-anchor down fa-solid fa-arrow-down"></a>
+        </div>
+    </div>
+    <div class="col-issueType" data-tooltip="{{typeLabel}}">{{{typeIcon}}}</div>
+
+    <div class="col-priority">
+        {{{priorityIcon}}} <span>{{priorityLabel}}</span>
+    </div>
+    <div class="col-id">{{numericID}}</div>
+    <div class="col-summary">
+        {{summary}}
+    </div>
+    <div class="col-status">
+        {{{statusIcon}}}
+        {{statusLabel}}
+    </div>
+    <div class="col-last-modified">
+        <div class="flexcol">
+            <div class="date-label">
+                {{createdLabel.date}}
+            </div>
+            <div class="time-label">
+                {{createdLabel.time}}
+            </div>
+        </div>
+    </div>
+</div>

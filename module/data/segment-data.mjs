@@ -4,6 +4,7 @@ import SegmentConfig from "../settings/segment-config.mjs";
  * TCR Macro Hub Segment Data Model
  */
 export default class SegmentData extends foundry.abstract.DataModel {
+  /**@inheritdoc */
   static defineSchema() {
     const f = foundry.data.fields;
 

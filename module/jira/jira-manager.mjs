@@ -1,0 +1,426 @@
+import IssueData from "../data/issue-data.mjs";
+import { BASE_URL, MODULE_ID } from "../constants.mjs";
+import MainHud from "../apps/main-hud.mjs";
+/**
+ * A singleton manager responsible for synchronizing Jira issues with Foundry VTT.
+ */
+export default class JiraIssueManager {
+  /** * The singleton instance of the manager.
+   * @type {JiraIssueManager}
+   * @private
+   */
+  static #instance;
+
+  /** * The local cache of issue data.
+   * @type {foundry.utils.Collection<string, IssueData>}
+   * @private
+   */
+  #issues = new foundry.utils.Collection();
+
+  /**
+   * Constructs the JiraIssueManager.
+   * Implements the Singleton pattern; returns the existing instance if available.
+   */
+  constructor() {
+    if (JiraIssueManager.#instance) return JiraIssueManager.#instance;
+
+    /** @type {number|null} Timestamp of the last successful sync */
+    this.lastSync = null;
+
+    /** @type {number} Time in milliseconds between automatic refreshes (default 5 mins). */
+    this.refreshInterval = 300000;
+
+    /** @type {number|null} The ID of the active setInterval timer. */
+    this._intervalId = null;
+
+    JiraIssueManager.#instance = this;
+  }
+
+  static SOCKET_EVENT = `${MODULE_ID}.refreshJira`;
+
+  /**
+   * Handles incoming socket broadcasts from other clients to synchronize the local state.
+   * @this {JiraIssueManager}
+   * @param {object} data - The message packet received from the socket.
+   * @param {"CREATE_ISSUE"|"UPDATE_ISSUE"|"DELETE_ISSUE"} data.type - The type of sync operation.
+   * @param {object} data.payload - The data required to perform the sync.
+   * @param {string} data.payload.key - The unique Jira key (e.g., "PROJ-123").
+   * @param {object} [data.payload.data] - The raw Jira data used for creation or updates.
+   * @private
+   */
+  static _handleSocketEvent({ type, payload }) {
+    switch (type) {
+      case "CREATE_ISSUE":
+        this.#issues.set(payload.key, payload.data);
+        break;
+      case "UPDATE_ISSUE":
+        const issueToUpdate = this.#issues.get(payload.key);
+        if (issueToUpdate) issueToUpdate.updateSource(payload.data);
+        break;
+      case "DELETE_ISSUE":
+        const issueToDelete = this.#issues.get(payload.key);
+        if(issueToDelete) {
+          issue.app.close();
+          this.#issues.delete(payload.key);
+        }
+        break;
+    }
+
+    JiraIssueManager._refreshApps();
+  }
+
+  /**
+   * Broadcasts a state change to all other connected clients via the Foundry Socket API.
+   * @param {"CREATE_ISSUE"|"UPDATE_ISSUE"|"DELETE_ISSUE"} type - The specific action being broadcasted.
+   * @param {object} payload - The data packet associated with the event.
+   * @param {string} payload.key - The unique Jira issue key (e.g., "PROJ-123").
+   * @param {object} [payload.data] - The updated issue data or the full issue object (required for CREATE/UPDATE).
+   * @private
+   */
+  static _emitRefresh(type, payload) {
+    game.socket.emit(JiraIssueManager.SOCKET_EVENT, {
+      type,
+      payload,
+    });
+  }
+
+  /**
+   * Static access to the issue collection.
+   * @type {foundry.utils.Collection<string, IssueData>}
+   * @readonly
+   */
+  static get issues() {
+    return this.instance.issues;
+  }
+
+  /**
+   * Returns the singleton instance of the manager.
+   * @type {JiraIssueManager}
+   * @readonly
+   */
+  static get instance() {
+    if (!this.#instance) this.#instance = new JiraIssueManager();
+    return this.#instance;
+  }
+
+  /**
+   * Instance access to the issue collection.
+   * @type {foundry.utils.Collection<string, IssueData>}
+   * @readonly
+   */
+  get issues() {
+    return this.#issues;
+  }
+
+  /* -------------------------------------------- */
+  /* Initialization & Sync                       */
+  /* -------------------------------------------- */
+
+  /**
+   * Performs initial data fetch and starts the automatic refresh timer.
+   * @returns {Promise<void>}
+   */
+  async initialize() {
+    game.socket.on(
+      JiraIssueManager.SOCKET_EVENT,
+      JiraIssueManager._handleSocketEvent.bind(this),
+    );
+
+    await this.loadAll();
+    this.startAutoRefresh();
+  }
+
+  /**
+   * Clears any existing interval and starts a new synchronization timer.
+   * @void
+   */
+  startAutoRefresh() {
+    if (this._intervalId) clearInterval(this._intervalId);
+    this._intervalId = setInterval(() => this.loadAll(), this.refreshInterval);
+  }
+
+  /**
+   * Stops the automatic refresh timer.
+   * @void
+   */
+  stopAutoRefresh() {
+    clearInterval(this._intervalId);
+    this._intervalId = null;
+  }
+
+  /* -------------------------------------------- */
+  /* API Methods                                 */
+  /* -------------------------------------------- */
+
+  /**
+   * Internal helper for making authenticated/formatted requests to the middleware.
+   * @param {string} endpoint - The API path (relative to BASE_URL).
+   * @param {RequestInit} [options={}] - Standard Fetch API options.
+   * @returns {Promise<object>} The parsed JSON response.
+   * @throws {Error} If the network response is not OK.
+   * @private
+   * @static
+   */
+  static async #fetchAPI(endpoint, options = {}) {
+    const url = `${BASE_URL}${endpoint}`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP Error ${response.status}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Fetches all issues from the middleware and updates the local collection cache.
+   * @returns {Promise<foundry.utils.Collection<string, IssueData>>} The updated collection.
+   */
+  async loadAll() {
+    try {
+      console.log("Jira | Syncing issues...");
+      const data = await JiraIssueManager.#fetchAPI("/search", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+
+      this.#issues.clear();
+      for (const issue of data) {
+        const model = IssueData.fromJira(issue);
+        this.#issues.set(model.key, model);
+      }
+
+      JiraIssueManager._refreshApps();
+      this.lastSync = Date.now();
+
+      console.log("Jira | Synchronized issues!");
+      return this.#issues;
+    } catch (err) {
+      ui.notifications.error(`Jira Load Error: ${err.message}`);
+      return this.#issues;
+    }
+  }
+
+  /**
+   * Re-renders any that are instances of the MainHud class.
+   * @private
+   */
+  static _refreshApps() {
+    for (const app of foundry.applications.instances.values()) {
+      if (app instanceof MainHud) app.render({ parts: ["bugTracker"] });
+    }
+  }
+
+  /**
+   * Sends a creation request to the Jira middleware.
+   * @param {object} data - The raw issue data to be created.
+   * @returns {Promise<IssueData>} The newly created issue model.
+   * @throws {Error} If creation fails.
+   * @static
+   */
+  static async create(data) {
+    try {
+      const result = await this.#fetchAPI("", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+
+      const newIssue = IssueData.fromJira(result);
+
+      this._emitRefresh("CREATE_ISSUE", { key: newIssue.key, data: newIssue });
+
+      this.issues.set(newIssue.key, newIssue);
+
+      JiraIssueManager._refreshApps();
+      ui.notifications.info(`Issue ${newIssue.key} created.`);
+      return newIssue;
+    } catch (err) {
+      ui.notifications.error(`Creation failed: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Updates an existing Jira issue with the provided changes.
+   * @param {string} issueID - The unique Jira key (e.g., "PROJ-123").
+   * @param {object} changes - An object containing the fields to update.
+   * @returns {Promise<void>}
+   * @static
+   */
+  static async update(issueID, changes) {
+    if (!game.user.isGM) {
+      ui.notifications.error(
+        "Jira Integration | Access Denied. Only Gamemasters can sync changes to Jira.",
+      );
+      return;
+    }
+
+    try {
+      const { message, result } = await this.#fetchAPI(`/${issueID}`, {
+        method: "PUT",
+        body: JSON.stringify(changes),
+      });
+
+      const existing = this.issues.get(issueID);
+      if (existing) {
+        existing.updateSource(result);
+        this._emitRefresh("EDIT_ISSUE", { data: existing.toObject() });
+      }
+
+      JiraIssueManager._refreshApps();
+      console.log(message);
+      return existing;
+    } catch (err) {
+      ui.notifications.error(`Update failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Deletes an issue from Jira and removes it from the local collection.
+   * @param {string} issueID - The unique Jira key to delete.
+   * @returns {Promise<void>}
+   * @static
+   */
+  static async delete(issueID) {
+    if (!game.user.isGM) {
+      ui.notifications.error(
+        "Jira Integration | Access Denied. Only Gamemasters can sync changes to Jira.",
+      );
+      return;
+    }
+
+    try {
+      await this.#fetchAPI(`/${issueID}`, { method: "DELETE" });
+
+      this._emitRefresh("DELETE_ISSUE", { key: issueID });
+
+      this.issues.delete(issueID);
+      JiraIssueManager._refreshApps();
+      ui.notifications.warn(`Issue ${issueID} deleted.`);
+    } catch (err) {
+      ui.notifications.error(`Deletion failed: ${err.message}`);
+    }
+  }
+
+  /* -------------------------------------------- */
+  /* Comment Methods                              */
+  /* -------------------------------------------- */
+
+  /**
+   * Adds a comment to a specific Jira issue.
+   * @param {string} issueID - The Jira key (e.g., "PROJ-123").
+   * @param {string} htmlContent - The comment body from Foundry.
+   * @returns {Promise<object>} The Jira response data.
+   * @static
+   */
+  static async addComment(issueID, htmlContent) {
+    try {
+      const result = await this.#fetchAPI(`/${issueID}/comments`, {
+        method: "POST",
+        body: JSON.stringify({
+          comment: htmlContent,
+          userkey: game.user.id ?? "",
+        }),
+      });
+
+      const issue = this.issues.get(issueID);
+
+      if (issue) {
+        issue.updateSource({ comments: result });
+        JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
+          key: issue.key,
+          data: issue.toObject(),
+        });
+      }
+
+      console.log(`Comment added to ${issueID}.`);
+      return result;
+    } catch (err) {
+      ui.notifications.error(`Failed to add comment: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Updates an existing comment in Jira.
+   * @param {string} issueID - The Jira key.
+   * @param {string} commentID - The ID of the comment to modify.
+   * @param {string} newHtmlContent - The updated HTML content.
+   * @returns {Promise<object>}
+   * @static
+   */
+  static async editComment(issueID, commentID, newHtmlContent) {
+    try {
+      const { result } = await this.#fetchAPI(
+        `/${issueID}/comments/${commentID}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ body: newHtmlContent }),
+        },
+      );
+
+      // Update local cache
+      const issue = this.issues.get(issueID);
+      if (issue && issue.comments) {
+        const index = issue.comments.findIndex((c) => c.id === commentID);
+        if (index !== -1) {
+          const updatedComments = [...issue.comments];
+          updatedComments[index] = result;
+          issue.updateSource({ comments: updatedComments });
+          JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
+            key: issue.key,
+            data: issue.toObject(),
+          });
+        }
+      }
+
+      JiraIssueManager._refreshApps();
+      return result;
+    } catch (err) {
+      ui.notifications.error(`Failed to edit comment: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Deletes a comment from Jira.
+   * @param {string} issueID - The Jira key.
+   * @param {string} commentID - The ID of the comment to remove.
+   * @returns {Promise<void>}
+   * @static
+   */
+  static async deleteComment(issueID, commentID) {
+    if (!game.user.isGM) {
+      ui.notifications.error(
+        "Jira Integration | Access Denied. Only Gamemasters can sync changes to Jira.",
+      );
+      return;
+    }
+
+    try {
+      await this.#fetchAPI(`/${issueID}/comments/${commentID}`, {
+        method: "DELETE",
+      });
+
+      const issue = this.issues.get(issueID);
+      if (issue && issue.comments) {
+        issue.updateSource({ [`comments.-=${commentID}`]: null });
+        JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
+          key: issue.key,
+          data: issue.toObject(),
+        });
+      }
+
+      JiraIssueManager._refreshApps();
+      console.log("Comment deleted.");
+    } catch (err) {
+      ui.notifications.error(`Failed to delete comment: ${err.message}`);
+      throw err;
+    }
+  }
+}

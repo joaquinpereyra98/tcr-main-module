@@ -1,0 +1,139 @@
+<form class="body-part flex1">
+    <aside class="sidebar">
+        {{#if editable}}
+        <div class="icon-select-container flex0 section-card" data-tooltip="{{issue.typeLabel}}">
+            {{{issue.typeIcon}}}
+            {{formInput fields.issueType value=source.issueType disabled=(not editable)}}
+            <i class="chevron fa-solid fa-chevron-down {{ifThen editable "" " disabled"}}"></i>
+        </div>
+        {{else}}
+        <div class="type-icon">
+            {{{issue.typeIcon}}}
+        </div>
+        {{/if}}
+        <div class="vote-controls">
+            <a
+                class="vote-action up {{#if (eq userVote 1)}}active{{/if}}"
+                data-action="vote"
+                data-direction="1"
+            >
+                <i class="fa-solid fa-arrow-up"></i>
+            </a>
+            <span class="score">{{issue.score}}</span>
+            <a
+                class="vote-action down {{#if (eq userVote -1)}}active{{/if}}"
+                data-action="vote"
+                data-direction="-1"
+            >
+                <i class="fa-solid fa-arrow-down"></i>
+            </a>
+        </div>
+
+        {{#if editable}}
+        <button
+            type="submit"
+            class="icon submit-button"
+            data-tooltip="{{ifThen isNew 'Create Issue' 'Save Changes'}}"
+        >
+            <i class="fa-regular fa-solid {{ifThen isNew 'fa-plus' 'fa-floppy-disk'}}"></i>
+        </button>
+        {{/if}}
+        
+    </aside>
+    <div class="issue-details">
+        <div class="detail-card subject-card">
+            <label class="detail-label">Subject</label>
+            {{#if editable}}
+            {{formInput fields.summary value=source.summary}}
+            {{else}}
+            <div class="value">{{issue.summary}}</div>
+            {{/if}}
+        </div>
+        <div class="metadata-grid">
+            <div class="detail-card">
+                <label class="detail-label"><i class="fa-solid fa-user"></i> Author</label>
+                <div class="value status-text">{{issue.author}}</div>
+            </div>
+            <div class="detail-card">
+                <label class="detail-label">{{{issue.priorityIcon}}} Priority</label>
+                {{#if editable}}
+                {{formInput fields.priority value=source.priority}}
+                {{else}}
+                <div class="value">{{issue.priorityLabel}}</div>
+                {{/if}}
+            </div>
+            <div class="detail-card">
+                <label class="detail-label">{{{issue.statusIcon}}} Status</label>
+                {{#if editable}}
+                {{formInput fields.status value=source.status}}
+                {{else}}
+                <div class="value status-text">{{issue.statusLabel}}</div>
+                {{/if}}
+            </div>
+        </div>
+        <div class="metadata-grid">
+            <div class="detail-card">
+                <label><i class="fa-regular fa-calendar"></i></i> Created at</label>
+                <div class="value">{{issue.createdLabel.date}} - {{issue.createdLabel.time}}</div>
+            </div>
+            <div class="detail-card">
+                <label><i class="fa-regular fa-calendar"></i></i> Updated at</label>
+                <div class="value">{{issue.updatedLabel.date}} - {{issue.updatedLabel.time}}</div>
+            </div>
+        </div>
+        <div class="description-section">
+            <h2 class="section-title">Description</h2>
+            <div class="description-content">
+                {{#if editable}}
+                {{formInput description.field value=description.value compact=true toggled=false}}
+                {{else}}
+                {{{description.enrich}}}
+                {{/if}}
+            </div>
+        </div>
+        {{!-- Attachments Section --}}
+        <div class="attachments-section detail-card">
+            <label class="detail-label"><i class="fa-solid fa-paperclip"></i> Attachments</label>
+            <div class="attachments-grid">
+                {{#each issue.attachments}}
+                <div class="attachment-item" data-index="{{@index}}">
+                    <img
+                        name="attachments"
+                        src="{{this}}"
+                        title="View Attachment"
+                        class="attachment-thumb"
+                        loading="lazy"
+                        alt=""
+                    >
+                    <div class="attachment-overlay">
+                        <a
+                            class="attachment-action view"
+                            data-action="viewImage"
+                            data-path="{{this}}"
+                        >
+                            <i class="fa-solid fa-magnifying-glass-plus"></i>
+                        </a>
+                        <a class="attachment-action delete" data-action="deleteAttachment">
+                            <i class="fa-solid fa-trash"></i>
+                        </a>
+                    </div>
+                </div>
+                {{/each}}
+
+            </div>
+            <div class="controls">
+                <button type="button" data-action="addAttachment">
+                    <input
+                        type="file"
+                        class="issue-image-upload"
+                        accept="image/*"
+                        style="display:none"
+                        multiple
+                    >
+                    <i class="fa-solid fa-file-circle-plus"></i>
+                    Add Image
+                </button>
+            </div>
+        </div>           
+    </div>
+</form>

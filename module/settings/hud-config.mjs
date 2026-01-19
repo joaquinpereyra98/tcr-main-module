@@ -87,6 +87,7 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
     });
   }
 
+  /**@type {Record<String, TabData>} */
   static get SETTING() {
     return game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION);
   }
