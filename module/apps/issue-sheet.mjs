@@ -1,4 +1,9 @@
-import { ISSUE_TYPES, MODULE_ID } from "../constants.mjs";
+import {
+  ISSUE_STATUSES,
+  ISSUE_TYPES,
+  MODULE_ID,
+  PRIORITY,
+} from "../constants.mjs";
 import IssueData from "../data/issue-data.mjs";
 import JiraIssueManager from "../jira/jira-manager.mjs";
 
@@ -39,6 +44,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
       addAttachment: IssueSheet.#onAddAttachment,
       addComment: IssueSheet.#onAddComment,
       deleteComment: IssueSheet.#onDeleteComment,
+      addScoreIssue: IssueSheet.#onAddScoreIssue,
     },
     position: {
       height: 650,
@@ -105,7 +111,8 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
   /** @inheritDoc */
   _configureRenderOptions(options) {
     super._configureRenderOptions(options);
-    if(!this.issue.key) options.parts = options.parts.filter(p => p !== "footer");;
+    if (!this.issue.key)
+      options.parts = options.parts.filter((p) => p !== "footer");
   }
 
   /** @inheritdoc */
@@ -114,11 +121,12 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
 
     this._addSelectTypeListener();
     this._addAttachImgListener();
+    this._addSelectPriorityAndStatus();
+    this._addEditCommentListener();
   }
 
   _addSelectTypeListener() {
     const select = this.element.querySelector(".icon-select-container select");
-
     if (!select) return;
 
     select.addEventListener("change", (event) => {
@@ -175,6 +183,43 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     });
   }
 
+  _addSelectPriorityAndStatus() {
+    const selects = this.element.querySelectorAll(
+      '[name="priority"], [name="status"]',
+    );
+    selects.forEach((select) => {
+      select.addEventListener("change", (event) => {
+        const { name, value, previousElementSibling } = event.target;
+        const config = { priority: PRIORITY, status: ISSUE_STATUSES }[name][
+          value
+        ];
+        const icon = previousElementSibling.querySelector("i");
+        icon.className = `issue-icon ${config.iconClass}`;
+        if (name === "priority") icon.classList.add("fa-solid");
+        icon.style.color = config.color;
+      });
+    });
+  }
+
+  _addEditCommentListener() {
+    const editors = this.element.querySelectorAll(".comment prose-mirror");
+    editors.forEach((editor) =>
+      editor.addEventListener("change", (event) => {
+        const commentID = event.target.closest(".comment")?.dataset.id;
+        JiraIssueManager.editComment(
+          this.issue.key,
+          commentID,
+          event.target.value,
+        );
+      }),
+    );
+  }
+
+  _replaceHTML(result, content, options) {
+    requestAnimationFrame(() => {
+      super._replaceHTML(result, content, options);
+    });
+  }
   /* -------------------------------------------- */
 
   /** @inheritDoc */
@@ -193,6 +238,12 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
         enrich: await issue.getEnrichDescription(),
         field: issue.schema.fields.description,
       },
+      comments: await Promise.all(
+        Object.values(issue.comments).map(async (c) => {
+          c.enrichBody = await c.getEnrichBody();
+          return c;
+        }),
+      ),
       user: game.user,
       newCommentField:
         foundry.applications.elements.HTMLProseMirrorElement.create({
@@ -303,13 +354,51 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this IssueSheet
    */
-  static async #onDeleteComment(_event, target) {
+  static async #onDeleteComment(event, target) {
     const id = target.closest("[data-id]").dataset.id;
 
     target.disabled = true;
     target.classList.remove("fa-paper-plane");
     target.classList.add("fa-spinner", "fa-spin");
-    await JiraIssueManager.deleteComment(this.issue.key, id);
+    if (event.shiftKey) {
+      await JiraIssueManager.deleteComment(this.issue.key, id);
+    } else {
+      Dialog.confirm({
+        title: `${game.i18n.format("DOCUMENT.Delete", { type: "Comment" })}: ${this.issue.key} - ${id}`,
+        content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.format("SIDEBAR.DeleteWarning", { type: "Comment" })}</p>`,
+        yes: () => JiraIssueManager.deleteComment(this.issue.key, id),
+      });
+    }
     await this.render({ parts: ["footer"] });
+  }
+
+  /**
+   *
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static async #onAddScoreIssue(_event, target) {
+    const score = Number(target.dataset.score);
+    if (!score) return;
+
+    const currentVoters = this.issue._source.voters;
+    const existingVoter = currentVoters.find((v) => v.userId === game.user.id);
+
+    let newVoters;
+
+    if (existingVoter?.vote === score) {
+      newVoters = currentVoters.filter((v) => v.userId !== game.user.id);
+    } else {
+      newVoters = [
+        ...currentVoters.filter((v) => v.userId !== game.user.id),
+        { userId: game.user.id, vote: score },
+      ];
+    }
+
+    const span = target.parentElement.querySelector("span");
+    span.innerText = "";
+    span.classList.add("fa-solid", "fa-spinner", "fa-spin");
+    span.style.opacity = 0.5;
+    await this.issue.update({ voters: newVoters });
   }
 }

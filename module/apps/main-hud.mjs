@@ -37,10 +37,12 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
         handler: MainHud.#onClickSegment,
         buttons: [0, 2],
       },
+      addScoreIssue: MainHud.#onAddScoreIssue,
       toggleGrid: MainHud.#onToggleGrid,
       openSetting: MainHud.#onOpenSetting,
+      createIssue: MainHud.#onCreateIssue,
+      deleteIssue: MainHud.#onDeleteIssue,
       editIssue: MainHud.#onEditIssue,
-      createTicket: MainHud.#onCreateTicket,
       toggleSelfFilter: MainHud.#onToggleSelfFilter,
       loginKofi: MainHud.#onLoginKofi,
     },
@@ -456,7 +458,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
         keys: ["summary"],
         threshold: 0.4,
       });
-      
+
       const results = fuse.search(this.#filters.searchQuery);
       issues = results.map((result) => result.item);
     }
@@ -465,7 +467,9 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       issues = issues.filter((issue) => issue.user?.isSelf === true);
     }
 
-    this.#filteredIssues = issues.sort((a, b) => (b.created || 0) - (a.created || 0));
+    this.#filteredIssues = issues.sort(
+      (a, b) => (b.created || 0) - (a.created || 0),
+    );
     this.#issueIndex = 0;
 
     const container = this.element.querySelector(".bug-tracker.tab .grid-body");
@@ -584,7 +588,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    * @type {ApplicationClickAction}
    * @this MainHud
    */
-  static #onEditIssue(_event, target) {
+  static #onEditIssue(event, target) {
+    if (event.target.closest(".col-score")) return;
     const key = target.dataset.key;
     const issue = JiraIssueManager.issues.get(key);
     issue.app.render({ force: true });
@@ -595,12 +600,30 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    * @type {ApplicationClickAction}
    * @this MainHud
    */
-  static #onCreateTicket(_event, target) {
+  static #onCreateIssue(_event, target) {
     const issue = new IssueData({
       summary: "New Issue",
+      user: game.user.id,
     });
 
     issue.app.render({ force: true });
+  }
+
+  /**
+   *
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static #onDeleteIssue(event, target) {
+    event.preventDefault();
+    const key = target.closest(".grid-row").dataset.key;
+    const issue = JiraIssueManager.issues.get(key);
+    if(event.shiftKey) return issue.delete();
+    return Dialog.confirm({
+      title: `${game.i18n.format("DOCUMENT.Delete", { type: "Issue" })}: ${issue.key}`,
+      content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.format("SIDEBAR.DeleteWarning", { type: "Issue" })}</p>`,
+      yes: () => issue.delete(),
+    });
   }
 
   /**
@@ -633,5 +656,37 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    */
   static #onLoginKofi(_event, target) {
     document.getElementById("dt-btn")?.click();
+  }
+
+  /**
+   * Toggles or adds a user's score to a specific Jira issue.
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static async #onAddScoreIssue(_event, target) {
+    const score = Number(target.dataset.score);
+    const key = target.closest(".grid-row")?.dataset.key;
+    const issue = JiraIssueManager.issues.get(key);
+    if (!score || !issue) return;
+
+    const currentVoters = issue._source.voters;
+    const existingVoter = currentVoters.find((v) => v.userId === game.user.id);
+
+    let newVoters;
+
+    if (existingVoter?.vote === score) {
+      newVoters = currentVoters.filter((v) => v.userId !== game.user.id);
+    } else {
+      newVoters = [
+        ...currentVoters.filter((v) => v.userId !== game.user.id),
+        { userId: game.user.id, vote: score },
+      ];
+    }
+
+    const span = target.parentElement.querySelector("span");
+    span.innerText = "";
+    span.classList.add("fa-solid", "fa-spinner", "fa-spin");
+    span.style.opacity = 0.5;
+    await issue.update({ voters: newVoters });
   }
 }

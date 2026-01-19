@@ -87,13 +87,13 @@ export const ISSUE_STATUSES = {
   inProgress: {
     label: "In-Pogress",
     key: "inProgress",
-    iconClass: "fa-solid fa-spinner fa-spin",
+    iconClass: "fa-regular fa-circle",
     color: "#f1c40f",
   },
   complete: {
     label: "Complete",
     key: "complete",
-    iconClass: "fa-solid fa-circle-check",
+    iconClass: "fa-regular fa-circle-check",
     color: "#2ecc71",
   },
 };

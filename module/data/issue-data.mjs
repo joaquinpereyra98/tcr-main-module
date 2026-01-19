@@ -94,12 +94,16 @@ export default class IssueData extends foundry.abstract.DataModel {
         hint: "The severity and urgency of this issue.",
       }),
 
-      score: new f.NumberField({
-        nullable: false,
-        initial: 0,
-        integer: true,
-        required: true,
-      }),
+      voters: new f.ArrayField(
+        new f.SchemaField({
+          userId: new f.ForeignDocumentField(foundry.documents.BaseUser, {
+            required: false,
+            initial: game.user.id,
+            idOnly: true,
+          }),
+          vote: new f.NumberField({ required: true, choices: [-1, 1] }),
+        }),
+      ),
 
       status: new f.StringField({
         required: true,
@@ -246,8 +250,10 @@ export default class IssueData extends foundry.abstract.DataModel {
    * @returns {number|null} 1 for upvote, -1 for downvote, null for no vote.
    */
   get userVote() {
-    const votes = game.user.getFlag(MODULE_ID, USER_FLAGS.ISSUE_VOTES) || {};
-    return votes[this.key] || null;
+    return (
+      Object.values(this.voters).find(({ userId }) => userId === game.user.id)
+        ?.vote || null
+    );
   }
 
   /**
@@ -256,6 +262,14 @@ export default class IssueData extends foundry.abstract.DataModel {
    */
   get hasVoted() {
     return this.userVote !== null;
+  }
+
+  /**
+   * Calculates the total score by summing all voter values.
+   * @returns {number} The aggregate score from all voters.
+   */
+  get score() {
+    return Object.values(this.voters).reduce((acc, { vote }) => acc + vote, 0);
   }
 
   async getEnrichDescription() {
@@ -287,7 +301,7 @@ export default class IssueData extends foundry.abstract.DataModel {
 
   updateSource(changes = {}, options = {}) {
     super.updateSource(changes, options);
-    this.app.render()
+    this.app.render();
   }
   /* -------------------------------------------- */
   /* CRUD Operations                              */

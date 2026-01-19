@@ -260,20 +260,22 @@ export default class JiraIssueManager {
       return;
     }
 
+    
     try {
+      /**@type {IssueData} */
+      const existing = this.issues.get(issueID);
       const { message, result } = await this.#fetchAPI(`/${issueID}`, {
         method: "PUT",
-        body: JSON.stringify(changes),
+        body: JSON.stringify(existing.clone(changes).toObject()),
       });
 
-      const existing = this.issues.get(issueID);
       if (existing) {
         existing.updateSource(result);
         this._emitRefresh("EDIT_ISSUE", { data: existing.toObject() });
       }
 
       JiraIssueManager._refreshApps();
-      console.log(message);
+      console.log(message); //TODO DONT DELETE THIS LINE!!! 
       return existing;
     } catch (err) {
       ui.notifications.error(`Update failed: ${err.message}`);
@@ -324,7 +326,7 @@ export default class JiraIssueManager {
         method: "POST",
         body: JSON.stringify({
           comment: htmlContent,
-          userkey: game.user.id ?? "",
+          user: game.user.id,
         }),
       });
 
@@ -364,20 +366,15 @@ export default class JiraIssueManager {
         },
       );
 
-      // Update local cache
+
       const issue = this.issues.get(issueID);
-      if (issue && issue.comments) {
-        const index = issue.comments.findIndex((c) => c.id === commentID);
-        if (index !== -1) {
-          const updatedComments = [...issue.comments];
-          updatedComments[index] = result;
-          issue.updateSource({ comments: updatedComments });
-          JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
-            key: issue.key,
-            data: issue.toObject(),
-          });
-        }
-      }
+      console.log(result)
+      issue.updateSource({ [`comments.${commentID}`]: result });
+
+      JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
+        key: issue.key,
+        data: issue.toObject(),
+      });
 
       JiraIssueManager._refreshApps();
       return result;

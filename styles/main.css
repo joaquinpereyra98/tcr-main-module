@@ -74,6 +74,33 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .score-anchor {
+    transition: 0.3s color ease, 0.3s opacity ease;
+    color: var(--hud-white-03);
+
+    &:hover,
+    &.active {
+      color: var(--hud-red);
+
+      &.up {
+        color: var(--hud-blue);
+      }
+    }
+
+    &:hover {
+      opacity: 1;
+      text-shadow: 0 0 8px var(--hud-red);
+
+      &.up {
+        text-shadow: 0 0 8px var(--hud-blue);
+      }
+    }
+
+    &.active {
+      opacity: 0.8;
+    }
+  }
+
   .editor.prosemirror.active {
     height: 300px;
 
@@ -682,6 +709,7 @@
 
         .grid-row {
           cursor: pointer;
+          position: relative;
 
           .col-summary {
             font-size: var(--font-size-20);
@@ -693,9 +721,23 @@
             font-size: var(--font-size-16);
           }
 
+          .controls {
+            position: absolute;
+            right: 0;
+            opacity: 0;
+            transition: 0.3s opacity ease 0.5s;
+            pointer-events: none;
+          }
+
 
           &:hover {
             background: rgb(37, 37, 37);
+
+            .controls {
+              width: auto;
+              opacity: 1;
+              pointer-events: inherit;
+            }
           }
 
           .col-issueType i {
@@ -723,19 +765,6 @@
               font-size: var(--font-size-12);
               color: var(--hud-white-05);
             }
-          }
-        }
-
-        .score-anchor {
-          transition: 0.3s color ease;
-          color: var(--hud-white-03);
-
-          &:hover {
-            &.up {
-              color: var(--hud-blue);
-            }
-
-            color: var(--hud-red);
           }
         }
 
@@ -1132,6 +1161,10 @@
         }
       }
 
+      prose-mirror {
+        min-height: 75px;
+      }
+
       >.flexrow {
         align-items: stretch;
       }
@@ -1142,6 +1175,7 @@
         align-items: center;
         justify-content: space-between;
         flex: 0;
+        margin-bottom: 5px;
 
         .comment-id {
           text-wrap: nowrap;
@@ -1150,6 +1184,7 @@
         }
 
         .control {
+          font-size: var(--font-size-12);
           opacity: 0.5;
           transition: 0.3s opacity ease;
 
@@ -1184,6 +1219,11 @@
       select {
         background: var(--hud-black-01);
         font-size: 0.8rem;
+        color: #cccccc;
+      }
+
+      select option {
+        background-color: #333;
         color: #cccccc;
       }
 
@@ -1286,22 +1326,6 @@
             color: #fff;
           }
 
-          .vote-action {
-            transition: 0.3s color ease;
-            color: var(--hud-white-03);
-
-            &.active {
-              &.up {
-                color: var(--hud-blue);
-              }
-
-              color: var(--hud-red);
-            }
-
-            &:hover {
-              color: var(--accent-gold);
-            }
-          }
         }
 
       }
@@ -1337,9 +1361,8 @@
 
         .description-content {
           min-height: 170px;
-          line-height: 1.6;
           color: #bbbbbb;
-          font-size: 1.05rem;
+          font-size: 0.8rem;
           background: var(--hud-black-01);
           padding: 10px;
           border-radius: 4px;

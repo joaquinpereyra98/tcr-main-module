@@ -11,23 +11,25 @@
             {{{issue.typeIcon}}}
         </div>
         {{/if}}
+        {{#unless isNew}} 
         <div class="vote-controls">
             <a
-                class="vote-action up {{#if (eq userVote 1)}}active{{/if}}"
-                data-action="vote"
-                data-direction="1"
+                class="score-anchor up {{#if (eq issue.userVote 1)}}active{{/if}}"
+                data-action="addScoreIssue"
+                data-score="1"
             >
                 <i class="fa-solid fa-arrow-up"></i>
             </a>
             <span class="score">{{issue.score}}</span>
             <a
-                class="vote-action down {{#if (eq userVote -1)}}active{{/if}}"
-                data-action="vote"
-                data-direction="-1"
+                class="score-anchor down {{#if (eq issue.userVote -1)}}active{{/if}}"
+                data-action="addScoreIssue"
+                data-score="-1"
             >
                 <i class="fa-solid fa-arrow-down"></i>
             </a>
         </div>
+        {{/unless}}
 
         {{#if editable}}
         <button
@@ -64,7 +66,7 @@
             </div>
             <div class="detail-card">
                 <label class="detail-label">{{{issue.statusIcon}}} Status</label>
-                {{#if editable}}
+                {{#if (and editable (not isNew))}}
                 {{formInput fields.status value=source.status}}
                 {{else}}
                 <div class="value status-text">{{issue.statusLabel}}</div>

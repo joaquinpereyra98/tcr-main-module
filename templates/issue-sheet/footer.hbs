@@ -13,12 +13,16 @@
                 </button>
             </div>
         </form>
-        {{#each issue.comments}}
-        <div class="detail-card" data-id="{{id}}">
+        {{#each comments}}
+        <div class="detail-card comment" data-id="{{id}}">
             <div class="flexrow">
                 <div class="flexcol">
                     <label class="detail-label">{{author}} <span class="subtitle">{{createdLabel.date}} - {{createdLabel.time}}</span></label>
-                    <div class="value">{{{body}}}</div>
+                    {{#if (or user.isSelf ../user.isGM)}}
+                    {{formInput schema.fields.body value=_source.body enriched=enrichBody toggled=true}}
+                    {{else}}
+                    <div class="value">{{{enrichBody}}}</div>
+                    {{/if}}
                 </div>
                 <div class="sidebar-card">
                     <div class="comment-id"># {{id}}</div>

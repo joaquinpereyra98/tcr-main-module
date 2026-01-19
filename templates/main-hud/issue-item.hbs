@@ -5,9 +5,17 @@
 >
     <div class="col-score">
         <div class="flexcol">
-            <a class="score-anchor up fa-solid fa-arrow-up"></a>
+            <a
+                class="score-anchor up fa-solid fa-arrow-up  {{#if (eq userVote 1)}}active{{/if}}"
+                data-action="addScoreIssue"
+                data-score="1"
+            ></a>
             <span>{{score}}</span>
-            <a class="score-anchor down fa-solid fa-arrow-down"></a>
+            <a
+                class="score-anchor down fa-solid fa-arrow-down {{#if (eq userVote -1)}}active{{/if}}"
+                data-action="addScoreIssue"
+                data-score="-1"
+            ></a>
         </div>
     </div>
     <div class="col-issueType" data-tooltip="{{typeLabel}}">{{{typeIcon}}}</div>
@@ -33,4 +41,13 @@
             </div>
         </div>
     </div>
+    {{#if user.isGM}}
+    <div class="controls">
+        <a
+            class="fa-solid fa-trash"
+            data-action="deleteIssue"
+            data-tooltip="Delete Issue"
+        ></a>
+    </div>
+    {{/if}}
 </div>
