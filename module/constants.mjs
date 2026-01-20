@@ -6,6 +6,8 @@ export const USER_FLAGS = {
 export const SETTINGS = {
   TAB_CONFIGURATION: "tabConfiguration",
   SOURCES_CONFIGURATION: "sourcesConfiguration",
+  METRICS_TIME_VALUE: "metricsTimeValue",
+  METRICS_TIME_UNIT: "metricsTimeUnit",
 };
 export const ISSUE_TYPES = {
   bug: {

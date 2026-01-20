@@ -479,6 +479,27 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     await this._renderIssueBatch();
   }
 
+  _renderMetrics() {
+    const { metrics } = JiraIssueManager.instance;
+    const val = game.settings.get(MODULE_ID, SETTINGS.METRICS_TIME_VALUE);
+    const unit = game.settings
+      .get(MODULE_ID, SETTINGS.METRICS_TIME_UNIT)
+      .capitalize();
+    const timeLabel = `${val} ${unit}`;
+
+    const cards = this.element?.querySelectorAll(".bug-tracker.tab .stat-card") ?? [];
+    if (!cards.length) return;
+
+    cards.forEach((card) => {
+      const key = card.dataset.key;
+      card.querySelector(".value span").innerText = metrics[key] ?? 0;
+
+      if (key.endsWith("SpanTime")) {
+        card.querySelector(".stat-time").innerText = timeLabel;
+      }
+    });
+  }
+
   /* -------------------------------------------- */
   /*  Event Listeners and Handlers                */
   /* -------------------------------------------- */
@@ -499,7 +520,10 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   /** @inheritDoc */
   _attachPartListeners(partId, htmlElement, options) {
     super._attachPartListeners(partId, htmlElement, options);
-    if (partId === "bugTracker") this._renderIssues();
+    if (partId === "bugTracker") {
+      this._renderIssues();
+      this._renderMetrics();
+    }
   }
 
   /**
@@ -618,7 +642,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     event.preventDefault();
     const key = target.closest(".grid-row").dataset.key;
     const issue = JiraIssueManager.issues.get(key);
-    if(event.shiftKey) return issue.delete();
+    if (event.shiftKey) return issue.delete();
     return Dialog.confirm({
       title: `${game.i18n.format("DOCUMENT.Delete", { type: "Issue" })}: ${issue.key}`,
       content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.format("SIDEBAR.DeleteWarning", { type: "Issue" })}</p>`,

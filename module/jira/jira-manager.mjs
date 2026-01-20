@@ -1,5 +1,5 @@
 import IssueData from "../data/issue-data.mjs";
-import { BASE_URL, MODULE_ID } from "../constants.mjs";
+import { BASE_URL, MAIN_HUD_KEY, MODULE_ID, SETTINGS } from "../constants.mjs";
 import MainHud from "../apps/main-hud.mjs";
 /**
  * A singleton manager responsible for synchronizing Jira issues with Foundry VTT.
@@ -16,6 +16,23 @@ export default class JiraIssueManager {
    * @private
    */
   #issues = new foundry.utils.Collection();
+
+  /**
+   * Performance metrics for Jira issues.
+   * @type {{
+   * totalAllTime: number,
+   * resolvedAllTime: number,
+   * totalSpanTime: number,
+   * resolvedSpanTime: number
+   * }}
+   * @private
+   */
+  #metrics = {
+    totalAllTime: 0,
+    resolvedAllTime: 0,
+    totalSpanTime: 0,
+    resolvedSpanTime: 0,
+  };
 
   /**
    * Constructs the JiraIssueManager.
@@ -59,7 +76,7 @@ export default class JiraIssueManager {
         break;
       case "DELETE_ISSUE":
         const issueToDelete = this.#issues.get(payload.key);
-        if(issueToDelete) {
+        if (issueToDelete) {
           issue.app.close();
           this.#issues.delete(payload.key);
         }
@@ -112,6 +129,19 @@ export default class JiraIssueManager {
     return this.#issues;
   }
 
+  /**
+   * Performance metrics for Jira issues.
+   * @type {{
+   * totalAllTime: number,
+   * resolvedAllTime: number,
+   * totalSpanTime: number,
+   * resolvedSpanTime: number
+   * }}
+   */
+  get metrics() {
+    return this.#metrics;
+  }
+
   /* -------------------------------------------- */
   /* Initialization & Sync                       */
   /* -------------------------------------------- */
@@ -127,6 +157,7 @@ export default class JiraIssueManager {
     );
 
     await this.loadAll();
+    await this.loadMetrics();
     this.startAutoRefresh();
   }
 
@@ -136,7 +167,10 @@ export default class JiraIssueManager {
    */
   startAutoRefresh() {
     if (this._intervalId) clearInterval(this._intervalId);
-    this._intervalId = setInterval(() => this.loadAll(), this.refreshInterval);
+    this._intervalId = setInterval(() => {
+      this.loadAll();
+      this.loadMetrics();
+    }, this.refreshInterval);
   }
 
   /**
@@ -177,6 +211,29 @@ export default class JiraIssueManager {
     return response.json();
   }
 
+  async loadMetrics() {
+    const value = game.settings.get(MODULE_ID, SETTINGS.METRICS_TIME_VALUE);
+    const unit = game.settings.get(MODULE_ID, SETTINGS.METRICS_TIME_UNIT);
+
+    const data = await JiraIssueManager.#fetchAPI("/metrics", {
+      method: "POST",
+      body: JSON.stringify({ value, unit }),
+    });
+
+    this.#metrics = foundry.utils.mergeObject(
+      {
+        totalAllTime: 0,
+        resolvedAllTime: 0,
+        totalSpanTime: 0,
+        resolvedSpanTime: 0,
+      },
+      data,
+      { inplace: false },
+    );
+
+    ui[MAIN_HUD_KEY]._renderMetrics()
+  }
+
   /**
    * Fetches all issues from the middleware and updates the local collection cache.
    * @returns {Promise<foundry.utils.Collection<string, IssueData>>} The updated collection.
@@ -201,7 +258,7 @@ export default class JiraIssueManager {
       console.log("Jira | Synchronized issues!");
       return this.#issues;
     } catch (err) {
-      ui.notifications.error(`Jira Load Error: ${err.message}`);
+      ui.notifications?.error(`Jira Load Error: ${err.message}`);
       return this.#issues;
     }
   }
@@ -260,7 +317,6 @@ export default class JiraIssueManager {
       return;
     }
 
-    
     try {
       /**@type {IssueData} */
       const existing = this.issues.get(issueID);
@@ -275,7 +331,7 @@ export default class JiraIssueManager {
       }
 
       JiraIssueManager._refreshApps();
-      console.log(message); //TODO DONT DELETE THIS LINE!!! 
+      console.log(message); //TODO DONT DELETE THIS LINE!!!
       return existing;
     } catch (err) {
       ui.notifications.error(`Update failed: ${err.message}`);
@@ -366,9 +422,7 @@ export default class JiraIssueManager {
         },
       );
 
-
       const issue = this.issues.get(issueID);
-      console.log(result)
       issue.updateSource({ [`comments.${commentID}`]: result });
 
       JiraIssueManager._emitRefresh("UPDATE_ISSUE", {

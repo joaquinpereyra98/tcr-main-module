@@ -20,6 +20,7 @@ Hooks.on("init", () => {
 
   settings.HUDConfig.registerSetting();
   settings.SourcesConfig.registerSetting();
+  settings.registerMetricsSetting()
 
   JiraIssueManager.instance
     .initialize()
