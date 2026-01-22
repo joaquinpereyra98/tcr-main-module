@@ -23,15 +23,36 @@ export function toCamelCase(str) {
     .trim();
 }
 
-export function getRankFolderNames() {
-  const userRank = game.membership?.membershipLevel;
+/**
+ * Retrieves the donation membership levels formatted for schema fields.
+ * * @returns {{k: string, label: string}[] | null}
+ */
+export function getRanks() {
+  const setting = game.settings.get("donation-tracker", "membershipLevels");
+  return (
+    setting?.levels?.map(({ id, name }) => ({ k: id, label: name })) ?? null
+  );
+}
 
-  if(!userRank) return null;
+export function getRankFolderNames() {
+  const { gmLevel, levels } = game.settings.get(
+    "donation-tracker",
+    "membershipLevels",
+  ) ?? {};
+
+  const userRank = game.user.isGM
+    ? levels.findIndex((lvl) => lvl.id === gmLevel)
+    : game.membership?.membershipLevel;
+
+  if (!userRank) return null;
 
   return Object.entries(game.membership.RANKS)
     .filter(([_, v]) => v !== -1 && userRank >= v)
     .map(([k]) =>
-      game.settings.get("foundryvtt-actor-studio", `donation-tracker-rank-${k}`)
+      game.settings.get(
+        "foundryvtt-actor-studio",
+        `donation-tracker-rank-${k}`,
+      ),
     );
 }
 
@@ -57,8 +78,8 @@ export function hasDocumentsInFolder(folder) {
  */
 export function getSubfoldersInCompenidum(folder) {
   const subfolders = folder.compendium.folders.filter(
-    (f) => f.folder?.id === folder.id
+    (f) => f.folder?.id === folder.id,
   );
 
-  return subfolders.concat(subfolders.flatMap((f) => getSubfolders(f)));
+  return subfolders.concat(subfolders.flatMap((f) => f.getSubfolders(true)));
 }

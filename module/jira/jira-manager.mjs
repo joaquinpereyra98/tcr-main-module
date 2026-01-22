@@ -331,7 +331,7 @@ export default class JiraIssueManager {
       }
 
       JiraIssueManager._refreshApps();
-      console.log(message); //TODO DONT DELETE THIS LINE!!!
+      console.log(message);
       return existing;
     } catch (err) {
       ui.notifications.error(`Update failed: ${err.message}`);

@@ -1,3 +1,4 @@
+import CompendiumBrowser from "../apps/compendium-browser.mjs";
 import { MODULE_ID, SETTINGS } from "../constants.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -71,6 +72,11 @@ export default class SourcesConfig extends HandlebarsApplicationMixin(
       config: false,
       type: Object,
       scope: "world",
+      change: () => {
+        for(const app of foundry.applications.instances) {
+          if(app instanceof CompendiumBrowser) app.render()
+        }
+      },
       initial: {},
     });
 

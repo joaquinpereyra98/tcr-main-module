@@ -1,13 +1,15 @@
 export const MODULE_ID = "tcr-main-module";
 export const MAIN_HUD_KEY = `${MODULE_ID}.MainHud`;
+export const LOGIN_TRACKER_KEY = `${MODULE_ID}.LoginTracker`;
 export const USER_FLAGS = {
-  ISSUE_VOTES: "issueVotes",
+  LOGIN_DATA: "loginData",
 };
 export const SETTINGS = {
   TAB_CONFIGURATION: "tabConfiguration",
   SOURCES_CONFIGURATION: "sourcesConfiguration",
   METRICS_TIME_VALUE: "metricsTimeValue",
   METRICS_TIME_UNIT: "metricsTimeUnit",
+  INACTIVE_THRESHOLD: "inactiveThreshold",
 };
 export const ISSUE_TYPES = {
   bug: {
@@ -78,16 +80,16 @@ export const ISSUE_STATUSES = {
     label: "Unread",
     key: "unread",
     iconClass: "fa-solid fa-envelope",
-    color: "#3498db",
+    color: "#95a5a6",
   },
   read: {
     label: "Read",
     key: "read",
     iconClass: "fa-regular fa-envelope-open",
-    color: "#95a5a6",
+    color: "#3498db",
   },
   inProgress: {
-    label: "In-Pogress",
+    label: "In Pogress",
     key: "inProgress",
     iconClass: "fa-regular fa-circle",
     color: "#f1c40f",
@@ -99,5 +101,10 @@ export const ISSUE_STATUSES = {
     color: "#2ecc71",
   },
 };
-
+export const TCR_RANKS = {
+  notMember: "Not Member",
+  member: "Member",
+  benefactor: "Benefactor",
+  benefactorOfKnowledge: "Benefactor of Knowledge",
+};
 export const BASE_URL = "http://localhost:3001/api/issues";

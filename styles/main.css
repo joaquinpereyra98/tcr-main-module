@@ -183,6 +183,26 @@
       font-size: var(--font-size-13);
     }
 
+    .visibility-container {
+      border: 1px solid var(--hud-white-01);
+      border-radius: 4px;
+      padding: 5px 10px;
+
+      .visibility-header {
+        padding: 0 2px;
+        border-bottom: 1px solid;
+        font-size: var(--font-size-15);
+      }
+
+      .form-group .form-fields {
+        flex: 0;
+      }
+
+      .bottom-border {
+        border-bottom: 1px solid var(--hud-white-01);
+      }
+    }
+
     .segment {
       margin: 2px;
       gap: 5px;
@@ -300,6 +320,7 @@
         height: 25px;
         opacity: 0.7;
         transition: all 0.3s ease;
+        cursor: default;
 
         i {
           padding-right: 3px;
@@ -684,7 +705,7 @@
         }
       }
 
-      .tracker-container {
+      .bug-tracker-container {
         gap: 0;
 
         .grid-header,
@@ -1460,5 +1481,87 @@
       }
     }
 
+  }
+
+  &.login-tracker {
+    .window-content {
+      overflow: hidden scroll;
+      --color-scrollbar: var(--wow-panel-border);
+    }
+
+    .login-tracker-container {
+      flex: 0 0 500px;
+
+      .grid-title {
+        margin-top: 0;
+        font-family: beaufort, "beaufort Fallback";
+        font-size: 30px;
+        color: rgb(201, 170, 113);
+        font-weight: 600;
+        border-bottom: none;
+        margin-bottom: 0;
+      }
+
+      .grid-header,
+      .grid-row {
+        text-align: center;
+        grid-template-columns: repeat(4, 1fr) 50px;
+      }
+
+      .grid-header {
+        flex: 0 0 auto;
+        height: 2rem;
+        margin-bottom: 0;
+        font-weight: bold;
+        font-size: var(--font-size-15);
+        color: var(--accent-gold);
+
+        .col-status {
+          a {
+            transition: all 0.3s ease;
+            &:hover {
+              font-weight: bold;
+              transform: scale(1.1);
+            }
+
+          }
+        }
+      }
+
+      .grid-body {
+        --color-scrollbar: var(--wow-panel-border);
+        max-height: 400px;
+      }
+
+      .grid-row {
+
+        >div {
+          margin: 5px 1px;
+          padding: 0 5px;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: inset 0 0 0 1px var(--hud-white-01);
+          background: #1c1c1c;
+          transition: background-color 0.3s ease;
+
+          &:last-child {
+            border-right: none;
+          }
+        }
+
+        .col-last-login {
+          .time-label {
+            font-size: var(--font-size-12);
+            color: var(--hud-white-05);
+          }
+        }
+
+        .col-status {
+          font-size: var(--font-size-20);
+        }
+      }
+    }
   }
 }

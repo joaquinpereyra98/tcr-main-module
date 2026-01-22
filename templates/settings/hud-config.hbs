@@ -19,6 +19,17 @@
                 value=tab.background.color}}
                 {{formGroup tab.schema.fields.background.fields.src name=(concat id ".background.src")
                 value=tab.background.src}}
+                <div class="visibility-container">
+                    <div class="visibility-header">
+                        <span>Visibility</span>
+                    </div>
+                    {{#each tab.schema.fields.visibility.fields as |f k|}}
+                    {{formGroup f value=(lookup tab.visibility k) name=(concat tab.id ".visibility." k)}}
+                    {{#if @first}}
+                    <div class="bottom-border"></div>
+                    {{/if}}
+                    {{/each}}
+                </div>
                 <div class="segments-container">
                     <div class="segments-header flexrow">
                         <span class="title">Segments</span>

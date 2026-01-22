@@ -2,9 +2,7 @@ import IssueSheet from "../apps/issue-sheet.mjs";
 import {
   ISSUE_STATUSES,
   ISSUE_TYPES,
-  MODULE_ID,
   PRIORITY,
-  USER_FLAGS,
 } from "../constants.mjs";
 import JiraIssueManager from "../jira/jira-manager.mjs";
 import MappingFieldV2 from "./fields/mapping-field-v2.mjs";

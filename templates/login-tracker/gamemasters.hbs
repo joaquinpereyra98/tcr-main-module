@@ -1,0 +1,47 @@
+<div class="login-tracker-container grid-table scrollable">
+    <h3 class="grid-title">Gamemasters</h3>
+    <div class="grid-header">
+        <div class="col-name">User</div>
+        <div class="col-last-login">Last Login</div>
+        <div class="col-time-connected">Time Connected</div>
+        <div class="col-last-time-active">Last Time Active</div>
+        <div class="col-status">
+            <a
+                class="fa-regular fa-file-export"
+                data-tooltip="Export Inactives to text"
+                data-action="exportToText"
+                data-export-type="gm"
+            ></a>
+        </div>
+    </div>
+    <div class="grid-body scrollable">
+        {{#each gms}}
+        <div
+            class="grid-row"
+            data-key="{{id}}"
+        >
+            <div class="col-name" data-tooltip="{{user.name}}">{{user.name}}</div>
+            <div class="col-last-login">
+                <div class="flexcol">
+                    <div class="date-label">
+                        {{lastLogin.date}}
+                    </div>
+                    <div class="time-label">
+                        {{lastLogin.time}}
+                    </div>
+                </div>
+            </div>
+            <div class="col-time-connected">{{timeConnected}}</div>
+            <div class="col-last-time-active">{{timeSinceLabel}}</div>
+            <div class="col-status">
+                <i
+                    class="{{status.icon}}"
+                    data-tooltip="{{status.label}}"
+                    style="color: {{status.color}};"
+                ></i>
+            </div>
+            
+        </div>
+        {{/each}}
+    </div>
+</div>

@@ -61,7 +61,10 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
 
   /**@override */
   static get TABS() {
-    const tabsSetting = Object.values(MainHud.SETTING);
+    const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
+      const rank = (game.membership?.membershipLevel ?? -1) + 1;
+      return game.user.isGM || Object.values(tab.visibilitylity)[rank];
+    });
 
     /**@type {ApplicationTabsConfiguration} */
     const primary = {
@@ -84,15 +87,17 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
 
   /** @override */
   static get PARTS() {
-    const tabsSetting = Object.values(
-      game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION) || {},
-    );
+    const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
+      const rank = (game.membership?.membershipLevel ?? -1) + 1;
+      return game.user.isGM || Object.values(tab.visibilitylity)[rank];
+    });
 
     return tabsSetting.reduce((acc, tab) => {
       acc[tab.id] = {
         template: `modules/${MODULE_ID}/templates/main-hud/tab-partial.hbs`,
         classes: [tab.id],
       };
+
       return acc;
     }, MainHud.BASE_PARTS);
   }
@@ -487,7 +492,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       .capitalize();
     const timeLabel = `${val} ${unit}`;
 
-    const cards = this.element?.querySelectorAll(".bug-tracker.tab .stat-card") ?? [];
+    const cards =
+      this.element?.querySelectorAll(".bug-tracker.tab .stat-card") ?? [];
     if (!cards.length) return;
 
     cards.forEach((card) => {

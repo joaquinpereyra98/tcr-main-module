@@ -274,18 +274,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           return CompendiumBrowser.intersectFilters(first, second);
         }, null) ?? new Map();
 
-    //TODO context.sources = this._getSourcesOptions();
-
-    const lockedSources = new Set(this.options.sources?.locked ?? []);
-
-    context.sources = Object.entries(SourcesConfig.SETTING)
-      .map(([id, { label }]) => ({
-        id,
-        label: label ?? game.packs.get(id)?.metadata.label,
-        selected: this.#sources.has(id),
-        locked: lockedSources.has(id),
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+    context.sources = this._getSourcesOptions();
 
     return context;
   }
@@ -295,7 +284,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @returns {Object[]} An array of formatted and sorted source options.
    */
   _getSourcesOptions() {
-    // 1. Get rank-based folder names from settings, filtering by what the user actually has access to
     const allowedNames = getRankFolderNames();
 
     const lockedSources = new Set(this.options.sources?.locked ?? []);
@@ -890,8 +878,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     // Pre-calculate Rank folder names to avoid repeated setting lookups
     const rankNames = getRankFolderNames();
 
-    const ignoreAll = isGM && rankNames === null; //TODO: change this
-
     // Iterate over all packs
     /** @type {Promise<Document[]>}*/
     let documents = game.packs
@@ -903,7 +889,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         const isVisible = p.visible;
 
         //const matchesSource = !sources?.size || sources.has(p.metadata.id);
-        const matchesSource = !sources?.size || sources.has(p.metadata.id);
+        const matchesSource = !sources?.size ? false : sources.has(p.metadata.id);
 
         // If types are set and specified in compendium flag, only include those that include the correct types
         const matchesTypes =
@@ -914,9 +900,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         return isCorrectType && isVisible && matchesSource && matchesTypes;
       })
       .map(async (p) => {
-        const allowedFolderIds = ignoreAll
-          ? null
-          : new Set(
+        const allowedFolderIds = new Set(
               rankNames.flatMap((name) => {
                 const parent = p.folders.getName(name);
                 return parent
@@ -939,8 +923,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             !filters.length || dnd5e.Filter.performCheck(i, filters);
 
           // Always allow if GM or if item has no folder. Otherwise, check if folder is in the allowed set.
-          const matchesFolder =
-            ignoreAll || !i.folder || allowedFolderIds?.has(i.folder);
+          const matchesFolder = !i.folder || allowedFolderIds?.has(i.folder);
 
           return matchesType && matchesFilters && matchesFolder;
         });

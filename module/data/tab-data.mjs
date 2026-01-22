@@ -1,7 +1,12 @@
+import { TCR_RANKS } from "../constants.mjs";
+import { getRanks } from "../utils.mjs";
 import SegmentData from "./segment-data.mjs";
 
+/**
+ * Data model representing a Tab within the HUD.
+ */
 export default class TabData extends foundry.abstract.DataModel {
-  /**@override */
+  /** @override */
   static defineSchema() {
     const f = foundry.data.fields;
 
@@ -49,13 +54,24 @@ export default class TabData extends foundry.abstract.DataModel {
         }),
       }),
       segments: new f.ArrayField(new f.EmbeddedDataField(SegmentData)),
+      visibility: new f.SchemaField({
+        notMember: new f.BooleanField({ label: "Not Member", initial: true }),
+        ...Object.fromEntries(
+          (getRanks() ?? []).map(({ k, label }) => [
+            k,
+            new f.BooleanField({ label, initial: true }),
+          ]),
+        ),
+      }),
     };
   }
 
+  /**
+   * Generates a CSS style string for grid configuration based on tab data.
+   * @type {string}
+   */
   get styleAttr() {
     const styles = [];
-
-    // Handle Columns & Rows
     styles.push(`--hud-columns: ${this.columns}`);
     styles.push(`--hud-rows: ${this.rows}`);
 
