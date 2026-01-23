@@ -59,14 +59,27 @@ export default class SegmentData extends foundry.abstract.DataModel {
     };
   }
 
+  /**
+   * Internal reference to the configuration application.
+   * @type {SegmentConfig|null}
+   * @private
+   */
   _app;
 
+  /**
+   * Get or create the configuration sheet for this segment.
+   * @type {SegmentConfig}
+   */
   get app() {
     this._app ??= new SegmentConfig({ segment: this });
     return this._app;
   }
 
-  /** @returns {string} */
+  /**
+   * Generates an inline CSS style string based on geometry and display data.
+   * Used for the element's 'style' attribute in the DOM.
+   * @type {string}
+   */
   get styleAttr() {
     const styles = [];
     const { display, geometry, content } = this;
@@ -94,28 +107,31 @@ export default class SegmentData extends foundry.abstract.DataModel {
     return styles.join("; ");
   }
 
+  /**
+   * Checks if the segment has any executable scripts assigned.
+   * @type {boolean}
+   */
   get isClickable() {
     return !!(this.actions.click || this.actions.contextMenu);
   }
 
   /**
-   * 
-   * @param {PointerEvent} event 
+   * Handles the execution of assigned scripts when the segment is clicked.
+   * Right-click actions are restricted to GMs only.
+   * @param {PointerEvent} event - The triggering pointer event.
+   * @returns {Promise<void>}
    */
   onClickAction(event) {
     const isContext = event.button === 2;
-    if( isContext && !game.user.isGM) return;
+    if (isContext && !game.user.isGM) return;
     try {
       const command = isContext ? this.actions.contextMenu : this.actions.click;
-      const fn = new foundry.utils.AsyncFunction(
-        "event",
-        `{${command}\n}`
-      );
+      const fn = new foundry.utils.AsyncFunction("event", `{${command}\n}`);
       fn.call(this, event);
     } catch (err) {
       console.error("HUD | Action Script Error:", err);
       ui.notifications.error(
-        "There was an error in the segment action script."
+        "There was an error in the segment action script.",
       );
     }
   }
@@ -135,6 +151,12 @@ export default class SegmentData extends foundry.abstract.DataModel {
   }
 }
 
+/**
+ * Helper to create a standardized JavaScript script field.
+ * @param {object} [options] - Field configuration options.
+ * @returns {foundry.data.fields.JavaScriptField}
+ * @private
+ */
 const createScriptField = (options = {}) =>
   new foundry.data.fields.JavaScriptField({
     async: true,
@@ -142,6 +164,12 @@ const createScriptField = (options = {}) =>
     ...options,
   });
 
+/**
+ * Helper to create a standardized integer field for grid geometry.
+ * @param {object} [options] - Field configuration options.
+ * @returns {foundry.data.fields.NumberField}
+ * @private
+ */
 const createGeometryField = (options = {}) =>
   new foundry.data.fields.NumberField({
     required: true,

@@ -53,6 +53,10 @@ export default class IssueCommentData extends foundry.abstract.DataModel {
     };
   }
 
+  /**
+   * Processes the raw body text into enriched HTML.
+   * @returns {Promise<string>}
+   */
   async getEnrichBody() {
     return await TextEditor.enrichHTML(this.body);
   }

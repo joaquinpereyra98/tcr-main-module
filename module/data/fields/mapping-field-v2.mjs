@@ -1,6 +1,7 @@
 const { MappingField } = dnd5e.dataModels.fields;
 
 export default class MappingFieldV2 extends MappingField {
+  /** @inheritDoc */
   _validateValues(value, options) {
     const errors = {};
     for (const [k, v] of Object.entries(value)) {
