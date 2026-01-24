@@ -3,10 +3,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "createSymlinks": "node tools/create-symlinks.mjs",
-    "build": "npm run db:pack && npm run build:code",
-    "build:code": "rollup -c",
-    "db:pack": "node tools/pack-level-db.mjs package pack",
-    "db:unpack": "node tools/pack-level-db.mjs package unpack"
+    "build": "npm run build:code",
+    "build:code": "rollup -c"
   },
   "author": "JoaquinP",
   "dependencies": {
