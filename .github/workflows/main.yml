@@ -46,9 +46,7 @@ jobs:
           README.md \
           LICENSE \
           styles/main.css \
-          templates/ \
-          packs/ \
-          -x "packs/_src/*"
+          templates/ 
 
       - name: Update Release With Files
         id: create_version_release
