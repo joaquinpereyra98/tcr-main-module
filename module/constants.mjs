@@ -107,4 +107,4 @@ export const TCR_RANKS = {
   benefactor: "Benefactor",
   benefactorOfKnowledge: "Benefactor of Knowledge",
 };
-export const BASE_URL = "http://localhost:3001/api/issues";
+export const BASE_URL = "https://jira.tcrdnd.com/api/issues";

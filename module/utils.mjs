@@ -28,6 +28,7 @@ export function toCamelCase(str) {
  * * @returns {{k: string, label: string}[] | null}
  */
 export function getRanks() {
+  if (!game.modules.get("donation-tracker").active) return null;
   const setting = game.settings.get("donation-tracker", "membershipLevels");
   return (
     setting?.levels?.map(({ id, name }) => ({ k: id, label: name })) ?? null
@@ -35,10 +36,8 @@ export function getRanks() {
 }
 
 export function getRankFolderNames() {
-  const { gmLevel, levels } = game.settings.get(
-    "donation-tracker",
-    "membershipLevels",
-  ) ?? {};
+  const { gmLevel, levels } =
+    game.settings.get("donation-tracker", "membershipLevels") ?? {};
 
   const userRank = game.user.isGM
     ? levels.findIndex((lvl) => lvl.id === gmLevel)

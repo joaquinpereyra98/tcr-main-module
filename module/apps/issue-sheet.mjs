@@ -115,18 +115,30 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
       options.parts = options.parts.filter((p) => p !== "footer");
   }
 
-  /** @inheritdoc */
-  _onRender(context, options) {
-    super._onRender(context, options);
+  /**
+   * Extends the base part listener attachment to initialize issue-specific 
+   * event listeners for the given HTML element.
+   * @param {string} partId - The unique identifier for the UI part.
+   * @param {HTMLElement} htmlElement - The DOM element containing the part's markup.
+   * @param {Object} options - Configuration options for the attachment.
+   * @protected
+   * @override
+   */
+  _attachPartListeners(partId, htmlElement, options) {
+    super._attachPartListeners(partId, htmlElement, options);
 
-    this._addSelectTypeListener();
-    this._addAttachImgListener();
-    this._addSelectPriorityAndStatus();
-    this._addEditCommentListener();
+    this._addSelectTypeListener(htmlElement);
+    this._addAttachImgListener(htmlElement);
+    this._addSelectPriorityAndStatus(htmlElement);
+    this._addEditCommentListener(htmlElement);
   }
 
-  _addSelectTypeListener() {
-    const select = this.element.querySelector(".icon-select-container select");
+  /**
+   * Initializes the listener for the Issue Type dropdown.
+   * @param {HTMLElement} element - The parent element containing the type selector.
+   */
+  _addSelectTypeListener(element) {
+    const select = element.querySelector(".icon-select-container select");
     if (!select) return;
 
     select.addEventListener("change", (event) => {
@@ -142,8 +154,12 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     });
   }
 
-  _addAttachImgListener() {
-    const imgInput = this.element.querySelector("input.issue-image-upload");
+  /**
+   * Handles image uploads via file input.
+   * @param {HTMLElement} element - The parent element containing the upload input.
+   */
+  _addAttachImgListener(element) {
+    const imgInput = element.querySelector("input.issue-image-upload");
     if (!imgInput) return;
 
     imgInput.addEventListener("change", (event) => {
@@ -183,8 +199,12 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     });
   }
 
-  _addSelectPriorityAndStatus() {
-    const selects = this.element.querySelectorAll(
+  /**
+   * Syncs the visual state of Priority and Status dropdowns.
+   * @param {HTMLElement} element - The parent element containing the select inputs.
+   */
+  _addSelectPriorityAndStatus(element) {
+    const selects = element.querySelectorAll(
       '[name="priority"], [name="status"]',
     );
     selects.forEach((select) => {
@@ -201,8 +221,12 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     });
   }
 
-  _addEditCommentListener() {
-    const editors = this.element.querySelectorAll(".comment prose-mirror");
+  /**
+   * Attaches change listeners to rich text editors (prose-mirror) for comments.
+   * @param {HTMLElement} element - The parent element containing comment editors.
+   */
+  _addEditCommentListener(element) {
+    const editors = element.querySelectorAll(".comment prose-mirror");
     editors.forEach((editor) =>
       editor.addEventListener("change", (event) => {
         const commentID = event.target.closest(".comment")?.dataset.id;
