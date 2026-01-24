@@ -21,12 +21,10 @@ const PACK_SRC = "packs/.src";
 
 /* -------------------------------------------------- */
 
-
-// eslint-disable-next-line no-unused-vars
 const argv = yargs(hideBin(process.argv))
   .command(packageCommand())
-  .help().alias("help", "h")
-  .argv;
+  .help()
+  .alias("help", "h").argv;
 
 /* -------------------------------------------------- */
 
@@ -34,7 +32,7 @@ function packageCommand() {
   return {
     command: "package [action] [pack] [entry]",
     describe: "Manage packages",
-    builder: yargs => {
+    builder: (yargs) => {
       yargs.positional("action", {
         describe: "The action to perform.",
         type: "string",
@@ -45,11 +43,12 @@ function packageCommand() {
         type: "string",
       });
       yargs.positional("entry", {
-        describe: "Name of any entry within a pack upon which to work. Only applicable to extract & clean commands.",
+        describe:
+          "Name of any entry within a pack upon which to work. Only applicable to extract & clean commands.",
         type: "string",
       });
     },
-    handler: async argv => {
+    handler: async (argv) => {
       const { action, pack, entry } = argv;
       switch (action) {
         case "clean":
@@ -61,6 +60,21 @@ function packageCommand() {
       }
     },
   };
+}
+
+/* -------------------------------------------------- */
+/* Helpers                                          */
+/* -------------------------------------------------- */
+
+/**
+ * Ensures a directory exists. If it doesn't, it creates it.
+ * @param {string} dirPath
+ */
+function ensureDir(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    console.log(`Directory ${dirPath} not found. Creating it...`);
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
 }
 
 /* -------------------------------------------------- */
@@ -78,7 +92,7 @@ function cleanPackEntry(data, { ownership = 0 } = {}) {
   delete data.flags?.core?.sourceId;
   delete data.flags?.importSource;
   delete data.flags?.exportSource;
-  if (parseInt(data.sort) && (parseInt(data.sort) !== 0)) data.sort = 0;
+  if (parseInt(data.sort) && parseInt(data.sort) !== 0) data.sort = 0;
 
   // Remove empty entries in flags
   if (!data.flags) data.flags = {};
@@ -87,7 +101,8 @@ function cleanPackEntry(data, { ownership = 0 } = {}) {
   });
 
   const cleanCollection = (collName, ownership = 0) => {
-    if (data[collName]) data[collName].forEach(i => cleanPackEntry(i, { ownership }));
+    if (data[collName])
+      data[collName].forEach((i) => cleanPackEntry(i, { ownership }));
   };
 
   cleanCollection("pages", -1);
@@ -113,7 +128,10 @@ function cleanPackEntry(data, { ownership = 0 } = {}) {
  * @returns {string}    The cleaned string.
  */
 function cleanString(str) {
-  return str.replace(/\u2060/gu, "").replace(/[‘’]/gu, "'").replace(/[“”]/gu, "\"");
+  return str
+    .replace(/\u2060/gu, "")
+    .replace(/[‘’]/gu, "'")
+    .replace(/[“”]/gu, '"');
 }
 
 /* -------------------------------------------------- */
@@ -129,9 +147,14 @@ function cleanString(str) {
  */
 async function cleanPacks(packName, entryName) {
   entryName = entryName?.toLowerCase();
-  const folders = fs.readdirSync(PACK_SRC, { withFileTypes: true }).filter(file =>
-    file.isDirectory() && (!packName || (packName === file.name)),
-  );
+
+  ensureDir(PACK_SRC);
+
+  const folders = fs
+    .readdirSync(PACK_SRC, { withFileTypes: true })
+    .filter(
+      (file) => file.isDirectory() && (!packName || packName === file.name),
+    );
 
   /**
    * Walk through directories to find JSON files.
@@ -151,9 +174,11 @@ async function cleanPacks(packName, entryName) {
     console.log(`Cleaning pack ${folder.name}`);
     for await (const src of _walkDir(path.join(PACK_SRC, folder.name))) {
       const json = JSON.parse(await readFile(src, { encoding: "utf8" }));
-      if (entryName && (entryName !== json.name.toLowerCase())) continue;
+      if (entryName && entryName !== json.name.toLowerCase()) continue;
       if (!json._id || !json._key) {
-        console.log(`Failed to clean \x1b[31m${src}\x1b[0m, must have _id and _key.`);
+        console.log(
+          `Failed to clean \x1b[31m${src}\x1b[0m, must have _id and _key.`,
+        );
         continue;
       }
       cleanPackEntry(json);
@@ -176,9 +201,11 @@ async function cleanPacks(packName, entryName) {
  */
 async function compilePacks(packName) {
   // Determine which source folders to process
-  const folders = fs.readdirSync(PACK_SRC, { withFileTypes: true }).filter(file =>
-    file.isDirectory() && (!packName || (packName === file.name)),
-  );
+  const folders = fs
+    .readdirSync(PACK_SRC, { withFileTypes: true })
+    .filter(
+      (file) => file.isDirectory() && (!packName || packName === file.name),
+    );
 
   for (const folder of folders) {
     const src = path.join(PACK_SRC, folder.name);
@@ -187,7 +214,7 @@ async function compilePacks(packName) {
     await compilePack(src, dest, {
       recursive: true,
       log: true,
-      transformEntry: cleanPackEntry, 
+      transformEntry: cleanPackEntry,
     });
   }
 }
@@ -209,10 +236,12 @@ async function extractPacks(packName, entryName) {
   entryName = entryName?.toLowerCase();
 
   // Load package manifest.
-  const manifest = JSON.parse(fs.readFileSync("./module.json", { encoding: "utf8" }));
+  const manifest = JSON.parse(
+    fs.readFileSync("./module.json", { encoding: "utf8" }),
+  );
 
   // Determine which source packs to process.
-  const packs = manifest.packs.filter(p => !packName || (p.name === packName));
+  const packs = manifest.packs.filter((p) => !packName || p.name === packName);
 
   for (const packInfo of packs) {
     const dest = path.join(PACK_SRC, packInfo.name);
@@ -221,11 +250,12 @@ async function extractPacks(packName, entryName) {
     const folders = {};
     await extractPack(path.join(PACK_DEST, packInfo.name), dest, {
       log: false,
-      transformEntry: e => {
-        if (e._key.startsWith("!folders")) folders[e._id] = {
-          name: slugify(e.name),
-          folder: e.folder, 
-        };
+      transformEntry: (e) => {
+        if (e._key.startsWith("!folders"))
+          folders[e._id] = {
+            name: slugify(e.name),
+            folder: e.folder,
+          };
         return false;
       },
     });
@@ -237,17 +267,18 @@ async function extractPacks(packName, entryName) {
         parent = collection[parent[parentKey]];
       }
     };
-    Object.values(folders).forEach(f => buildPath(folders, f, "folder"));
+    Object.values(folders).forEach((f) => buildPath(folders, f, "folder"));
 
     await extractPack(path.join(PACK_DEST, packInfo.name), dest, {
       log: true,
       clean: true,
-      transformEntry: entry => {
-        if (entryName && (entryName !== entry.name.toLowerCase())) return false;
+      transformEntry: (entry) => {
+        if (entryName && entryName !== entry.name.toLowerCase()) return false;
         cleanPackEntry(entry);
       },
-      transformName: entry => {
-        if (entry._id in folders) return path.join(folders[entry._id].path, "_folder.json");
+      transformName: (entry) => {
+        if (entry._id in folders)
+          return path.join(folders[entry._id].path, "_folder.json");
         const outputName = slugify(entry.name);
         const parent = folders[entry.folder];
         return path.join(parent?.path ?? "", `${outputName}-${entry._id}.json`);
@@ -264,5 +295,10 @@ async function extractPacks(packName, entryName) {
  * @returns {string}
  */
 function slugify(name) {
-  return name.toLowerCase().replace("'", "").replace(/[^a-z0-9]+/gi, " ").trim().replace(/\s+|-{2,}/g, "-");
+  return name
+    .toLowerCase()
+    .replace("'", "")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim()
+    .replace(/\s+|-{2,}/g, "-");
 }
