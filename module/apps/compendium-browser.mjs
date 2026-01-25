@@ -1,6 +1,11 @@
 import { MODULE_ID } from "../constants.mjs";
 import SourcesConfig from "../settings/sources-config.mjs";
-import { getRankFolderNames, hasDocumentsInFolder } from "../utils.mjs";
+import {
+  formatIdentifier,
+  getRankFolderNames,
+  getSubfoldersInCompenidum,
+  hasDocumentsInFolder,
+} from "../utils.mjs";
 
 /**
  * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationFormConfiguration, ApplicationRenderContext} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
@@ -18,7 +23,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @template {CompendiumBrowserConfiguration}
  */
 export default class CompendiumBrowser extends HandlebarsApplicationMixin(
-  ApplicationV2
+  ApplicationV2,
 ) {
   constructor(...args) {
     super(...args);
@@ -39,6 +44,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       title: "DND5E.CompendiumBrowser.Title",
       minimizable: true,
       resizable: true,
+      background: {
+        src: "",
+        color: "#0d0b0b url(../../ui/denim075.png)",
+      },
     },
     actions: {
       clearName: CompendiumBrowser.#onClearName,
@@ -60,6 +69,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       width: 850,
       height: 700,
     },
+    hiddenSubtitle: false,
     filters: {
       locked: {},
       initial: {
@@ -85,6 +95,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     header: {
       template: `modules/${MODULE_ID}/templates/compendium/browser-header.hbs`,
       classes: ["header"],
+      scrollable: [".filter-sections-wrapper"],
     },
     search: {
       id: "header-search",
@@ -141,6 +152,12 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   static SEARCH_DELAY = 200;
 
+  static renderCompendiumBrowser(options = {}) {
+    const cls = game.modules.get("tcr-main-module").api.apps.CompendiumBrowser;
+    const app = new cls(options);
+    return app.render({ force: true });
+  }
+
   /* -------------------------------------------- */
   /*  Properties                                  */
   /* -------------------------------------------- */
@@ -168,7 +185,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const filters = foundry.utils.mergeObject(
       this.#filters,
       this.options.filters.locked,
-      { inplace: false }
+      { inplace: false },
     );
     filters.documentClass ??= "Item";
     return filters;
@@ -228,12 +245,30 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   _debouncedSearch = foundry.utils.debounce(
     this._onSearchName.bind(this),
-    this.constructor.SEARCH_DELAY
+    this.constructor.SEARCH_DELAY,
   );
+
+  /* -------------------------------------------- */
+
+  /**@type {HTMLElement} */
+  #background;
 
   /* -------------------------------------------- */
   /*  Rendering                                   */
   /* -------------------------------------------- */
+
+  async _renderFrame(options) {
+    const frame = await super._renderFrame(options);
+
+    this.#background = document.createElement("div");
+    this.#background.classList.add("background-container");
+    frame.insertAdjacentElement("afterbegin", this.#background);
+
+    const { src, color } = this.options.window.background ?? {};
+    if (src || color) this.#applyBackgroundTransition(src, color);
+
+    return frame;
+  }
 
   /** @inheritDoc */
   _onRender(context, options) {
@@ -241,13 +276,17 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
     const searchContainer = this.element.querySelector(".search-container");
     const filterSections = this.element.querySelector(
-      ".filter-sections-wrapper"
+      ".filter-sections-wrapper",
     );
 
-    filterSections.replaceChildren(
-      ...this.element.querySelectorAll(".header-part")
-    );
-    searchContainer.replaceChildren(this.element.querySelector(".search-part"));
+    if (searchContainer && !searchContainer.querySelector(".search-part")) {
+      const searchPart = this.element.querySelector(".search-part");
+      if (searchPart) searchContainer.appendChild(searchPart);
+    }
+
+    if (filterSections && filterSections.children.length === 0) {
+      filterSections.append(...this.element.querySelectorAll(".header-part"));
+    }
   }
 
   /* -------------------------------------------- */
@@ -260,19 +299,60 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     context.filters = this.currentFilters;
 
     let dataModels = Object.entries(
-      CONFIG[context.filters.documentClass].dataModels
+      CONFIG[context.filters.documentClass].dataModels,
     );
+
     if (context.filters.types?.size)
       dataModels = dataModels.filter(([type]) =>
-        context.filters.types.has(type)
+        context.filters.types.has(type),
       );
+
     context.filterDefinitions =
       dataModels
         .map(([, d]) => d.compendiumBrowserFilters ?? new Map())
         .reduce((first, second) => {
           if (!first) return second;
-          return CompendiumBrowser.intersectFilters(first, second);
+          for (let [key, value] of second)
+            if (!first.has(key)) first.set(key, value);
+          return first;
         }, null) ?? new Map();
+
+    if (context.filters.types?.has("subclass")) {
+      const classIdentifiers = new Set();
+
+      for (const sourceId of this.currentSources) {
+        const pack = game.packs.get(sourceId);
+        if (!pack) continue;
+
+        const index = await pack.getIndex({
+          fields: ["system.classIdentifier"],
+        });
+        for (const entry of index) {
+          if (entry.type === "subclass" && entry.system?.classIdentifier) {
+            classIdentifiers.add(entry.system.classIdentifier);
+          }
+        }
+      }
+
+      if (classIdentifiers.size > 0) {
+        const choices = Array.from(classIdentifiers)
+          .sort()
+          .reduce((acc, id) => {
+            acc[id] = formatIdentifier(id);
+            return acc;
+          }, {});
+
+        context.filterDefinitions.set("classIdentifier", {
+          type: "set",
+          label: "Parent Class",
+          config: {
+            keyPath: "system.classIdentifier",
+            choices,
+            multiple: true,
+          },
+        });
+      }
+    }
 
     context.sources = this._getSourcesOptions();
 
@@ -306,7 +386,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               (f) =>
                 f.depth === 1 &&
                 allowedNames.includes(f.name) &&
-                hasDocumentsInFolder(f)
+                hasDocumentsInFolder(f),
             ));
 
         if (isVisible) {
@@ -364,15 +444,37 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
     if (partId === "types") {
       context.showTypes = true;
-      context.types = CONFIG[
+
+      const allTypes = CONFIG[
         context.filters.documentClass
       ].documentClass.compendiumBrowserTypes({
         chosen: context.filters.types,
       });
 
+      const availableTypeKeys = new Set(
+        Array.from(this.currentSources).flatMap((sourceId) => {
+          const pack = game.packs.get(sourceId);
+          return pack ? pack.index.map((i) => i.type) : [];
+        }),
+      );
+
+      const filterTypeMap = (typeMap) => {
+        return Object.entries(typeMap).reduce((acc, [key, data]) => {
+          if (data.children) {
+            data.children = filterTypeMap(data.children);
+            if (Object.keys(data.children).length > 0) acc[key] = data;
+          } else if (availableTypeKeys.has(key)) {
+            acc[key] = data;
+          }
+          return acc;
+        }, {});
+      };
+
+      context.types = filterTypeMap(allTypes);
+
       // Special case handling for 'Items' tab in basic mode.
       if (types[0] === "physical")
-        context.types = context.types.physical.children;
+        context.types = context.types.physical?.children ?? {};
 
       if (context.isLocked.types) {
         for (const [key, value] of Object.entries(context.types)) {
@@ -387,17 +489,25 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         }
       }
     } else if (partId === "filters") {
+      const hasSelectedTypes =
+        context.filters.types && context.filters.types.size > 0;
+
+      if (!hasSelectedTypes) {
+        context.additional = [];
+        return context;
+      }
+
       context.additional = Array.from(
-        context.filterDefinitions?.entries() ?? []
+        context.filterDefinitions?.entries() ?? [],
       ).reduce((arr, [key, data]) => {
         const filterValue = context.filters.additional?.[key] ?? {};
 
         const posCount = Object.values(filterValue).filter(
-          (v) => v === 1
+          (v) => v === 1,
         ).length;
 
         const negCount = Object.values(filterValue).filter(
-          (v) => v === -1
+          (v) => v === -1,
         ).length;
 
         // Special case handling for 'Feats' tab in basic mode.
@@ -432,8 +542,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               posCount: posCount > 0 ? posCount : null,
               negCount: negCount > 0 ? negCount : null,
             },
-            { inplace: false }
-          )
+            { inplace: false },
+          ),
         );
         return arr;
       }, []);
@@ -456,7 +566,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   async _prepareResultsContext(context, options) {
     const filters = CompendiumBrowser.applyFilters(
       context.filterDefinitions,
-      context.filters.additional
+      context.filters.additional,
     );
     // Add the name filter
     if (this.#filters.name?.length)
@@ -468,7 +578,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         filters,
         types: context.filters.types,
         sources: this.currentSources,
-      }
+      },
     );
     context.displaySelection = this.displaySelection;
     return context;
@@ -485,10 +595,15 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   async _renderResult(entry, documentClass) {
     const { img, name, type, uuid } = entry;
-    const subtitle = CONFIG[documentClass].typeLabels[type] ?? "";
+
+    const label = CONFIG[documentClass]?.typeLabels?.[type] ?? "";
+    const subtitle = this.options.hiddenSubtitle ? "" : label;
+
+    const compId = foundry.utils.parseUuid(uuid)?.collection?.metadata.id;
+    const isDrag = game.user.isGM || !!SourcesConfig.SETTING[compId]?.draggable;
 
     const context = {
-      entry: { img, name, subtitle, uuid },
+      entry: { img, name, subtitle, uuid, isDrag },
       displaySelection: this.displaySelection,
     };
     const path = `modules/${MODULE_ID}/templates/compendium/browser-entry-grid.hbs`;
@@ -560,6 +675,45 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     });
   }
 
+  /**
+   * Handles the cross-fade transition for any background type (Video, Image, or Color)
+   */
+  #applyBackgroundTransition(src, color) {
+    if (!this.#background) return;
+
+    const oldLayers = Array.from(this.#background.children);
+
+    const isVideo = VideoHelper.hasVideoExtension(src);
+    const newLayer = document.createElement(isVideo ? "video" : "div");
+
+    newLayer.classList.add("bg-layer");
+    if (isVideo) {
+      newLayer.src = src;
+      newLayer.autoplay = true;
+      newLayer.muted = true;
+      newLayer.loop = true;
+      newLayer.playsInline = true;
+    }
+
+    newLayer.style.background = isVideo
+      ? "none"
+      : src
+        ? `url("${src}") center/cover no-repeat`
+        : color;
+
+    this.#background.appendChild(newLayer);
+
+    requestAnimationFrame(() => {
+      newLayer.style.opacity = "1";
+    });
+
+    if (oldLayers.length > 0) {
+      setTimeout(() => {
+        oldLayers.forEach((el) => el.remove());
+      }, 800);
+    }
+  }
+
   /* -------------------------------------------- */
 
   /** @inheritDoc */
@@ -589,7 +743,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @protected
    */
   _onDragStart(event) {
-    const { uuid } = event.target.closest("[data-uuid]")?.dataset ?? {};
+    const card = event.target.closest(".grid-card");
+    const { uuid } = card.dataset ?? {};
+    if (card.draggable) return;
     try {
       const { type } = foundry.utils.parseUuid(uuid);
       event.dataTransfer.setData("text/plain", JSON.stringify({ type, uuid }));
@@ -643,7 +799,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const batchStart = this.#resultIndex;
     const batchEnd = Math.min(
       batchStart + this.constructor.BATCHING.SIZE,
-      this.#results.length
+      this.#results.length,
     );
     for (let i = batchStart; i < batchEnd; i++) {
       rendered.push(this._renderResult(this.#results[i], documentClass));
@@ -724,7 +880,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     foundry.utils.setProperty(
       this.#filters,
       name,
-      value === "" ? undefined : value
+      value === "" ? undefined : value,
     );
 
     if (target.tagName === "BUTTON")
@@ -790,7 +946,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (!counters) return;
 
     const values = Object.values(
-      this.#filters.additional?.[collapsible.dataset.filterId] ?? {}
+      this.#filters.additional?.[collapsible.dataset.filterId] ?? {},
     );
 
     const posCount = values.filter((v) => v === 1).length;
@@ -861,7 +1017,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       indexFields = new Set(),
       sort = true,
       sources = new Set(),
-    } = {}
+    } = {},
   ) {
     // Nothing within containers should be shown
     filters.push({ k: "system.container", o: "in", v: [null, undefined] });
@@ -889,7 +1045,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         const isVisible = p.visible;
 
         //const matchesSource = !sources?.size || sources.has(p.metadata.id);
-        const matchesSource = !sources?.size ? false : sources.has(p.metadata.id);
+        const matchesSource = !sources?.size
+          ? false
+          : sources.has(p.metadata.id);
 
         // If types are set and specified in compendium flag, only include those that include the correct types
         const matchesTypes =
@@ -901,15 +1059,13 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       })
       .map(async (p) => {
         const allowedFolderIds = new Set(
-              rankNames.flatMap((name) => {
-                const parent = p.folders.getName(name);
-                return parent
-                  ? [parent, ...getSubfoldersInCompenidum(parent)].map(
-                      (f) => f.id
-                    )
-                  : [];
-              })
-            );
+          rankNames.flatMap((name) => {
+            const parent = p.folders.getName(name);
+            return parent
+              ? [parent, ...getSubfoldersInCompenidum(parent)].map((f) => f.id)
+              : [];
+          }),
+        );
 
         // Fetch the index
         let packIndex = await p.getIndex({ fields: Array.from(indexFields) });
@@ -943,7 +1099,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           ? sort
           : (lhs, rhs) => {
               return String(foundry.utils.getProperty(lhs, sort)).localeCompare(
-                String(foundry.utils.getProperty(rhs, sort))
+                String(foundry.utils.getProperty(rhs, sort)),
               );
             };
       documents.sort(sortFunc);
@@ -1001,7 +1157,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               }
               return [positive, negative];
             },
-            [[], []]
+            [[], []],
           );
 
           if (positive.length) {
@@ -1049,7 +1205,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       ${game.i18n.localize("DND5E.CompendiumBrowser.Action.Open")}
     `;
     button.addEventListener("click", (event) =>
-      new CompendiumBrowser().render({ force: true })
+      new CompendiumBrowser().render({ force: true }),
     );
 
     const headerActions = html.querySelector(".header-actions");
@@ -1083,7 +1239,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               continue;
             finalConfig.config.min = Math.max(
               firstConfig.config.min,
-              secondConfig.config.min
+              secondConfig.config.min,
             );
           }
           if ("max" in firstConfig.config || "max" in secondConfig.config) {
@@ -1094,7 +1250,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               continue;
             finalConfig.config.max = Math.min(
               firstConfig.config.max,
-              secondConfig.config.max
+              secondConfig.config.max,
             );
           }
           if (

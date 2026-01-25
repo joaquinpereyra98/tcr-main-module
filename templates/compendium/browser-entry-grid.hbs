@@ -1,7 +1,7 @@
 <li
     class="item grid-card"
     data-uuid="{{entry.uuid}}"
-    draggable="true"
+    draggable="{{ifThen entry.isDrag "true" "false"}}"
 >
     
     {{#if entry.img}}

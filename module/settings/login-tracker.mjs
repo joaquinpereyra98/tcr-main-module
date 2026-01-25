@@ -188,6 +188,8 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
     const lang = game.i18n.lang;
 
     const sortedUsers = [...users].sort((a, b) => {
+      if (a.active !== b.active) return a.active ? -1 : 1;
+  
       const dataA = a.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA)?.lastLogin ?? 0;
       const dataB = b.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA)?.lastLogin ?? 0;
       return dataA - dataB;
@@ -244,7 +246,10 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
     });
 
     if (inactiveUsers.length === 0) {
-      return ui.notifications.info("No inactive users found in this category.");
+      return foundry.applications.api.DialogV2.prompt({
+        content: "No inactive users found in this category.",
+        rejectClose: false,
+      });
     }
 
     const threshold = LoginTracker.INACTIVE_THRESHOLD_SETTING;

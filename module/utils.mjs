@@ -36,6 +36,8 @@ export function getRanks() {
 }
 
 export function getRankFolderNames() {
+  if (!game.modules.get("donation-tracker").active) return [];
+
   const { gmLevel, levels } =
     game.settings.get("donation-tracker", "membershipLevels") ?? {};
 
@@ -81,4 +83,16 @@ export function getSubfoldersInCompenidum(folder) {
   );
 
   return subfolders.concat(subfolders.flatMap((f) => f.getSubfolders(true)));
+}
+
+/**
+ * Converts identifiers with dashes/underscores into capitalized labels with spaces.
+ * @param {string} identifier 
+ * @returns {string}
+ */
+export function formatIdentifier(identifier) {
+  if (!identifier) return "";
+  return identifier
+    .replace(/[-_]/g, " ")
+    .titleCase();
 }

@@ -77,7 +77,7 @@ export default class SourcesConfig extends HandlebarsApplicationMixin(
           if(app instanceof CompendiumBrowser) app.render()
         }
       },
-      initial: {},
+      default: {},
     });
 
     game.settings.registerMenu(MODULE_ID, SETTINGS.SOURCES_CONFIGURATION, {
@@ -172,12 +172,14 @@ export default class SourcesConfig extends HandlebarsApplicationMixin(
    * @param {Event} event                                 An input change event within the form
    */
   _onChangeForm(formConfig, event) {
-    const targetName = event.target.name ?? "";
+    /**@type {HTMLInputElement} */
+    const input = event.target;
+    const targetName = input.name ?? "";
     const lastDot = targetName.lastIndexOf(".");
     const id = targetName.slice(0, lastDot);
     const prop = targetName.slice(lastDot + 1);
 
-    if (this.sources[id]) this.#sources[id][prop] = event.target.value;
+    if (this.sources[id]) this.#sources[id][prop] = input.type === "checkbox" ? input.checked : input.value;
 
     super._onChangeForm(formConfig, event);
   }

@@ -70,7 +70,7 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
       config: false,
       type: Object,
       scope: "world",
-      initial: () => {
+      default: () => {
         const id = foundry.utils.randomID();
         const data = new TabData({ id, label: "Home", columns: 3 });
         return { [id]: data };
@@ -89,7 +89,7 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
 
   /**@type {Record<String, TabData>} */
   static get SETTING() {
-    return game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION);
+    return game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION) ?? {};
   }
 
   /**

@@ -30,10 +30,17 @@
 <div class="flexcol filter-part">
     {{#each additional}}
     {{#if (eq type "boolean")}}
-    <div class="filter filter-boolean" data-filter-id="{{ key }}">
-        <div class="wrapper filter-tag-container">{{> "boolean-tag" }}</div>
+    <div class="filter filter-boolean collapsible" data-filter-id="{{ key }}">
+        <div class="filter-header">
+            <label data-action="toggleCollapse">
+                <span class="roboto-upper">{{ localize label }}</span>
+                <i class="fa-solid fa-caret-down"></i>
+            </label>
+        </div>
+        <div class="collapsible-content">
+            <div class="wrapper filter-tag-container">{{> "boolean-tag" }}</div>
+        </div>
     </div>
-
     {{else if (eq type "range")}}
     <div class="filter filter-range collapsible" data-filter-id="{{ key }}">
         <div class="filter-header">

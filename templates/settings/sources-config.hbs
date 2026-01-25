@@ -4,6 +4,9 @@
         <div class="grid-header">
             <div class="col-id">ID</div>
             <div class="col-label">{{localize "Pseudonym"}}</div>
+            <div class="col-draggable">
+                Drag?
+            </div>
             <div class="col-actions"></div>
         </div>
 
@@ -20,6 +23,13 @@
                         name="{{@key}}.label"
                         placeholder="{{name}}"
                         value="{{label}}"
+                    >
+                </div>
+                <div class="col-draggable">
+                    <input
+                        type="checkbox"
+                        name="{{@key}}.draggable"
+                        {{checked draggable}}
                     >
                 </div>
                 <div class="col-actions">
