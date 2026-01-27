@@ -1,5 +1,6 @@
-import { MODULE_ID } from "../constants.mjs";
+import { MODULE_ID, SETTINGS } from "../constants.mjs";
 import SegmentData from "../data/segment-data.mjs";
+import HUDConfig from "./hud-config.mjs";
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
@@ -90,9 +91,11 @@ export default class SegmentConfig extends HandlebarsApplicationMixin(
   static async #onSubmitForm(_event, _form, formData) {
     const expanded = foundry.utils.expandObject(formData.object);
     this.segment.updateSource(expanded);
-    const settingMenu = foundry.applications.instances.get(
-      "tcr-main-module-hud-config"
-    );
-    settingMenu?.render();
+    const settings = foundry.utils.deepClone(HUDConfig.SETTING);
+    const tabData = this.segment.parent.toObject();
+    settings[tabData.id] = tabData;
+
+    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
+    this.render();
   }
 }

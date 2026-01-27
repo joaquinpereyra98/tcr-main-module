@@ -37,6 +37,35 @@ Hooks.on("init", () => {
     .then(() => console.log(`${MODULE_ID} | Jira Issues Loaded!`));
 });
 
+Hooks.once("setup", () => {
+  const SpellModel = CONFIG.Item.dataModels.spell;
+  const descriptor = Object.getOwnPropertyDescriptor(
+    SpellModel,
+    "compendiumBrowserFilters",
+  );
+  Object.defineProperty(SpellModel, "compendiumBrowserFilters", {
+    get: function () {
+      const map = descriptor.get.call(this);
+      map.set("level", {
+        label: "DND5E.Level",
+        type: "set",
+        config: {
+          keyPath: "system.level",
+          choices: Object.fromEntries(
+            Array.from({ length: 10 }, (_, i) => [
+              i,
+              { label: game.i18n.localize(`DND5E.SpellLevel${i}`) },
+            ]),
+          ),
+        },
+      });
+
+      return map;
+    },
+    configurable: true,
+  });
+});
+
 Hooks.on("ready", () => {
   settings.LoginTracker.initialize();
 });

@@ -14,7 +14,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @extends {ApplicationV2}
  */
 export default class HUDConfig extends HandlebarsApplicationMixin(
-  ApplicationV2
+  ApplicationV2,
 ) {
   /**
    * The default configuration options which are assigned to every instance of this Application class.
@@ -34,8 +34,8 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
       height: 500,
     },
     form: {
-      closeOnSubmit: true,
       handler: HUDConfig.#onSubmit,
+      submitOnChange: true,
     },
     actions: {
       addTab: HUDConfig.#onAddTab,
@@ -75,7 +75,10 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
         const data = new TabData({ id, label: "Home", columns: 3 });
         return { [id]: data };
       },
-      onChange: () => ui[MAIN_HUD_KEY]?.render(),
+      onChange: () => {
+        foundry.applications.instances.get(`${MODULE_ID}-hud-config`)?.render();
+        ui[MAIN_HUD_KEY]?.render();
+      },
     });
 
     game.settings.registerMenu(MODULE_ID, SETTINGS.TAB_CONFIGURATION, {
@@ -92,23 +95,14 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
     return game.settings.get(MODULE_ID, SETTINGS.TAB_CONFIGURATION) ?? {};
   }
 
-  /**
-   * Storage for the instantiated TabData objects
-   */
-  _setting = null;
-
   /** @return {Record<string, TabData>} */
   get setting() {
-    if (!this._setting) {
-      this._setting = Object.fromEntries(
-        Object.entries(HUDConfig.SETTING).map(([id, data]) => [
-          id,
-          new TabData({ ...data, id }),
-        ])
-      );
-    }
-
-    return this._setting;
+    return Object.fromEntries(
+      Object.entries(HUDConfig.SETTING).map(([id, data]) => [
+        id,
+        new TabData({ ...data, id }),
+      ]),
+    );
   }
 
   /* -------------------------------------------- */
@@ -127,11 +121,6 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
           icon: "fa-solid fa-square-plus",
           action: "addTab",
           label: "Add New Tab",
-        },
-        {
-          type: "submit",
-          icon: "fa-solid fa-floppy-disk",
-          label: "SETTINGS.Save",
         },
       ],
     };
@@ -164,40 +153,18 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
    * @this {HUDConfig}
    */
   static async #onSubmit(_event, _form, formData) {
-    const { mergeObject } = foundry.utils;
-    const config = Object.fromEntries(
-      Object.entries(this.setting).map(([id, tab]) => [id, tab.toObject()])
-    );
     const expanded = foundry.utils.expandObject(formData.object);
-
-    await game.settings.set(
-      MODULE_ID,
-      SETTINGS.TAB_CONFIGURATION,
-      mergeObject(config, expanded, { inplace: false })
+    const updated = foundry.utils.mergeObject(
+      HUDConfig.SETTING,
+      expanded,
+      { inplace: false },
     );
-
-    for (const app of foundry.applications.instances.values()) {
-      if (app instanceof SegmentConfig) app.close();
-    }
+    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, updated);
   }
 
   /* -------------------------------------------- */
   /*  Event Listeners and Handlers                */
   /* -------------------------------------------- */
-
-  /**
-   * @type {ApplicationClickAction}
-   * @this {HUDConfig}
-   */
-  static #onAddTab(_event, _target) {
-    const n = Object.keys(this._setting).length;
-    const newTab = new TabData({
-      label: n ? `New Tab ${n}` : "New Tab",
-    });
-
-    this._setting[newTab.id] = newTab;
-    this.render();
-  }
 
   /**
    * @type {ApplicationClickAction}
@@ -212,32 +179,46 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this {HUDConfig}
    */
-  static #onDeleteTab(_event, target) {
-    const tabId = target.closest("[data-tab-id]")?.dataset.tabId;
-    if (!tabId) return;
-    delete this._setting[tabId];
-    this.render();
+  static async #onAddTab(_event, _target) {
+    const settings = foundry.utils.deepClone(HUDConfig.SETTING);
+    const n = Object.keys(settings).length;
+    const newTab = new TabData({ label: n ? `New Tab ${n}` : "New Tab" });
+    settings[newTab.id] = newTab.toObject();
+    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
   }
 
   /**
    * @type {ApplicationClickAction}
    * @this {HUDConfig}
    */
-  static #onAddSegment(_event, target) {
+  static async #onDeleteTab(_event, target) {
     const tabId = target.closest("[data-tab-id]")?.dataset.tabId;
-    const tabData = this.setting[tabId];
+    if (!tabId) return;
+
+    const settings = foundry.utils.deepClone(HUDConfig.SETTING);
+    delete settings[tabId];
+    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this {HUDConfig}
+   */
+  static async #onAddSegment(_event, target) {
+    const tabId = target.closest("[data-tab-id]")?.dataset.tabId;
+    const settings = foundry.utils.deepClone(HUDConfig.SETTING);
+    const tabData = settings[tabId];
+
     if (!tabData) return;
 
-    const count = tabData.segments.length;
     const segment = new SegmentData({
-      name: count ? `New Segment ${count}` : "New Segment",
+      name: tabData.segments?.length
+        ? `New Segment ${tabData.segments.length}`
+        : "New Segment",
     });
 
-    tabData.updateSource({
-      segments: [...tabData.segments, segment],
-    });
-
-    this.render();
+    tabData.segments = [...(tabData.segments ?? []), segment.toObject()];
+    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
   }
 
   /**
@@ -250,7 +231,7 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
     if (!segmentId || !tabId) return;
 
     const segment = this.setting[tabId].segments.find(
-      (s) => s.id === segmentId
+      (s) => s.id === segmentId,
     );
     segment.app.render({ force: true });
   }
@@ -259,10 +240,11 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this {HUDConfig}
    */
-  static #onDeleteSegment(_event, target) {
+  static async #onDeleteSegment(_event, target) {
     const tabId = target.closest("[data-tab-id]")?.dataset.tabId;
     const segmentId = target.closest("[data-segment-id]")?.dataset.segmentId;
-    const tabData = this.setting[tabId];
+    const settings = foundry.utils.deepClone(HUDConfig.SETTING);
+    const tabData = settings[tabId];
 
     if (!tabData || !segmentId) return;
 
@@ -271,10 +253,7 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
         app.close();
     }
 
-    tabData.updateSource({
-      segments: tabData.segments.filter((s) => s.id !== segmentId),
-    });
-
-    this.render();
+    tabData.segments = tabData.segments.filter((s) => s.id !== segmentId);
+    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
   }
 }

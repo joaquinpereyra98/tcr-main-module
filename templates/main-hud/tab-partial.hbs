@@ -3,16 +3,20 @@
     data-group="{{tab.group}}"
     data-tab="{{tab.id}}"
 >
-    <div class="content grid-container {{ifThen showGrid "show-grid" ""}}" style="{{tab.style}}">
+    <div class="content grid-container" style="{{tab.style}}">
+        {{#each tab.cells}}
+        <div class="cell" style="grid-column-start:{{columnStart}} ;grid-row-start:{{rowStart}} ;">
+            {{label}}
+        </div>
+        {{/each}}
         {{#each tab.segments}}
         <div
             class="segment {{ifThen model.isClickable 'clickable' ''}}"
             style="{{style}}"
             data-segment-id="{{model.id}}"
-            data-tab-id="{{../id}}"
+            data-tab-id="{{../tab.id}}"
             data-action="clickSegment"
         >
-            <div class="ackground-blur"></div>
             <div class="wrappler">
                 {{{enrichedHTML}}}
             </div>
@@ -28,7 +32,7 @@
             data-tooltip="Open Setting"
         ></a>
         <a
-            class="icon fa-regular fa-grid fixed-anchor {{ifThen showGrid "active" ""}}"
+            class="icon fa-regular fa-grid fixed-anchor"
             data-action="toggleGrid"
             data-tooltip="Toggle Grid"
         ></a>

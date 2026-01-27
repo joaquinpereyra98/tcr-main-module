@@ -296,67 +296,181 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   /** @inheritDoc */
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
+    const rankNames = getRankFolderNames();
     context.filters = this.currentFilters;
 
-    let dataModels = Object.entries(
-      CONFIG[context.filters.documentClass].dataModels,
-    );
+    const dataModels = await this._getActiveDataModels(context, rankNames);
 
-    if (context.filters.types?.size)
-      dataModels = dataModels.filter(([type]) =>
-        context.filters.types.has(type),
-      );
+    context.filterDefinitions = this._getMergedFilterDefinitions(dataModels);
 
-    context.filterDefinitions =
-      dataModels
-        .map(([, d]) => d.compendiumBrowserFilters ?? new Map())
-        .reduce((first, second) => {
-          if (!first) return second;
-          for (let [key, value] of second)
-            if (!first.has(key)) first.set(key, value);
-          return first;
-        }, null) ?? new Map();
-
-    if (context.filters.types?.has("subclass")) {
-      const classIdentifiers = new Set();
-
-      for (const sourceId of this.currentSources) {
-        const pack = game.packs.get(sourceId);
-        if (!pack) continue;
-
-        const index = await pack.getIndex({
-          fields: ["system.classIdentifier"],
-        });
-        for (const entry of index) {
-          if (entry.type === "subclass" && entry.system?.classIdentifier) {
-            classIdentifiers.add(entry.system.classIdentifier);
-          }
-        }
-      }
-
-      if (classIdentifiers.size > 0) {
-        const choices = Array.from(classIdentifiers)
-          .sort()
-          .reduce((acc, id) => {
-            acc[id] = formatIdentifier(id);
-            return acc;
-          }, {});
-
-        context.filterDefinitions.set("classIdentifier", {
-          type: "set",
-          label: "Parent Class",
-          config: {
-            keyPath: "system.classIdentifier",
-            choices,
-            multiple: true,
-          },
-        });
-      }
-    }
+    await this._prepareSubclassFilters(context, dataModels);
+    this._prepareRankFilters(context, rankNames);
 
     context.sources = this._getSourcesOptions();
 
     return context;
+  }
+
+  /**
+   * Retrieves the data models that are currently active based on document filters
+   * or visibility within specific source packs.
+   * @param {ApplicationRenderContext} context - The current application context.
+   * @param {string[]} rankNames - A list of folder names/ranks used to determine visibility
+   * for non-GM users.
+   * @returns {Promise<Array<[string, foundry.abstract.TypeDataModel]>>}
+   */
+  async _getActiveDataModels(context, rankNames) {
+    let dataModels = Object.entries(
+      CONFIG[context.filters.documentClass].dataModels,
+    );
+    const hasSelectedTypes = context.filters.types?.size > 0;
+
+    if (hasSelectedTypes) {
+      return dataModels.filter(([type]) => context.filters.types.has(type));
+    }
+
+    const availableTypeKeys = new Set();
+    for (const sourceId of this.currentSources) {
+      const pack = game.packs.get(sourceId);
+      if (!pack) continue;
+      const index = await pack.getIndex();
+
+      for (const entry of index) {
+        const folder = pack.folders.get(entry.folder);
+        const isVisible =
+          game.user.isGM ||
+          !entry.folder ||
+          folder?.ancestors.some((f) => rankNames.includes(f.name)) ||
+          rankNames.includes(folder?.name);
+
+        if (isVisible) availableTypeKeys.add(entry.type);
+      }
+    }
+    return dataModels.filter(([type]) => availableTypeKeys.has(type));
+  }
+
+  /**
+   * Aggregates and merges unique filter definitions from the provided data models.
+   * @param {Array<[string, foundry.abstract.TypeDataModel]>} dataModels - An array of data model entries.
+   * @returns {Map<string, any>} A Map containing merged filter definitions
+   */
+  _getMergedFilterDefinitions(dataModels) {
+    return dataModels
+      .map(([, d]) => d.compendiumBrowserFilters ?? new Map())
+      .reduce((merged, current) => {
+        for (let [key, value] of current) {
+          if (!merged.has(key)) merged.set(key, foundry.utils.deepClone(value));
+        }
+        return merged;
+      }, new Map());
+  }
+
+  /**
+   * Dynamically prepares and adds a "Parent Class" filter if subclasses are being displayed.
+   * @param {Object} context - The current application context.
+   * @param {Array<[string, foundry.abstract.TypeDataModel]>} dataModels - Array of active data model entries.
+   * @returns {Promise<void>}
+   */
+  async _prepareSubclassFilters(context, dataModels) {
+    const wantsSubclass =
+      context.filters.types?.has("subclass") ||
+      (context.filters.types?.size === 0 &&
+        dataModels.some(([t]) => t === "subclass"));
+
+    if (!wantsSubclass) return;
+
+    const classIdentifiers = new Set();
+    for (const sourceId of this.currentSources) {
+      const pack = game.packs.get(sourceId);
+      if (!pack) continue;
+
+      const index = await pack.getIndex({ fields: ["system.classIdentifier"] });
+      for (const entry of index) {
+        if (entry.type === "subclass" && entry.system?.classIdentifier) {
+          classIdentifiers.add(entry.system.classIdentifier);
+        }
+      }
+    }
+
+    if (classIdentifiers.size > 0) {
+      context.filterDefinitions.set("classIdentifier", {
+        type: "set",
+        label: "Parent Class",
+        config: {
+          keyPath: "system.classIdentifier",
+          choices: Array.from(classIdentifiers)
+            .sort()
+            .reduce((acc, id) => {
+              acc[id] = {label: formatIdentifier(id)};
+              return acc;
+            }, {}),
+          multiple: false,
+        },
+      });
+    }
+  }
+  
+  /**
+   * Processes folders within active compendium packs to build a "Rank Access" filter.
+   * @param {ApplicationRenderContext} context - The current application context.
+   * @param {string[]} rankNames - An array of folder names of valid ranks
+   * @returns {void}
+   */
+  _prepareRankFilters(context, rankNames) {
+    const rankChoices = {};
+    const gmoFolderIds = new Set();
+
+    for (const sourceId of this.currentSources) {
+      const pack = game.packs.get(sourceId);
+      if (!pack) continue;
+
+      for (const folder of pack.folders) {
+        const rankMatch = rankNames.includes(folder.name)
+          ? folder.name
+          : folder.ancestors.find((f) => rankNames.includes(f.name))?.name;
+
+        if (rankMatch) {
+          rankChoices[rankMatch] = rankMatch;
+        } else {
+          gmoFolderIds.add(folder.id);
+        }
+      }
+    }
+
+    if (Object.keys(rankChoices).length || gmoFolderIds.size) {
+      const choices = { ...rankChoices };
+      if (gmoFolderIds.size) choices["gm-only"] = "GMO";
+
+      context.filterDefinitions.set("rankFilter", {
+        type: "set",
+        label: "Rank Access",
+        config: { keyPath: "folder", choices, multiple: true },
+        createFilter: (filters, value, def) => {
+          const selected = Object.entries(value)
+            .filter(([k, v]) => v === 1)
+            .map(([k]) => k);
+          if (!selected.length) return;
+
+          const targetFolderIds = [];
+          for (const selection of selected) {
+            if (selection === "gm-only") {
+              targetFolderIds.push(...gmoFolderIds);
+            } else {
+              for (const sId of this.currentSources) {
+                const p = game.packs.get(sId);
+                const matches = p?.folders.filter(
+                  (f) =>
+                    f.name === selection ||
+                    f.ancestors.some((a) => a.name === selection),
+                );
+                if (matches) targetFolderIds.push(...matches.map((f) => f.id));
+              }
+            }
+          }
+          filters.push({ k: "folder", o: "in", v: targetFolderIds });
+        },
+      });
+    }
   }
 
   /**
@@ -451,12 +565,25 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         chosen: context.filters.types,
       });
 
-      const availableTypeKeys = new Set(
-        Array.from(this.currentSources).flatMap((sourceId) => {
-          const pack = game.packs.get(sourceId);
-          return pack ? pack.index.map((i) => i.type) : [];
-        }),
-      );
+      const rankNames = getRankFolderNames();
+      const availableTypeKeys = new Set();
+
+      for (const sourceId of this.currentSources) {
+        const pack = game.packs.get(sourceId);
+        if (!pack) continue;
+
+        const index = await pack.getIndex();
+        for (const entry of index) {
+          const folder = pack.folders.get(entry.folder);
+          const isVisible =
+            game.user.isGM ||
+            !entry.folder ||
+            folder?.ancestors.some((f) => rankNames.includes(f.name)) ||
+            rankNames.includes(folder?.name);
+
+          if (isVisible) availableTypeKeys.add(entry.type);
+        }
+      }
 
       const filterTypeMap = (typeMap) => {
         return Object.entries(typeMap).reduce((acc, [key, data]) => {
@@ -489,10 +616,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         }
       }
     } else if (partId === "filters") {
-      const hasSelectedTypes =
-        context.filters.types && context.filters.types.size > 0;
-
-      if (!hasSelectedTypes) {
+      if (!this.currentSources.size) {
         context.additional = [];
         return context;
       }
@@ -1029,10 +1153,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     // Ensure folder is always indexed
     if (!indexFields.has("folder")) indexFields.add("folder");
 
-    const isGM = game.user.isGM;
-
-    // Pre-calculate Rank folder names to avoid repeated setting lookups
-    const rankNames = getRankFolderNames();
+    const rankNames = getRankFolderNames() ?? [];
 
     // Iterate over all packs
     /** @type {Promise<Document[]>}*/
@@ -1079,7 +1200,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             !filters.length || dnd5e.Filter.performCheck(i, filters);
 
           // Always allow if GM or if item has no folder. Otherwise, check if folder is in the allowed set.
-          const matchesFolder = !i.folder || allowedFolderIds?.has(i.folder);
+          const matchesFolder =
+            game.user.isGM || !i.folder || allowedFolderIds?.has(i.folder);
 
           return matchesType && matchesFilters && matchesFolder;
         });

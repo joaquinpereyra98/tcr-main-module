@@ -45,10 +45,21 @@ export default class SegmentData extends foundry.abstract.DataModel {
         raw: new f.HTMLField({
           label: "Inner HTML Content",
         }),
+
         src: new f.FilePathField({
           categories: ["IMAGE"],
           label: "Background Image",
           blank: true,
+        }),
+
+        opacity: new f.NumberField({
+          min: 0,
+          max: 1,
+          step: 0.1,
+          initial: 1,
+          nullable: false,
+          required: true,
+          label: "Background Opacity",
         }),
       }),
 
@@ -101,7 +112,15 @@ export default class SegmentData extends foundry.abstract.DataModel {
 
     // --- Content Background ---
     if (content.src) {
-      styles.push(`background-image: url('${content.src}')`);
+      const imagePath =
+        content.src.startsWith("http") || content.src.startsWith("/")
+          ? content.src
+          : `/${content.src}`;
+
+      styles.push(`--bg-image: url('${imagePath}')`);
+
+      const opacityValue = content.opacity !== undefined ? content.opacity : 1;
+      styles.push(`--bg-opacity: ${opacityValue}`);
     }
 
     return styles.join("; ");

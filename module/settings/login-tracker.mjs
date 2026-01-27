@@ -192,7 +192,7 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
   
       const dataA = a.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA)?.lastLogin ?? 0;
       const dataB = b.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA)?.lastLogin ?? 0;
-      return dataA - dataB;
+      return dataB - dataA;
     });
 
     return sortedUsers.map((user) => {

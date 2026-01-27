@@ -27,6 +27,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     classes: [MODULE_ID, "main-hud"],
     window: {
       minimizable: true,
+      resizable: true,
+      title: "Main HUD",
     },
     position: {
       width: 800,
@@ -270,6 +272,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       tabContainer = document.createElement("div");
       tabContainer.classList.add("tab-container");
     }
+    tabContainer.classList.toggle("show-grid", this._showGrid);
 
     tabContainer.append(...tabs);
 
@@ -336,6 +339,17 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       })),
     );
 
+    const cells = [];
+    for (let r = 0; r < tab.rows; r++) {
+      for (let c = 1; c <= tab.columns; c++) {
+       cells.push({
+        label: String.fromCharCode(65 + r) + (c),
+        columnStart: c,
+        rowStart: r +1,
+       });
+      }
+    }
+
     context.tab = {
       active,
       cssClass,
@@ -344,6 +358,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       model: tab,
       id: tab.id,
       style: tab.styleAttr,
+      cells
     };
   }
 
@@ -382,11 +397,15 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     if (!this.#background) return;
 
     const oldLayers = Array.from(this.#background.children);
-
     const isVideo = VideoHelper.hasVideoExtension(src);
     const newLayer = document.createElement(isVideo ? "video" : "div");
 
     newLayer.classList.add("bg-layer");
+    newLayer.style.opacity = "0";
+    newLayer.style.transition = "opacity 800ms ease-in-out";
+    newLayer.style.position = "absolute";
+    newLayer.style.inset = "0";
+
     if (isVideo) {
       newLayer.src = src;
       newLayer.autoplay = true;
@@ -405,13 +424,17 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
 
     requestAnimationFrame(() => {
       newLayer.style.opacity = "1";
+
+      oldLayers.forEach((layer) => {
+        layer.style.transition = "opacity 800ms ease-in-out";
+        layer.style.opacity = "0";
+      });
     });
 
-    if (oldLayers.length > 0) {
-      setTimeout(() => {
-        oldLayers.forEach((el) => el.remove());
-      }, 800);
-    }
+    // 3. Cleanup
+    setTimeout(() => {
+      oldLayers.forEach((el) => el.remove());
+    }, 850); // Slightly longer than transition to be safe
   }
 
   /**
@@ -571,7 +594,6 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    */
   static #onClickSegment(event, target) {
     event.preventDefault();
-
     const { tabId, segmentId } = target.dataset;
     const tabData = this.setting[tabId];
     if (!tabData) return;
@@ -588,8 +610,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    */
   static #onToggleGrid(_event, target) {
     this._showGrid = !this._showGrid;
-    const grid = this.element.querySelector(".grid-container");
-    grid?.classList.toggle("show-grid", this._showGrid);
+    const tabContainer = this.element.querySelector(".tab-container");
+    tabContainer?.classList.toggle("show-grid", this._showGrid);
     target.classList.toggle("active", this._showGrid);
   }
 
@@ -610,6 +632,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       foundry.applications.instances.get(`${MODULE_ID}-hud-config`) ??
       new Cls();
 
+    if (app.rendered) app.bringToFront();
     return app.render({ force: true });
   }
 
@@ -684,7 +707,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    * @type {ApplicationClickAction}
    * @this MainHud
    */
-  static #onLoginKofi(_event, target) {
+  static #onLoginKofi() {
     document.getElementById("dt-btn")?.click();
   }
 

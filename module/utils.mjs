@@ -35,24 +35,28 @@ export function getRanks() {
   );
 }
 
+/**
+ * Retrieves the names of folders associated with the user's current donation rank.
+ * @returns {string[]|null} An array of folder name strings.
+ */
 export function getRankFolderNames() {
-  if (!game.modules.get("donation-tracker").active) return [];
+  if (!game.modules.get("donation-tracker").active) return null;
 
-  const { gmLevel, levels } =
+  const { levels } =
     game.settings.get("donation-tracker", "membershipLevels") ?? {};
 
   const userRank = game.user.isGM
-    ? levels.findIndex((lvl) => lvl.id === gmLevel)
+    ? levels.length
     : game.membership?.membershipLevel;
 
-  if (!userRank) return null;
+  if (userRank === undefined || userRank === null) return null;
 
   return Object.entries(game.membership.RANKS)
-    .filter(([_, v]) => v !== -1 && userRank >= v)
-    .map(([k]) =>
+    .filter(([_, value]) => value !== -1 && userRank >= value)
+    .map(([key]) =>
       game.settings.get(
         "foundryvtt-actor-studio",
-        `donation-tracker-rank-${k}`,
+        `donation-tracker-rank-${key}`,
       ),
     );
 }
@@ -87,12 +91,10 @@ export function getSubfoldersInCompenidum(folder) {
 
 /**
  * Converts identifiers with dashes/underscores into capitalized labels with spaces.
- * @param {string} identifier 
+ * @param {string} identifier
  * @returns {string}
  */
 export function formatIdentifier(identifier) {
   if (!identifier) return "";
-  return identifier
-    .replace(/[-_]/g, " ")
-    .titleCase();
+  return identifier.replace(/[-_]/g, " ").titleCase();
 }
