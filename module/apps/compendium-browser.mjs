@@ -1,4 +1,4 @@
-import { MODULE_ID } from "../constants.mjs";
+import { ITEM_FLAGS, MODULE_ID } from "../constants.mjs";
 import SourcesConfig from "../settings/sources-config.mjs";
 import {
   formatIdentifier,
@@ -253,6 +253,11 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   /**@type {HTMLElement} */
   #background;
 
+  /**
+   * @type {Map<String, String>} identifier - uuid
+   */
+  static #identifierMap = new Map();
+
   /* -------------------------------------------- */
   /*  Rendering                                   */
   /* -------------------------------------------- */
@@ -303,7 +308,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
     context.filterDefinitions = this._getMergedFilterDefinitions(dataModels);
 
-    await this._prepareSubclassFilters(context, dataModels);
+    await this._prepareSpecialFilters(context, dataModels);
+
     this._prepareRankFilters(context, rankNames);
 
     context.sources = this._getSourcesOptions();
@@ -366,28 +372,57 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   }
 
   /**
-   * Dynamically prepares and adds a "Parent Class" filter if subclasses are being displayed.
+   * Dynamically prepares and adds class-related filters for both Subclasses and Spells.
    * @param {Object} context - The current application context.
    * @param {Array<[string, foundry.abstract.TypeDataModel]>} dataModels - Array of active data model entries.
    * @returns {Promise<void>}
    */
-  async _prepareSubclassFilters(context, dataModels) {
-    const wantsSubclass =
-      context.filters.types?.has("subclass") ||
-      (context.filters.types?.size === 0 &&
-        dataModels.some(([t]) => t === "subclass"));
+  async _prepareSpecialFilters(context, dataModels) {
+    const types = context.filters.types;
+    const hasNoFilters = !types || types.size === 0;
 
-    if (!wantsSubclass) return;
+    // Determine if we need to scan for subclasses or spells
+    const wantsSubclass =
+      types?.has("subclass") ||
+      (hasNoFilters && dataModels.some(([t]) => t === "subclass"));
+    const wantsSpell =
+      types?.has("spell") ||
+      (hasNoFilters && dataModels.some(([t]) => t === "spell"));
+
+    if (!wantsSubclass && !wantsSpell) return;
 
     const classIdentifiers = new Set();
+    const classUuids = new Set();
+    const spellFlagPath = `flags.${MODULE_ID}.${ITEM_FLAGS.SPELL_CLASSES}`;
+
+    // Single pass over sources
     for (const sourceId of this.currentSources) {
       const pack = game.packs.get(sourceId);
       if (!pack) continue;
 
-      const index = await pack.getIndex({ fields: ["system.classIdentifier"] });
+      // Fetch all required fields in one index call
+      const fields = [];
+      if (wantsSubclass) fields.push("system.classIdentifier");
+      if (wantsSpell) fields.push(spellFlagPath);
+
+      const index = await pack.getIndex({ fields });
+
       for (const entry of index) {
-        if (entry.type === "subclass" && entry.system?.classIdentifier) {
+        // Logic for Subclasses
+        if (
+          wantsSubclass &&
+          entry.type === "subclass" &&
+          entry.system?.classIdentifier
+        ) {
           classIdentifiers.add(entry.system.classIdentifier);
+        }
+
+        // Logic for Spells
+        if (wantsSpell && entry.type === "spell") {
+          const spellClasses = foundry.utils.getProperty(entry, spellFlagPath);
+          if (Array.isArray(spellClasses)) {
+            spellClasses.forEach((uuid) => classUuids.add(uuid));
+          }
         }
       }
     }
@@ -399,17 +434,71 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         config: {
           keyPath: "system.classIdentifier",
           choices: Array.from(classIdentifiers)
-            .sort()
-            .reduce((acc, id) => {
-              acc[id] = {label: formatIdentifier(id)};
+            .map((id) => ({ id, label: formatIdentifier(id) }))
+            .sort((a, b) => a.label.localeCompare(b.label, game.i18n.lang))
+            .reduce((acc, item) => {
+              acc[item.id] = { label: item.label };
               return acc;
             }, {}),
           multiple: false,
         },
       });
     }
+
+    if (classUuids.size > 0) {
+      context.filterDefinitions.set(ITEM_FLAGS.SPELL_CLASSES, {
+        type: "set",
+        label: "Sources Class",
+        config: {
+          keyPath: "_classIdentifiers",
+          choices: await this.#preprareSpellClassChoices(classUuids),
+          multiple: true,
+        },
+      });
+    }
   }
-  
+
+  async #preprareSpellClassChoices(classUuids) {
+    const packs = new Set(
+      Array.from(classUuids).map(
+        (uuid) => foundry.utils.parseUuid(uuid).collection,
+      ),
+    );
+
+    const indexMap = new Map();
+    await Promise.all(
+      Array.from(packs).map(async (pack) => {
+        const index = await pack?.getIndex({ fields: ["system.identifier"] });
+        if (index) indexMap.set(pack.metadata.id, index);
+      }),
+    );
+
+    const choiceData = Array.from(classUuids).map((uuid) => {
+      const { collection, id } = foundry.utils.parseUuid(uuid);
+      const entry = indexMap.get(collection.metadata.id)?.get(id);
+
+      CompendiumBrowser.#identifierMap.set(uuid, entry?.system?.identifier);
+
+      return {
+        identifier: entry?.system?.identifier || id,
+        name: entry?.name || uuid,
+        type: entry?.type || "unknown",
+      };
+    });
+
+    const priorities = { class: 1, subclass: 2 };
+    choiceData.sort((a, b) => {
+      const priorityA = priorities[a.type] || 3;
+      const priorityB = priorities[b.type] || 3;
+      if (priorityA !== priorityB) return priorityA - priorityB;
+      return a.name.localeCompare(b.name, game.i18n.lang);
+    });
+
+    return Object.fromEntries(
+      choiceData.map((i) => [i.identifier, { label: i.name }]),
+    );
+  }
+
   /**
    * Processes folders within active compendium packs to build a "Rank Access" filter.
    * @param {ApplicationRenderContext} context - The current application context.
@@ -1189,6 +1278,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         );
 
         // Fetch the index
+        /**@type {foundry.utils.Collection} */
         let packIndex = await p.getIndex({ fields: Array.from(indexFields) });
         // Apply module art to the new index
         packIndex = game.dnd5e.moduleArt.apply(packIndex);
@@ -1196,6 +1286,18 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         const filteredIndex = packIndex.filter((i) => {
           // Remove any documents that don't match the specified types or the provided filters
           const matchesType = !types.size || types.has(i.type);
+
+          if (i.type === "spell") {
+            const uuids =
+              foundry.utils.getProperty(
+                i,
+                `flags.${MODULE_ID}.${ITEM_FLAGS.SPELL_CLASSES}`,
+              ) || [];
+
+            i._classIdentifiers = uuids.map((uuid) =>
+              CompendiumBrowser.#identifierMap.get(uuid),
+            );
+          }
           const matchesFilters =
             !filters.length || dnd5e.Filter.performCheck(i, filters);
 

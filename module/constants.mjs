@@ -4,6 +4,9 @@ export const LOGIN_TRACKER_KEY = `${MODULE_ID}.LoginTracker`;
 export const USER_FLAGS = {
   LOGIN_DATA: "loginData",
 };
+export const ITEM_FLAGS = {
+  SPELL_CLASSES: "spellClasses"
+}
 export const SETTINGS = {
   TAB_CONFIGURATION: "tabConfiguration",
   SOURCES_CONFIGURATION: "sourcesConfiguration",

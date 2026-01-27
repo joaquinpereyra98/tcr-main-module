@@ -1,6 +1,7 @@
 import * as apps from "./module/apps/_module.mjs";
 import * as settings from "./module/settings/_module.mjs";
 import * as data from "./module/data/_module.mjs";
+import * as hooks from "./module/hooks/_module.mjs";
 
 import JiraIssueManager from "./module/jira/jira-manager.mjs";
 
@@ -31,6 +32,8 @@ Hooks.on("init", () => {
   settings.SourcesConfig.registerSetting();
   settings.LoginTracker.registerSetting();
   settings.registerMetricsSetting();
+
+  window.customElements.define(apps.elements.HTMLDocumentTagsElementV2.tagName, apps.elements.HTMLDocumentTagsElementV2);
 
   JiraIssueManager.instance
     .initialize()
@@ -69,3 +72,5 @@ Hooks.once("setup", () => {
 Hooks.on("ready", () => {
   settings.LoginTracker.initialize();
 });
+
+Hooks.on("renderItemSheet", hooks.onRenderItemSheet);

@@ -32,7 +32,6 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     },
     position: {
       width: 800,
-      height: 600,
     },
     actions: {
       clickSegment: {

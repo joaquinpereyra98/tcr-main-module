@@ -198,17 +198,23 @@ export default class JiraIssueManager {
   static async #fetchAPI(endpoint, options = {}) {
     const url = `${BASE_URL}${endpoint}`;
 
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      ...options,
-    });
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP Error ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP Error ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("API Fetch Error:", error.message);
+      return { error: true, message: error.message };
     }
-    return response.json();
   }
 
   async loadMetrics() {
@@ -231,7 +237,7 @@ export default class JiraIssueManager {
       { inplace: false },
     );
 
-    ui[MAIN_HUD_KEY]._renderMetrics()
+    ui[MAIN_HUD_KEY]?._renderMetrics();
   }
 
   /**
