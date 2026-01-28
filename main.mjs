@@ -33,7 +33,10 @@ Hooks.on("init", () => {
   settings.LoginTracker.registerSetting();
   settings.registerMetricsSetting();
 
-  window.customElements.define(apps.elements.HTMLDocumentTagsElementV2.tagName, apps.elements.HTMLDocumentTagsElementV2);
+  window.customElements.define(
+    apps.elements.HTMLDocumentTagsElementV2.tagName,
+    apps.elements.HTMLDocumentTagsElementV2,
+  );
 
   JiraIssueManager.instance
     .initialize()
@@ -46,6 +49,7 @@ Hooks.once("setup", () => {
     SpellModel,
     "compendiumBrowserFilters",
   );
+
   Object.defineProperty(SpellModel, "compendiumBrowserFilters", {
     get: function () {
       const map = descriptor.get.call(this);
@@ -54,12 +58,47 @@ Hooks.once("setup", () => {
         type: "set",
         config: {
           keyPath: "system.level",
-          choices: Object.fromEntries(
-            Array.from({ length: 10 }, (_, i) => [
-              i,
-              { label: game.i18n.localize(`DND5E.SpellLevel${i}`) },
-            ]),
-          ),
+          choices: Array.from({ length: 10 }, (_, i) => ({
+            label: game.i18n.localize(`DND5E.SpellLevel${i}`),
+          })),
+        },
+        createFilter: (filters, value, def, key, operators) => {
+          const choices = foundry.utils.deepClone(def.config.choices);
+          if (def.config.blank) choices._blank = "";
+          const opCfg = operators[key] ?? { pos: "AND", neg: "OR" };
+
+          const [positive, negative] = Object.entries(value ?? {}).reduce(
+            ([positive, negative], [k, v]) => {
+              if (k in choices) {
+                if (k === "_blank") k = "";
+                if (v === 1) positive.push(k);
+                else if (v === -1) negative.push(k);
+              }
+              return [positive, negative];
+            },
+            [[], []],
+          );
+
+          if (positive.length) {
+            const posOp = opCfg.pos === "OR" ? "hasany" : "hasall";
+
+            filters.push({
+              k: def.config.keyPath,
+              o: def.config.multiple ? posOp : "in",
+              v: positive.map(s  => parseInt(s)),
+            });
+          }
+          if (negative.length) {
+            const negOp = opCfg.pos === "OR" ? "hasany" : "hasall";
+            filters.push({
+              o: "NOT",
+              v: {
+                k: def.config.keyPath,
+                o: def.config.multiple ? negOp : "in",
+                v: negative.map(s  => parseInt(s)),
+              },
+            });
+          }
         },
       });
 

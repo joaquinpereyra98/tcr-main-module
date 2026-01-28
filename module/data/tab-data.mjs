@@ -1,4 +1,3 @@
-import { TCR_RANKS } from "../constants.mjs";
 import { getRanks } from "../utils.mjs";
 import SegmentData from "./segment-data.mjs";
 

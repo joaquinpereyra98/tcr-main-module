@@ -96,39 +96,13 @@
         {{!-- Attachments Section --}}
         <div class="attachments-section detail-card">
             <label class="detail-label"><i class="fa-solid fa-paperclip"></i> Attachments</label>
-            <div class="attachments-grid">
-                {{#each issue.attachments}}
-                <div class="attachment-item" data-index="{{@index}}">
-                    <img
-                        name="attachments"
-                        src="{{this}}"
-                        title="View Attachment"
-                        class="attachment-thumb"
-                        loading="lazy"
-                        alt=""
-                    >
-                    <div class="attachment-overlay">
-                        <a
-                            class="attachment-action view"
-                            data-action="viewImage"
-                            data-path="{{this}}"
-                        >
-                            <i class="fa-solid fa-magnifying-glass-plus"></i>
-                        </a>
-                        <a class="attachment-action delete" data-action="deleteAttachment">
-                            <i class="fa-solid fa-trash"></i>
-                        </a>
-                    </div>
-                </div>
-                {{/each}}
-
-            </div>
+            <div class="attachments-grid"></div>
             <div class="controls">
                 <button type="button" data-action="addAttachment">
                     <input
                         type="file"
-                        class="issue-image-upload"
-                        accept="image/*"
+                        class="issue-file-upload" 
+                        accept="image/*,video/*"
                         style="display:none"
                         multiple
                     >

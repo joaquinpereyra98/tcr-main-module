@@ -77,7 +77,6 @@ export default class IssueData extends foundry.abstract.DataModel {
 
       user: new f.ForeignDocumentField(foundry.documents.BaseUser, {
         required: false,
-        initial: game.user.id,
         label: "User",
       }),
 
@@ -276,13 +275,6 @@ export default class IssueData extends foundry.abstract.DataModel {
 
   /* -------------------------------------------- */
 
-  toJira({ source = true } = {}) {
-    const obj = this.toObject(source);
-    delete obj.user;
-    obj.userName = this.user?.name ?? "";
-    return obj;
-  }
-
   /**
    * Transforms Jira data into a local IssueData instance.
    * @param {Object} data - The raw data from Jira.
@@ -311,7 +303,7 @@ export default class IssueData extends foundry.abstract.DataModel {
    * @returns {Promise<IssueData>}
    */
   static async create(data) {
-    const result = await JiraIssueManager.create(new IssueData(data).toJira());
+    const result = await JiraIssueManager.create(new IssueData(data).toObject(true));
     return result;
   }
 

@@ -104,10 +104,4 @@ export const ISSUE_STATUSES = {
     color: "#2ecc71",
   },
 };
-export const TCR_RANKS = {
-  notMember: "Not Member",
-  member: "Member",
-  benefactor: "Benefactor",
-  benefactorOfKnowledge: "Benefactor of Knowledge",
-};
 export const BASE_URL = "https://jira.tcrdnd.com/api/issues";

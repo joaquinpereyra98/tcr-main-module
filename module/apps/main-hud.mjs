@@ -32,6 +32,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     },
     position: {
       width: 800,
+      height: 700,
     },
     actions: {
       clickSegment: {
@@ -63,8 +64,10 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   /**@override */
   static get TABS() {
     const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
-      const rank = (game.membership?.membershipLevel ?? -1) + 1;
-      return game.user.isGM || Object.values(tab.visibilitylity)[rank];
+      const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
+      return (
+        game.user.isGM || Object.values(tab.visibility)[(rankIdx)]
+      );
     });
 
     /**@type {ApplicationTabsConfiguration} */
@@ -89,8 +92,10 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   /** @override */
   static get PARTS() {
     const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
-      const rank = (game.membership?.membershipLevel ?? -1) + 1;
-      return game.user.isGM || Object.values(tab.visibilitylity)[rank];
+      const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
+      return (
+        game.user.isGM || Object.values(tab.visibility)[(rankIdx)]
+      );
     });
 
     return tabsSetting.reduce((acc, tab) => {
@@ -113,7 +118,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     },
     bugTracker: {
       template: `modules/${MODULE_ID}/templates/main-hud/bug-tracker.hbs`,
-      scrollable: [""],
+      scrollable: [".scrollable"],
     },
   };
 
@@ -341,11 +346,11 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const cells = [];
     for (let r = 0; r < tab.rows; r++) {
       for (let c = 1; c <= tab.columns; c++) {
-       cells.push({
-        label: String.fromCharCode(65 + r) + (c),
-        columnStart: c,
-        rowStart: r +1,
-       });
+        cells.push({
+          label: String.fromCharCode(65 + r) + c,
+          columnStart: c,
+          rowStart: r + 1,
+        });
       }
     }
 
@@ -357,7 +362,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       model: tab,
       id: tab.id,
       style: tab.styleAttr,
-      cells
+      cells,
     };
   }
 

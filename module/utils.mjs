@@ -34,7 +34,6 @@ export function getRanks() {
     setting?.levels?.map(({ id, name }) => ({ k: id, label: name })) ?? null
   );
 }
-
 /**
  * Retrieves the names of folders associated with the user's current donation rank.
  * @returns {string[]|null} An array of folder name strings.
@@ -45,9 +44,12 @@ export function getRankFolderNames() {
   const { levels } =
     game.settings.get("donation-tracker", "membershipLevels") ?? {};
 
-  const userRank = game.user.isGM
-    ? levels.length
-    : game.membership?.membershipLevel;
+  const membershipLevel =
+    game.membership?.membershipLevel === -1
+      ? 0
+      : game.membership.membershipLevel;
+
+  const userRank = game.user.isGM ? levels.length : membershipLevel;
 
   if (userRank === undefined || userRank === null) return null;
 

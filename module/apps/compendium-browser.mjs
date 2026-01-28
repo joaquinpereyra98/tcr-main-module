@@ -567,7 +567,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @returns {Object[]} An array of formatted and sorted source options.
    */
   _getSourcesOptions() {
-    const allowedNames = getRankFolderNames();
+    const allowedNames = getRankFolderNames() ?? [];
 
     const lockedSources = new Set(this.options.sources?.locked ?? []);
 
@@ -710,8 +710,38 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         return context;
       }
 
+      const activeTypes = context.filters.types;
+      let filteredDefinitions;
+      if (!activeTypes || activeTypes.size === 0) {
+        filteredDefinitions = context.filterDefinitions;
+      } else {
+        filteredDefinitions = new Map();
+        const allModels = CONFIG[context.filters.documentClass].dataModels;
+        for (const type of activeTypes) {
+          const model = allModels[type];
+          const modelFilters = model?.compendiumBrowserFilters;
+          if (modelFilters) {
+            for (const [key, def] of modelFilters) {
+              if (!filteredDefinitions.has(key))
+                filteredDefinitions.set(key, def);
+            }
+          }
+        }
+        const specialKeys = [
+          "classIdentifier",
+          "rankFilter",
+          `flags.${MODULE_ID}.${ITEM_FLAGS.SPELL_CLASSES}`,
+        ];
+        for (const key of specialKeys) {
+          if (context.filterDefinitions.has(key)) {
+            if (key.includes("spell") && !activeTypes.has("spell")) continue;
+            filteredDefinitions.set(key, context.filterDefinitions.get(key));
+          }
+        }
+      }
+
       context.additional = Array.from(
-        context.filterDefinitions?.entries() ?? [],
+        filteredDefinitions.entries() ?? [],
       ).reduce((arr, [key, data]) => {
         const filterValue = context.filters.additional?.[key] ?? {};
 
@@ -1297,6 +1327,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             i._classIdentifiers = uuids.map((uuid) =>
               CompendiumBrowser.#identifierMap.get(uuid),
             );
+            const levelFilter = filters.find(f => f.k === "system.level");
+            if(levelFilter)levelFilter.v.map(s => parseInt(s));
           }
           const matchesFilters =
             !filters.length || dnd5e.Filter.performCheck(i, filters);
@@ -1351,7 +1383,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       const def = definition.get(key);
       if (!def) continue;
       if (foundry.utils.getType(def.createFilter) === "function") {
-        def.createFilter(filters, value, def);
+        def.createFilter(filters, value, def, key, operators);
         continue;
       }
       switch (def.type) {

@@ -326,9 +326,14 @@ export default class JiraIssueManager {
     try {
       /**@type {IssueData} */
       const existing = this.issues.get(issueID);
+
+      if (changes.user !== existing.user?.id) delete changes.user;
+      
+      const fullData = existing.clone(changes).toObject();
+
       const { message, result } = await this.#fetchAPI(`/${issueID}`, {
         method: "PUT",
-        body: JSON.stringify(existing.clone(changes).toObject()),
+        body: JSON.stringify(fullData),
       });
 
       if (existing) {

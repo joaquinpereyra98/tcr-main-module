@@ -39,7 +39,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
       contentClasses: ["scrollable"],
     },
     actions: {
-      viewImage: IssueSheet.#onViewImage,
+      viewFile: IssueSheet.#onViewFile,
       deleteAttachment: IssueSheet.#onDeleteAttachment,
       addAttachment: IssueSheet.#onAddAttachment,
       addComment: IssueSheet.#onAddComment,
@@ -116,7 +116,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
   }
 
   /**
-   * Extends the base part listener attachment to initialize issue-specific 
+   * Extends the base part listener attachment to initialize issue-specific
    * event listeners for the given HTML element.
    * @param {string} partId - The unique identifier for the UI part.
    * @param {HTMLElement} htmlElement - The DOM element containing the part's markup.
@@ -128,6 +128,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     super._attachPartListeners(partId, htmlElement, options);
 
     this._addSelectTypeListener(htmlElement);
+    this._renderAttachments(htmlElement);
     this._addAttachImgListener(htmlElement);
     this._addSelectPriorityAndStatus(htmlElement);
     this._addEditCommentListener(htmlElement);
@@ -159,10 +160,10 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
    * @param {HTMLElement} element - The parent element containing the upload input.
    */
   _addAttachImgListener(element) {
-    const imgInput = element.querySelector("input.issue-image-upload");
-    if (!imgInput) return;
+    const fileInput = element.querySelector("input.issue-file-upload");
+    if (!fileInput) return;
 
-    imgInput.addEventListener("change", (event) => {
+    fileInput.addEventListener("change", (event) => {
       const files = Array.from(event.target.files);
       if (!files.length) return;
       files.forEach((file) => {
@@ -170,26 +171,13 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
 
         reader.onload = async (e) => {
           const base64String = e.target.result;
-          const grid = imgInput
+          const grid = fileInput
             .closest(".attachments-section")
             .querySelector(".attachments-grid");
 
           const nextIndex = grid.querySelectorAll(".attachment-item").length;
-
-          const htmlString = `
-                <div class="attachment-item" data-index="${nextIndex}">
-                    <img src="${base64String}" class="attachment-thumb" loading="lazy">
-                    <div class="attachment-overlay">
-                        <a class="attachment-action view" data-action="viewImage" data-path="${base64String}">
-                            <i class="fa-solid fa-magnifying-glass-plus"></i>
-                        </a>
-                        <a class="attachment-action delete" data-action="deleteAttachment">
-                            <i class="fa-solid fa-trash"></i>
-                        </a>
-                    </div>
-                </div>`;
-
-          grid.insertAdjacentHTML("beforeend", htmlString);
+          const item = this._renderAttachmentItem(base64String, nextIndex);
+          grid.insertAdjacentElement("beforeend", item);
         };
 
         reader.readAsDataURL(file);
@@ -197,6 +185,57 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
 
       event.target.value = "";
     });
+  }
+
+  /**
+   *
+   * @param {HTMLElement} element
+   */
+  _renderAttachments(element) {
+    const container = element.querySelector(".attachments-grid");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    this.issue.attachments.forEach((attch, idx) => {
+      const item = this._renderAttachmentItem(attch, idx);
+      container.appendChild(item);
+    });
+  }
+
+  /**
+   * Crea y retorna un elemento de adjunto (imagen o video).
+   * @param {string} attachment - URL o Base64 del archivo.
+   * @param {number} index - Índice para el atributo data.
+   * @returns {HTMLElement}
+   */
+  _renderAttachmentItem(attachment, index) {
+    const isVideo =
+      attachment.startsWith("data:video/") ||
+      /\.(m4v|mp4|ogv|webm)$/i.test(attachment);
+
+    const item = document.createElement("div");
+    item.classList.add("attachment-item");
+    item.dataset.index = index;
+    item.dataset.type = isVideo ? "video" : "image";
+
+    const media = isVideo
+      ? `<video src="${attachment}" class="attachment-thumb" muted playsinline></video>`
+      : `<img src="${attachment}" class="attachment-thumb" loading="lazy">`;
+
+    const overlay = `
+    <div class="attachment-overlay">
+      <a class="attachment-action view" data-action="viewFile" data-path="${attachment}">
+        <i class="fa-solid ${isVideo ? "fa-play" : "fa-magnifying-glass-plus"}"></i>
+      </a>
+      <a class="attachment-action delete" data-action="deleteAttachment">
+        <i class="fa-solid fa-trash"></i>
+      </a>
+    </div>`;
+
+    item.insertAdjacentHTML("afterbegin", media);
+    item.insertAdjacentHTML("beforeend", overlay);
+    return item;
   }
 
   /**
@@ -322,14 +361,38 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this IssueSheet
    */
-  static #onViewImage(_event, target) {
-    const imgEl = target.closest(".attachment-item")?.querySelector("img");
+  /**
+   * Maneja el evento de click para visualizar archivos (imágenes o videos).
+   * @type {ApplicationClickAction}
+   * @this IssueSheet
+   */
+  static #onViewFile(_event, target) {
+    const item = target.closest(".attachment-item");
+    if (!item) return;
 
-    const ip = new ImagePopout(imgEl.src, {
-      title: "Attached Image",
-    });
+    const path = target.dataset.path;
+    const type = item.dataset.type;
 
-    ip.render(true);
+    if (type === "video") {
+      new foundry.applications.api.DialogV2({
+        window: "Attached Video",
+        content: `
+        <div style="background: black; display: flex; align-items: center; justify-content: center;">
+            <video src="${path}" controls autoplay style="max-width: 100%; max-height: 50vh; "></video>
+          </div>
+        `,
+        buttons: [{
+          action: "close",
+          label: "Close",
+        }]
+      }).render({ force: true });
+    } else {
+      const ip = new ImagePopout(path, {
+        title: "Attached Image",
+        shareable: true,
+      });
+      ip.render(true);
+    }
   }
 
   /**
