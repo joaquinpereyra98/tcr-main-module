@@ -986,10 +986,12 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @protected
    */
   _onDragStart(event) {
+    console.log(event);
     const card = event.target.closest(".grid-card");
     const { uuid } = card.dataset ?? {};
-    if (card.draggable) return;
+    if (!card.draggable) return;
     try {
+      console.log(uuid);
       const { type } = foundry.utils.parseUuid(uuid);
       event.dataTransfer.setData("text/plain", JSON.stringify({ type, uuid }));
     } catch (e) {
