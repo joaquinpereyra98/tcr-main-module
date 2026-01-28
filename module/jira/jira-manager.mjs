@@ -198,10 +198,20 @@ export default class JiraIssueManager {
   static async #fetchAPI(endpoint, options = {}) {
     const url = `${BASE_URL}${endpoint}`;
 
+    const headers = { ...options.headers };
+    delete options.headers;
+
+    if (!headers["Content-Type"] && !(options.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+    }
+    if (options.body instanceof FormData) {
+      delete headers["Content-Type"];
+    }
+
     try {
       const response = await fetch(url, {
         method: "GET",
-        headers: { "Content-Type": "application/json" },
+        headers,
         ...options,
       });
 
@@ -295,8 +305,23 @@ export default class JiraIssueManager {
 
       const newIssue = IssueData.fromJira(result);
 
-      this._emitRefresh("CREATE_ISSUE", { key: newIssue.key, data: newIssue });
+      if (data.attachments?.length > 0) {
+        const formData = new FormData();
 
+        data.attachments.forEach((uri, idx) => {
+          const { blob, filename } = this._base64ToBlob(uri, idx);
+          formData.append("files", blob, filename);
+        });
+
+        await this.#fetchAPI(`/${newIssue.key}/attachments`, {
+          method: "POST",
+          body: formData,
+        });
+
+        newIssue.updateSource({ attachments: data.attachments });
+      }
+
+      this._emitRefresh("CREATE_ISSUE", { key: newIssue.key, data: newIssue });
       this.issues.set(newIssue.key, newIssue);
 
       JiraIssueManager._refreshApps();
@@ -322,26 +347,71 @@ export default class JiraIssueManager {
       );
       return;
     }
+    /**@type {IssueData} */
+    const existing = this.issues.get(issueID);
+
+    const toUpload =
+      changes.attachments?.filter((a) => !existing.attachments.includes(a)) ||
+      [];
+    const formData = new FormData();
+
+    toUpload.forEach((uri, idx) => {
+      const { blob, filename } = this._base64ToBlob(uri, idx);
+      formData.append("files", blob, filename);
+    });
 
     try {
-      /**@type {IssueData} */
-      const existing = this.issues.get(issueID);
-      const { message, result } = await this.#fetchAPI(`/${issueID}`, {
-        method: "PUT",
-        body: JSON.stringify(existing.clone(changes).toObject()),
-      });
+      const promises = [
+        this.#fetchAPI(`/${issueID}`, {
+          method: "PUT",
+          body: JSON.stringify(existing.clone(changes).toObject()),
+        }),
+      ];
 
-      if (existing) {
-        existing.updateSource(result);
-        this._emitRefresh("EDIT_ISSUE", { data: existing.toObject() });
+      if (toUpload.length > 0) {
+        promises.push(
+          this.#fetchAPI(`/${issueID}/attachments`, {
+            method: "POST",
+            body: formData,
+          }),
+        );
       }
 
+      const [result] = await Promise.all(promises);
+
+      existing.updateSource(result);
+      this._emitRefresh("EDIT_ISSUE", { data: existing.toObject() });
       JiraIssueManager._refreshApps();
-      console.log(message);
+
       return existing;
     } catch (err) {
       ui.notifications.error(`Update failed: ${err.message}`);
     }
+  }
+
+  /**
+   * Converts a Base64/Data-URI string to a Blob object using Browser APIs.
+   * @param {string} dataUri - The base64 string.
+   * @param {number} idx - Index for unique filename.
+   * @returns {{blob: Blob, filename: string}}
+   */
+  static _base64ToBlob(dataUri, idx) {
+    const [header, base64] = dataUri.split(",");
+    const mimeType = header.match(/:(.*?);/)[1];
+    const ext = mimeType.split("/")[1];
+
+    const byteCharacters = atob(base64);
+
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+
+    return {
+      blob: new Blob([byteArray], { type: mimeType }),
+      filename: `foundry_${Date.now()}_${idx}.${ext}`,
+    };
   }
 
   /**
