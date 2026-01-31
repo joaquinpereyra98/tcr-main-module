@@ -163,33 +163,43 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     const fileInput = element.querySelector("input.issue-file-upload");
     if (!fileInput) return;
 
-    fileInput.addEventListener("change", (event) => {
+    fileInput.addEventListener("change", async (event) => {
       const files = Array.from(event.target.files);
-      if (!files.length) return;
-      files.forEach((file) => {
-        const reader = new FileReader();
+      const grid = fileInput
+        .closest(".attachments-section")
+        .querySelector(".attachments-grid");
 
-        reader.onload = async (e) => {
-          const base64String = e.target.result;
-          const grid = fileInput
-            .closest(".attachments-section")
-            .querySelector(".attachments-grid");
-
-          const nextIndex = grid.querySelectorAll(".attachment-item").length;
-          const item = this._renderAttachmentItem(base64String, nextIndex);
-          grid.insertAdjacentElement("beforeend", item);
-        };
-
-        reader.readAsDataURL(file);
-      });
+      for (const file of files) {
+        const base64 = await this.#readFileAsDataURL(file);
+        const nextIndex = grid.querySelectorAll(".attachment-item").length;
+        grid.insertAdjacentElement(
+          "beforeend",
+          this._renderAttachmentItem(base64, nextIndex),
+        );
+      }
 
       event.target.value = "";
     });
   }
 
   /**
-   *
-   * @param {HTMLElement} element
+   * Reads a File object and returns its contents as a base64 encoded Data URL.
+   * @param {File} file - The File or Blob object to read.
+   * @returns {Promise<string|ArrayBuffer|null>}
+   * @private
+   */
+  #readFileAsDataURL(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /**
+   * Renders the attachments list into the grid container.
+   * @param {HTMLElement} element - The parent element containing the attachments grid.
+   * @protected
    */
   _renderAttachments(element) {
     const container = element.querySelector(".attachments-grid");
@@ -278,11 +288,39 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     );
   }
 
+  /**@inheritdoc */
   _replaceHTML(result, content, options) {
     requestAnimationFrame(() => {
       super._replaceHTML(result, content, options);
     });
   }
+
+  /**@inheritdoc */
+  async _preClose(options) {
+    await super._preClose(options);
+
+    if (!this.isEditable) return;
+
+    if (!this.issue.key) {
+      const confirmSave = await foundry.applications.api.DialogV2.confirm({
+        window: { title: "Unsaved Changes" },
+        content:
+          "Do you want to close the window without creating a new Issue?",
+        yes: {
+          label: "Create Issue",
+        },
+        no: {
+          label: "Discard",
+        },
+        rejectClose: false,
+      });
+
+      if (!confirmSave) return;
+    }
+
+    await this.#handleSave();
+  }
+
   /* -------------------------------------------- */
 
   /** @inheritDoc */
@@ -325,42 +363,121 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
    * @type {ApplicationFormSubmission}
    * @this IssueSheet
    */
-  static async #onSubmitForm(_event, form, formData) {
-    const expanded = foundry.utils.expandObject(formData.object);
+  static async #onSubmitForm(_event, _form, formData) {
+    if (this.isEditable) await this.#handleSave(formData.object);
+  }
 
-    if ("undefined" in expanded) delete expanded.undefined;
+  /**
+   * Persists changes to the issue.
+   * @param {Object} [data] - Optional explicit data to save; otherwise, it is extracted from the form.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async #handleSave(data = null) {
+    const form = this.element?.querySelector("form");
+    if (!form) return;
+
+    const rawData = data || new FormDataExtended(form).object;
+    const expanded = foundry.utils.expandObject(rawData);
 
     expanded.attachments = Array.from(
       form.querySelectorAll("img.attachment-thumb"),
     ).map((img) => img.src);
 
-    this.issue.validate({ changes: expanded, clean: true, fallback: false });
+    const normalizeDescription = ({ description = "" }) =>
+      foundry.applications.parseHTML(description).outerHTML;
 
-    const submitBtn = this.element.querySelector("button.submit-button");
-    submitBtn.disabled = true;
-    const submitIconButton = submitBtn.querySelector("i");
-    submitIconButton.classList.remove("fa-floppy-disk");
-    submitIconButton.classList.add("fa-spinner", "fa-spin");
+    const issueData = this.issue.toObject();
+
+    issueData.description = normalizeDescription(issueData);
+    expanded.description = normalizeDescription(expanded);
+
+    const diff = foundry.utils.diffObject(issueData, expanded);
+    if (foundry.utils.isEmpty(diff)) return;
+
+    this.#toggleSubmitState(true);
 
     try {
       if (!this.issue.key) {
-        const newIssueData = await IssueData.create(expanded);
-        this.#issue = newIssueData;
+        this.#issue = await IssueData.create(this.issue.clone(expanded));
         this.render();
       } else {
         await this.issue.update(expanded);
       }
+      this.#toggleSubmitState(false, true);
     } catch (err) {
       console.error(err);
       ui.notifications.error("Failed to save issue.");
-      this.render();
+      this.#toggleSubmitState(false, false);
     }
   }
 
   /**
-   * @type {ApplicationClickAction}
+   * Toggles the visual loading state of the submit button.
+   * @param {boolean} isSaving - Whether the application is currently in a saving/loading state.
+   * @private
+   */
+  #toggleSubmitState(isSaving, success = false) {
+    const btn = this.element?.querySelector("button.submit-button");
+    const icon = btn?.querySelector("i");
+    if (!btn || !icon) return;
+
+    icon.className = "issue-icon fa-solid";
+
+    if (isSaving) {
+      btn.disabled = true;
+      icon.classList.add("fa-spinner", "fa-spin");
+    } else {
+      btn.disabled = false;
+
+      if (success) {
+        icon.classList.add("fa-check");
+
+        setTimeout(() => {
+          if (!this.element) return;
+          icon.className = "issue-icon fa-solid fa-floppy-disk";
+        }, 2000);
+      } else {
+        icon.classList.add("fa-floppy-disk");
+      }
+    }
+  }
+
+  /**
+   * Maneja el evento de click para visualizar archivos (imágenes o videos).
+   * @param {ClipboardEvent} event
    * @this IssueSheet
    */
+  static async onPasteFile(event) {
+    const isAppActive = ui.activeWindow === this;
+    const items = event.clipboardData?.items;
+    if (!items || !isAppActive) return;
+
+    const grid = this.element.querySelector(".attachments-grid");
+    if (!grid) return;
+
+    for (const item of items) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (
+          !file ||
+          (!file.type.startsWith("image/") && !file.type.startsWith("video/"))
+        )
+          continue;
+
+        const base64 = await this.#readFileAsDataURL(file);
+        const nextIndex = grid.querySelectorAll(".attachment-item").length;
+
+        grid.insertAdjacentElement(
+          "beforeend",
+          this._renderAttachmentItem(base64, nextIndex),
+        );
+
+        ui.notifications.info(`Pasted: ${file.name || "Clipboard Image"}`);
+      }
+    }
+  }
+
   /**
    * Maneja el evento de click para visualizar archivos (imágenes o videos).
    * @type {ApplicationClickAction}
@@ -381,10 +498,12 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
             <video src="${path}" controls autoplay style="max-width: 100%; max-height: 50vh; "></video>
           </div>
         `,
-        buttons: [{
-          action: "close",
-          label: "Close",
-        }]
+        buttons: [
+          {
+            action: "close",
+            label: "Close",
+          },
+        ],
       }).render({ force: true });
     } else {
       const ip = new ImagePopout(path, {
@@ -405,6 +524,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
   }
 
   /**
+   * Triggers the file selection dialog by clicking the hidden file input.
    * @type {ApplicationClickAction}
    * @this IssueSheet
    */
@@ -414,6 +534,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
   }
 
   /**
+   * Handles adding a new comment to the Jira issue.
    * @type {ApplicationClickAction}
    * @this IssueSheet
    */
@@ -438,6 +559,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
   }
 
   /**
+   * Handles the deletion of a comment, with a confirmation dialog unless Shift is held.
    * @type {ApplicationClickAction}
    * @this IssueSheet
    */
@@ -460,9 +582,9 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
   }
 
   /**
-   *
+   * Handles voting or scoring on an issue.
    * @type {ApplicationClickAction}
-   * @this MainHud
+   * @this IssueSheet
    */
   static async #onAddScoreIssue(_event, target) {
     const score = Number(target.dataset.score);

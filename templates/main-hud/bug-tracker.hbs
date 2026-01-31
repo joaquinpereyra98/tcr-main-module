@@ -70,13 +70,72 @@
     <div class="bug-tracker-container grid-table">
         {{!-- Header Row --}}
         <div class="grid-header">
-            <div class="col-score">Score</div>
-            <div class="col-issueType">Type</div>
-            <div class="col-priority">Priority</div>
-            <div class="col-id">ID</div>
-            <div class="col-summary">Subject</div>
-            <div class="col-status">Status</div>
-            <div class="col-last-modified">Last Update</div>
+            <div
+                data-action="sortIssues"
+                data-sort="score"
+                class="col-score"
+            >
+                {{#if (eq filters.sort.key "score")}}
+                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                {{/if}}
+                Score
+            </div>
+            <div
+                class="col-issueType"
+                data-action="openFilterMenu"
+                data-key="issueType"
+            >
+                <i class="sort-icon fa-solid fa-filter {{ifThen filters.activeFilters.issueType "" "inactive"}}"></i>
+                Type
+            </div>
+            <div
+                data-action="sortIssues"
+                data-sort="priority"
+                class="col-priority"
+            >
+                {{#if (eq filters.sort.key "priority")}}
+                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                {{/if}}
+                Priority
+            </div>
+            <div
+                data-action="sortIssues"
+                data-sort="numericID"
+                class="col-id"
+            >
+                {{#if (eq filters.sort.key "numericID")}}
+                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                {{/if}}
+                ID
+            </div>
+            <div
+                data-action="sortIssues"
+                data-sort="summary"
+                class="col-summary"
+            >
+                {{#if (eq filters.sort.key "summary")}}
+                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                {{/if}}
+                Subject
+            </div>
+            <div
+                class="col-status"
+                data-action="openFilterMenu"
+                data-key="status"
+            >
+                <i class="sort-icon fa-solid fa-filter  {{ifThen filters.activeFilters.status "" "inactive"}}"></i>
+                Status
+            </div>
+            <div
+                data-action="sortIssues"
+                data-sort="updated"
+                class="col-last-modified"
+            >
+                {{#if (eq filters.sort.key "updated")}}
+                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                {{/if}}
+                Last Update
+            </div>
         </div>
 
         {{!-- Data Body --}}

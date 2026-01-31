@@ -30,14 +30,13 @@
             </a>
         </div>
         {{/unless}}
-
         {{#if editable}}
         <button
             type="submit"
             class="icon submit-button"
             data-tooltip="{{ifThen isNew 'Create Issue' 'Save Changes'}}"
         >
-            <i class="fa-regular fa-solid {{ifThen isNew 'fa-plus' 'fa-floppy-disk'}}"></i>
+            <i class="fa-solid {{ifThen isNew 'fa-plus' 'fa-floppy-disk'}}"></i>
         </button>
         {{/if}}
         

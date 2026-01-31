@@ -281,18 +281,9 @@ export default class IssueData extends foundry.abstract.DataModel {
    * @returns {IssueData} A new instance of IssueData.
    */
   static fromJira(data) {
-    data.user = game.users.getName(data.userName)?._id ?? data.user ?? null;
     return new IssueData(data);
   }
 
-  /* ---------------------------------------- */
-  /*  Data Management                         */
-  /* ---------------------------------------- */
-
-  updateSource(changes = {}, options = {}) {
-    super.updateSource(changes, options);
-    this.app.render();
-  }
   /* -------------------------------------------- */
   /* CRUD Operations                              */
   /* -------------------------------------------- */

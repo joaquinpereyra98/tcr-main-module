@@ -1,7 +1,8 @@
 <div class="scrollable flex1">
     {{#each setting as |tab id|}}
     <div class="accordion-container" data-tab-id="{{tab.id}}">
-        <div class="accordion-header flexrow">
+        <div class="accordion-header flexrow draggable">
+            <span class="drag-span flex0"></span>
             <a class="icon flex0 fa-solid fa-chevron-down fa-lg" data-action="toggleAccordion"></a>
             {{formInput tab.schema.fields.label name=(concat id ".label") value=tab.label}}
             <a

@@ -47,9 +47,7 @@ export default function InteractiveMixin(BaseApplication) {
       this._contextMenus = this._createContextMenus();
     }
 
-    static TABS = {
-      primary: {},
-    };
+    static TABS = {};
 
     /**
      * @returns {ContextMenu[]}

@@ -59,13 +59,36 @@ export default class SegmentData extends foundry.abstract.DataModel {
           initial: 1,
           nullable: false,
           required: true,
-          label: "Background Opacity",
+          label: "Image Opacity",
+        }),
+
+        color: new f.ColorField({
+          initial: "#000000",
+          nullable: false,
+          required: true,
+          label: "Background Color",
+        }),
+
+        colorOpacity: new f.NumberField({
+          min: 0,
+          max: 1,
+          step: 0.1,
+          initial: 0.5,
+          nullable: false,
+          required: true,
+          label: "Color Opacity",
         }),
       }),
 
       actions: new f.SchemaField({
         click: createScriptField({ label: "Left Click Script" }),
-        contextMenu: createScriptField({ label: "Right Click Script" }),
+        doc: new f.DocumentUUIDField({
+          label: "Linked Document",
+          hint: "The UUID of a document to trigger. You can drag and drop a sidebar entry or compendium link here.",
+        }),
+        contextMenu: createScriptField({
+          label: "Right Click Script (GM only)",
+        }),
       }),
     };
   }
@@ -108,7 +131,7 @@ export default class SegmentData extends foundry.abstract.DataModel {
 
     // --- Visual Display ---
     if (display.textColor) styles.push(`color: ${display.textColor}`);
-    if (display.textSize) styles.push(`font-size: ${display.textSize}`);
+    if (display.textSize) styles.push(`--font-size: ${display.textSize}`);
 
     // --- Content Background ---
     if (content.src) {
@@ -122,6 +145,9 @@ export default class SegmentData extends foundry.abstract.DataModel {
       const opacityValue = content.opacity !== undefined ? content.opacity : 1;
       styles.push(`--bg-opacity: ${opacityValue}`);
     }
+
+    const rgba = content.color.toRGBA(content.colorOpacity);
+    styles.push(`--bg-color: ${rgba}`);
 
     return styles.join("; ");
   }
@@ -140,13 +166,25 @@ export default class SegmentData extends foundry.abstract.DataModel {
    * @param {PointerEvent} event - The triggering pointer event.
    * @returns {Promise<void>}
    */
-  onClickAction(event) {
+  async onClickAction(event) {
     const isContext = event.button === 2;
     if (isContext && !game.user.isGM) return;
+
     try {
+      if (this.doc && !isContext) {
+        const doc = await fromUuid(this.doc);
+        if (!doc) throw new Error(`Document not found for UUID: ${this.doc}`);
+
+        return doc instanceof Macro && doc.canExecute
+          ? doc.execute()
+          : doc.sheet?.render(true);
+      }
+
       const command = isContext ? this.actions.contextMenu : this.actions.click;
-      const fn = new foundry.utils.AsyncFunction("event", `{${command}\n}`);
-      fn.call(this, event);
+      if (command) {
+        const fn = new foundry.utils.AsyncFunction("event", command);
+        return await fn.call(this, event);
+      }
     } catch (err) {
       console.error("HUD | Action Script Error:", err);
       ui.notifications.error(

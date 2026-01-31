@@ -258,6 +258,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   static #identifierMap = new Map();
 
+  #gridSize = 100;
+
   /* -------------------------------------------- */
   /*  Rendering                                   */
   /* -------------------------------------------- */
@@ -292,6 +294,16 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (filterSections && filterSections.children.length === 0) {
       filterSections.append(...this.element.querySelectorAll(".header-part"));
     }
+
+    const sliderSize = this.element.querySelector(
+      "range-picker.size-range-picker",
+    );
+    sliderSize.addEventListener("change", (event) => {
+      const windowsContent = event.target.closest(".window-content");
+      const val = event.target.value;
+      this.#gridSize = val;
+      windowsContent.style.setProperty("--grid-size", `${val + 80}px`);
+    });
   }
 
   /* -------------------------------------------- */
@@ -507,56 +519,82 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   _prepareRankFilters(context, rankNames) {
     const rankChoices = {};
-    const gmoFolderIds = new Set();
+    const isGM = game.user.isGM;
+
+    const baseRank = rankNames[0];
+    const otherRanks = rankNames.slice(1);
+    const specialNames = [...otherRanks];
+
+    const gmoName = "[GMO]";
+    if (isGM) specialNames.push(gmoName);
 
     for (const sourceId of this.currentSources) {
       const pack = game.packs.get(sourceId);
       if (!pack) continue;
 
       for (const folder of pack.folders) {
-        const rankMatch = rankNames.includes(folder.name)
-          ? folder.name
-          : folder.ancestors.find((f) => rankNames.includes(f.name))?.name;
-
-        if (rankMatch) {
-          rankChoices[rankMatch] = rankMatch;
-        } else {
-          gmoFolderIds.add(folder.id);
+        if (folder.name === gmoName) {
+          if (isGM) rankChoices[gmoName] = gmoName;
+          continue;
         }
+
+        let rankMatch = specialNames.includes(folder.name)
+          ? folder.name
+          : folder.ancestors.find((f) => specialNames.includes(f.name))?.name;
+
+        if (!rankMatch) rankMatch = baseRank;
+        rankChoices[rankMatch] = rankMatch;
       }
     }
 
-    if (Object.keys(rankChoices).length || gmoFolderIds.size) {
-      const choices = { ...rankChoices };
-      if (gmoFolderIds.size) choices["gm-only"] = "GMO";
-
+    if (Object.keys(rankChoices).length) {
       context.filterDefinitions.set("rankFilter", {
         type: "set",
         label: "Rank Access",
-        config: { keyPath: "folder", choices, multiple: true },
+        config: { keyPath: "folder", choices: rankChoices, multiple: true },
         createFilter: (filters, value, def) => {
-          const selected = Object.entries(value)
-            .filter(([k, v]) => v === 1)
-            .map(([k]) => k);
+          const selected = Object.entries(value).filter(([k, v]) => v !== 0);
           if (!selected.length) return;
 
-          const targetFolderIds = [];
-          for (const selection of selected) {
-            if (selection === "gm-only") {
-              targetFolderIds.push(...gmoFolderIds);
-            } else {
-              for (const sId of this.currentSources) {
-                const p = game.packs.get(sId);
-                const matches = p?.folders.filter(
-                  (f) =>
-                    f.name === selection ||
-                    f.ancestors.some((a) => a.name === selection),
+          const includeIds = [];
+          const excludeIds = [];
+
+          for (const [selection, mode] of selected) {
+            if (selection === gmoName && !isGM) continue;
+
+            const targetList = mode === 1 ? includeIds : excludeIds;
+
+            for (const sId of this.currentSources) {
+              const p = game.packs.get(sId);
+              if (!p) continue;
+
+              const matches = p.folders.filter((f) => {
+                if (selection === baseRank) {
+                  const isSpecial = specialNames.some(
+                    (r) =>
+                      f.name === r || f.ancestors.some((a) => a.name === r),
+                  );
+                  const isGMO =
+                    f.name === gmoName ||
+                    f.ancestors.some((a) => a.name === gmoName);
+                  return !isSpecial && !isGMO;
+                }
+                return (
+                  f.name === selection ||
+                  f.ancestors.some((a) => a.name === selection)
                 );
-                if (matches) targetFolderIds.push(...matches.map((f) => f.id));
-              }
+              });
+              targetList.push(...matches.map((f) => f.id));
             }
           }
-          filters.push({ k: "folder", o: "in", v: targetFolderIds });
+
+          if (includeIds.length)
+            filters.push({ k: "folder", o: "in", v: includeIds });
+          if (excludeIds.length)
+            filters.push({
+              o: "NOT",
+              v: { k: "folder", o: "in", v: excludeIds },
+            });
         },
       });
     }
@@ -634,6 +672,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   async _prepareHeaderContext(partId, context, options) {
     context.headerCollapsed = this._headerCollapsed;
+    context.gridSize = this.#gridSize;
 
     context.isLocked = { documentClass: true };
     context.isLocked.filters = "additional" in this.options.filters.locked;
@@ -986,12 +1025,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @protected
    */
   _onDragStart(event) {
-    console.log(event);
     const card = event.target.closest(".grid-card");
     const { uuid } = card.dataset ?? {};
     if (!card.draggable) return;
     try {
-      console.log(uuid);
       const { type } = foundry.utils.parseUuid(uuid);
       event.dataTransfer.setData("text/plain", JSON.stringify({ type, uuid }));
     } catch (e) {
@@ -1024,7 +1061,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   async _onScrollResults(event) {
     if (
       this.#renderThrottle ||
-      !event.target.matches('[data-application-part="results"]')
+      !event.target.matches('.window-content')
     )
       return;
     if (
@@ -1329,9 +1366,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             i._classIdentifiers = uuids.map((uuid) =>
               CompendiumBrowser.#identifierMap.get(uuid),
             );
-            const levelFilter = filters.find(f => f.k === "system.level");
-            if(levelFilter)levelFilter.v.map(s => parseInt(s));
+            const levelFilter = filters.find((f) => f.k === "system.level");
+            if (levelFilter) levelFilter.v.map((s) => parseInt(s));
           }
+
           const matchesFilters =
             !filters.length || dnd5e.Filter.performCheck(i, filters);
 

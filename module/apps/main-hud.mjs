@@ -1,5 +1,11 @@
 import InteractiveMixin from "./interactive-mixin.mjs";
-import { MODULE_ID, SETTINGS } from "../constants.mjs";
+import {
+  ISSUE_STATUSES,
+  ISSUE_TYPES,
+  MODULE_ID,
+  PRIORITY,
+  SETTINGS,
+} from "../constants.mjs";
 import TabData from "../data/tab-data.mjs";
 import JiraIssueManager from "../jira/jira-manager.mjs";
 import IssueData from "../data/issue-data.mjs";
@@ -37,7 +43,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     actions: {
       clickSegment: {
         handler: MainHud.#onClickSegment,
-        buttons: [0, 2],
+        buttons: [0, 1, 2],
       },
       addScoreIssue: MainHud.#onAddScoreIssue,
       toggleGrid: MainHud.#onToggleGrid,
@@ -47,6 +53,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       editIssue: MainHud.#onEditIssue,
       toggleSelfFilter: MainHud.#onToggleSelfFilter,
       loginKofi: MainHud.#onLoginKofi,
+      sortIssues: MainHud.#onSortIssues,
+      openFilterMenu: MainHud.#onOpenFilterMenu,
     },
   };
 
@@ -65,9 +73,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   static get TABS() {
     const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
       const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
-      return (
-        game.user.isGM || Object.values(tab.visibility)[(rankIdx)]
-      );
+      return game.user.isGM || Object.values(tab.visibility)[rankIdx];
     });
 
     /**@type {ApplicationTabsConfiguration} */
@@ -93,9 +99,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   static get PARTS() {
     const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
       const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
-      return (
-        game.user.isGM || Object.values(tab.visibility)[(rankIdx)]
-      );
+      return game.user.isGM || Object.values(tab.visibility)[rankIdx];
     });
 
     return tabsSetting.reduce((acc, tab) => {
@@ -105,7 +109,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       };
 
       return acc;
-    }, MainHud.BASE_PARTS);
+    }, foundry.utils.duplicate(MainHud.BASE_PARTS));
   }
 
   /**
@@ -132,6 +136,12 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
 
     /** The number of entries to load per batch.*/
     SIZE: 20,
+  };
+
+  /**@enum {Number} */
+  static SORT_DIRECTIONS = {
+    ASCENDING: 1,
+    DESCENDING: -1,
   };
 
   /**
@@ -180,13 +190,20 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   /**
    * The full list of issues available for rendering, used for slicing batches.
    * @type {Array<object>}
-   * @private
    */
   #filteredIssues = [];
 
   #filters = {
     searchQuery: "",
     showOnlySelf: false,
+    sort: {
+      key: "updated",
+      direction: MainHud.SORT_DIRECTIONS.DESCENDING,
+    },
+    activeFilters: {
+      issueType: "",
+      status: "",
+    },
   };
 
   /* -------------------------------------------- */
@@ -344,12 +361,11 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     );
 
     const cells = [];
-    for (let r = 0; r < tab.rows; r++) {
+    for (let r = 1; r <= tab.rows; r++) {
       for (let c = 1; c <= tab.columns; c++) {
         cells.push({
-          label: String.fromCharCode(65 + r) + c,
           columnStart: c,
-          rowStart: r + 1,
+          rowStart: r,
         });
       }
     }
@@ -484,8 +500,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    */
   async _renderIssues() {
     let issues = Array.from(JiraIssueManager.issues.values());
-
-    if (this.#filters.searchQuery) {
+    const { searchQuery, showOnlySelf, activeFilters } = this.#filters;
+    if (searchQuery) {
       const fuse = new Fuse(issues, {
         keys: ["summary"],
         threshold: 0.4,
@@ -495,13 +511,33 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       issues = results.map((result) => result.item);
     }
 
-    if (this.#filters.showOnlySelf) {
+    if (showOnlySelf) {
       issues = issues.filter((issue) => issue.user?.isSelf === true);
     }
 
-    this.#filteredIssues = issues.sort(
-      (a, b) => (b.created || 0) - (a.created || 0),
-    );
+    if (activeFilters.status) {
+      issues = issues.filter((i) => i.status === activeFilters.status);
+    }
+    if (activeFilters.issueType) {
+      issues = issues.filter((i) => i.issueType === activeFilters.issueType);
+    }
+
+    const { key, direction } = this.#filters.sort;
+
+    this.#filteredIssues = issues.sort((a, b) => {
+      let valA = a[key] ?? "";
+      let valB = b[key] ?? "";
+
+      if (key === "priority") {
+        valA = PRIORITY[valA].sort ?? 0;
+        valB = PRIORITY[valB].sort ?? 0;
+      }
+
+      if (valA < valB) return -1 * direction;
+      if (valA > valB) return 1 * direction;
+      return 0;
+    });
+
     this.#issueIndex = 0;
 
     const container = this.element.querySelector(".bug-tracker.tab .grid-body");
@@ -604,7 +640,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const tab = new TabData(tabData);
     const segment = tab.segments.find((s) => s.id === segmentId);
 
-    segment.onClickAction(event);
+    if (event.button === 2) return segment?.app?.render({ force: true });
+    return segment.onClickAction(event);
   }
 
   /**
@@ -745,5 +782,70 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     span.classList.add("fa-solid", "fa-spinner", "fa-spin");
     span.style.opacity = 0.5;
     await issue.update({ voters: newVoters });
+  }
+
+  /**
+   * Handle clicking a header to sort the issues list.
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static #onSortIssues(_event, target) {
+    const { ASCENDING, DESCENDING } = MainHud.SORT_DIRECTIONS;
+    const newKey = target.dataset.sort;
+    const { sort } = this.#filters;
+
+    if (sort.key !== newKey) {
+      sort.key = newKey;
+      sort.direction = DESCENDING;
+    } else if (sort.direction === DESCENDING) {
+      sort.direction = ASCENDING;
+    } else if (sort.direction === ASCENDING) {
+      sort.key = "updated";
+      sort.direction = DESCENDING;
+    }
+
+    this.render({ parts: ["bugTracker"] });
+  }
+
+  /**
+   *
+   * @type {ApplicationClickAction}
+   * @this MainHud
+   */
+  static #onOpenFilterMenu(_event, target) {
+    const { key } = target.dataset;
+    const config = key === "issueType" ? ISSUE_TYPES : ISSUE_STATUSES;
+
+    let options = Object.values(config).map(({ key, label }) => ({
+      value: key,
+      label,
+    }));
+
+    if (key === "status") options.pop();
+
+    const menu = document.createElement("div");
+    menu.classList.add("tooltip-filter-menu");
+
+    const select = foundry.applications.fields.createSelectInput({
+      name: "filter",
+      options,
+      blank: "All",
+      value: this.#filters.activeFilters[key],
+    });
+
+    select.addEventListener("change", (ev) => {
+      this.#filters.activeFilters[key] = ev.target.value;
+      this.render({ parts: ["bugTracker"] });
+    });
+
+    menu.innerHTML = `<i class="fa-solid fa-filter"></i> `;
+
+    menu.appendChild(select);
+    game.tooltip.activate(target, {
+      content: menu,
+      locked: true,
+      direction: "UP",
+      cssClass: MODULE_ID,
+    });
   }
 }

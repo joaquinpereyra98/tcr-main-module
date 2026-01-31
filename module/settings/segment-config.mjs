@@ -9,7 +9,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  */
 
 export default class SegmentConfig extends HandlebarsApplicationMixin(
-  ApplicationV2
+  ApplicationV2,
 ) {
   /** @param {Partial<ApplicationConfiguration> & {segment: SegmentData}} options */
   constructor(options) {
@@ -71,6 +71,37 @@ export default class SegmentConfig extends HandlebarsApplicationMixin(
     return options;
   }
 
+  /** @inheritDoc */
+  _onRender(context, options) {
+    super._onRender(context, options);
+
+    /**@type {NodeListOf<HTMLTextAreaElement>} */
+    const textAreas = this.element.querySelectorAll("textarea");
+
+    if (textAreas.length) {
+      textAreas.forEach((el) =>
+        el.addEventListener("dblclick", (event) => {
+          const target = event.target;
+          const rect = target.getBoundingClientRect();
+          const isExpanded = target.classList.contains("expanded");
+          const isInResizeHandle =
+            event.clientX > rect.right - 20 && event.clientY > rect.bottom - 20;
+          if (isInResizeHandle) {
+            if (!isExpanded) {
+              target.style.height = "auto";
+              target.style.height = target.scrollHeight + 10 + "px";
+              target.classList.add("expanded");
+              target.scrollIntoView({ behavior: "smooth", block: "end" });
+            } else {
+              target.style.height = 20 + "px";
+              target.classList.remove("expanded");
+            }
+          }
+        }),
+      );
+    }
+  }
+
   /* -------------------------------------------- */
 
   /** @override */
@@ -89,13 +120,11 @@ export default class SegmentConfig extends HandlebarsApplicationMixin(
    * @this {SegmentConfig}
    */
   static async #onSubmitForm(_event, _form, formData) {
-    const expanded = foundry.utils.expandObject(formData.object);
-    this.segment.updateSource(expanded);
+    this.segment.updateSource(formData.object);
     const settings = foundry.utils.deepClone(HUDConfig.SETTING);
     const tabData = this.segment.parent.toObject();
     settings[tabData.id] = tabData;
 
     await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
-    this.render();
   }
 }

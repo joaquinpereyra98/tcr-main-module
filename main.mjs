@@ -85,7 +85,7 @@ Hooks.once("setup", () => {
             filters.push({
               k: def.config.keyPath,
               o: def.config.multiple ? posOp : "in",
-              v: positive.map(s  => parseInt(s)),
+              v: positive.map((s) => parseInt(s)),
             });
           }
           if (negative.length) {
@@ -95,7 +95,7 @@ Hooks.once("setup", () => {
               v: {
                 k: def.config.keyPath,
                 o: def.config.multiple ? negOp : "in",
-                v: negative.map(s  => parseInt(s)),
+                v: negative.map((s) => parseInt(s)),
               },
             });
           }
@@ -105,6 +105,11 @@ Hooks.once("setup", () => {
       return map;
     },
     configurable: true,
+  });
+
+  document.addEventListener("paste", (event) => {
+    const app = ui.activeWindow;
+    if (app instanceof apps.IssueSheet) apps.IssueSheet.onPasteFile?.call(app, event);
   });
 });
 

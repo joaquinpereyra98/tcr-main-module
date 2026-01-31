@@ -24,6 +24,8 @@
         <legend><i class="fa-solid fa-file-code"></i> Visual Content</legend>
         {{formGroup fields.content.fields.src value=segment.content.src}}
         {{formGroup fields.content.fields.opacity value=segment.content.opacity}}
+        {{formGroup fields.content.fields.color value=segment.content.color}}
+        {{formGroup fields.content.fields.colorOpacity value=segment.content.colorOpacity}}
         {{formGroup fields.content.fields.raw value=segment.content.raw}}
 
     </fieldset>
@@ -31,8 +33,8 @@
     {{!-- Actions Section (Scripts) --}}
     <fieldset>
         <legend><i class="fa-solid fa-terminal"></i> Interaction Scripts</legend>
+        {{formGroup fields.actions.fields.doc value=segment.actions.value}}
         {{formGroup fields.actions.fields.click value=segment.actions.click}}
         {{formGroup fields.actions.fields.contextMenu value=segment.actions.contextMenu}}
-
     </fieldset>
 </div>

@@ -101,6 +101,19 @@
     }
   }
 
+  .tooltip-filter-menu {
+    margin: 0 2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    select {
+      color: var(--input-text-color);
+      option {
+        background-color: var(--input-background-color);
+      }
+    }
+  }
+
   .editor.prosemirror.active {
     height: 300px;
 
@@ -160,6 +173,20 @@
       align-items: center;
       gap: 0.4rem;
       padding: 4px 8px;
+      cursor: default;
+
+      .drag-span {
+        padding: 10px 1px;
+        border-left: 3px dotted white;
+        border-right: 3px dotted white;
+        opacity: 0.3;
+        cursor: grab;
+        transition: opacity 0.3s ease;
+
+        &:hover {
+          opacity: 1;
+        }
+      }
 
       .icon {
         transition: transform 0.3s ease;
@@ -373,8 +400,11 @@
     }
 
     .tab-container {
-      height: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       position: relative;
+      flex: 1;
 
       .tab[data-tab] {
         display: block;
@@ -470,8 +500,8 @@
       justify-content: center;
       align-content: start;
       position: relative;
-      grid-template-columns: repeat(var(--hud-columns), minmax(20px, 1fr));
-      grid-template-rows: repeat(var(--hud-rows), minmax(20px, 1fr));
+      grid-template-columns: repeat(var(--hud-columns), minmax(0, 1fr));
+      grid-template-rows: repeat(var(--hud-rows), minmax(0, 1fr));
       max-height: 100%;
       gap: 5px;
 
@@ -511,7 +541,7 @@
           pointer-events: none;
         }
       }
-      
+
     }
 
     .dynamic-part {
@@ -532,7 +562,8 @@
         box-shadow: 0 0 20px var(--hud-black-05), var(--wow-glow);
         transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
         padding: 5px;
-        background-color: rgba(0, 0, 0, 0.5);
+        background-color: var(--bg-color, rgba(0, 0, 0, 0.5));
+        container-type: inline-size;
 
         &::before {
           margin: 5px;
@@ -558,6 +589,7 @@
           justify-content: center;
           height: 100%;
           text-align: center;
+          font-size: var(--font-size);
         }
 
         &:hover {
@@ -611,6 +643,11 @@
     }
 
     .bug-tracker.tab {
+      overflow: hidden;
+      flex-direction: column;
+      display: flex !important;
+      flex: 1;
+
       .bug-tracker-header {
         gap: 10px;
 
@@ -761,12 +798,14 @@
       }
 
       .bug-tracker-container {
+        overflow: hidden;
+        flex: 1;
         gap: 0;
 
         .grid-header,
         .grid-row {
           text-align: center;
-          grid-template-columns: 40px 45px 1fr 40px 2fr 1fr 1fr;
+          grid-template-columns: 45px 50px 1fr 45px 2fr 1fr 1fr;
         }
 
         .grid-header {
@@ -774,13 +813,37 @@
           height: 2rem;
           margin-bottom: 0;
           font-weight: bold;
-          font-size: var(--font-size-15);
+          font-size: var(--font-size-14);
           color: var(--accent-gold);
+
+          >div {
+            text-wrap: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+
+            i {
+              font-size: var(--font-size-10);
+              color: white;
+              transition: 0.3s opacity ease;
+              &.inactive {
+                opacity: 0.3;
+              }
+            }
+
+            &[data-action] {
+              cursor: pointer;
+              &:hover {
+                text-shadow: 0px 0px 1px var(--hud-white-05);
+              }
+            }
+
+          }
         }
 
         .grid-body {
           --color-scrollbar: var(--wow-panel-border);
-          max-height: 385px;
         }
 
         .grid-row {
@@ -986,19 +1049,19 @@
     }
 
     .window-content {
+      margin-top: 0;
+      padding-top: 0;
       background: none !important;
-      grid-template-areas:
-        "header"
-        "results";
-      grid-template-columns: 100%;
-      grid-template-rows: auto 1fr;
+      display: block;
       transition: all 0.3s ease;
+      overflow: auto;
+      --color-scrollbar: var(--wow-panel-border);
+      padding-right: 5px;
 
       .header {
         font-family: var(--dnd5e-font-roboto-condensed);
 
         .collapsible-filters {
-          margin-top: 10px;
           display: flex;
 
           .filter-sections-header {
@@ -1014,10 +1077,7 @@
 
           .filter-sections-wrapper {
             flex: 1;
-            max-height: 300px;
-            overflow-y: auto;
             padding-right: 10px;
-            --color-scrollbar: var(--wow-panel-border);
           }
 
           &.collapsed {
@@ -1134,6 +1194,94 @@
             gap: 5px;
           }
         }
+
+        .size-slider-container {
+          justify-content: end;
+          gap: 15px;
+          margin: 3px 15px 0 15px;
+          opacity: 0.3;
+          transition: opacity 0.3s ease;
+
+          &:hover {
+            opacity: 1;
+          }
+
+          label {
+            font-family: var(--dnd5e-font-roboto-condensed);
+            font-size: var(--font-size-14);
+            text-wrap: nowrap;
+          }
+
+          .size-range-picker {
+            flex: 0 0 10rem;
+
+            input[type=number] {
+              --input-height: 1.5rem;
+              font-size: 1rem;
+              background: transparent;
+            }
+
+            input[type="range"] {
+              --range-thumb-background-color: var(--dnd5e-color-card);
+              --range-thumb-border-color: var(--dnd5e-color-gold);
+              --range-track-border-color: transparent;
+              border: none;
+
+              /* Hover & Focus States */
+              &:not([disabled]) {
+
+                &:hover,
+                &:focus-visible {
+                  --range-track-border-color: var(--dnd5e-color-gold);
+
+                  &::-moz-range-track {
+                    box-shadow: 0 0 6px var(--dnd5e-color-gold);
+                  }
+
+                  &::-webkit-slider-runnable-track {
+                    box-shadow: 0 0 6px var(--dnd5e-color-gold);
+                  }
+                }
+              }
+
+              /* Shared Transitions */
+              &::-moz-range-thumb,
+              &::-moz-range-track,
+              &::-webkit-slider-thumb,
+              &::-webkit-slider-runnable-track {
+                transition: all 250ms ease;
+              }
+
+              /* Thumb Styling */
+              &::-moz-range-thumb {
+                border-radius: 100%;
+                box-shadow: 0 0 3px var(--dnd5e-shadow-45);
+                background-color: var(--range-thumb-background-color);
+                border: 1px solid var(--range-thumb-border-color);
+              }
+
+              &::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                border-radius: 100%;
+                box-shadow: 0 0 3px var(--dnd5e-shadow-45);
+                background-color: var(--range-thumb-background-color);
+                border: 1px solid var(--range-thumb-border-color);
+              }
+
+              /* Track Styling */
+              &::-moz-range-track {
+                border: 1px solid var(--range-track-border-color);
+                box-shadow: none;
+              }
+
+              &::-webkit-slider-runnable-track {
+                border: 1px solid var(--range-track-border-color);
+                box-shadow: none;
+              }
+            }
+          }
+        }
+
       }
 
       .items-section .header.items-header {
@@ -1148,7 +1296,7 @@
       ol.item-list {
         transition: all 0.3s;
         display: grid;
-        grid-template-columns: repeat(auto-fill, 180px);
+        grid-template-columns: repeat(auto-fill, var(--grid-size, 180px));
         justify-content: center;
         gap: 12px;
         padding: 10px;
@@ -1464,7 +1612,13 @@
           background: var(--hud-black-01);
           padding: 10px;
           border-radius: 4px;
+
+          prose-mirror [data-action="image"],
+          prose-mirror .source-code-edit {
+            display: none;
+          }
         }
+
       }
 
       .attachments-section {
@@ -1660,6 +1814,7 @@ document-tags-v2 {
     padding: 0;
     flex: 0 0 36px !important;
     color: var(--t5e-secondary-color) !important;
+
     &:disabled {
       cursor: default !important;
       opacity: 0.5;

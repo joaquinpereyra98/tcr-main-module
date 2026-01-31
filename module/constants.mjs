@@ -52,30 +52,35 @@ export const PRIORITY = {
     key: "lowest",
     iconClass: "fa-chevrons-down",
     color: "rgb(241, 91, 80)",
+    sort: -2,
   },
   low: {
     label: "Low",
     key: "low",
     iconClass: "fa-chevron-down",
     color: "rgb(241, 91, 80)",
+    sort: -1,
   },
   medium: {
     label: "Medium",
     key: "medium",
     iconClass: "fa-equals",
     color: "rgb(224, 108, 0)",
+    sort: 0,
   },
   high: {
     label: "High",
     key: "high",
     iconClass: "fa-chevron-up",
     color: "rgb(70, 136, 236)",
+    sort: 1,
   },
   highest: {
     label: "Highest",
     key: "highest",
     iconClass: "fa-chevrons-up",
     color: "rgb(70, 136, 236)",
+    sort: 2,
   },
 };
 export const ISSUE_STATUSES = {
@@ -91,9 +96,9 @@ export const ISSUE_STATUSES = {
     iconClass: "fa-regular fa-envelope-open",
     color: "#3498db",
   },
-  inProgress: {
+  in_progress: {
     label: "In Pogress",
-    key: "inProgress",
+    key: "in_progress",
     iconClass: "fa-regular fa-circle",
     color: "#f1c40f",
   },

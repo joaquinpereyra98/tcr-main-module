@@ -2,8 +2,9 @@ import SegmentConfig from "./segment-config.mjs";
 import { MAIN_HUD_KEY, MODULE_ID, SETTINGS } from "../constants.mjs";
 import SegmentData from "../data/segment-data.mjs";
 import TabData from "../data/tab-data.mjs";
+import InteractiveMixin from "../apps/interactive-mixin.mjs";
 
-const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
+const { ApplicationV2 } = foundry.applications.api;
 
 /**
  * @import {ApplicationFormSubmission, ApplicationClickAction, ApplicationConfiguration} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
@@ -13,9 +14,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * The application responsible for configuring the main hud
  * @extends {ApplicationV2}
  */
-export default class HUDConfig extends HandlebarsApplicationMixin(
-  ApplicationV2,
-) {
+export default class HUDConfig extends InteractiveMixin(ApplicationV2) {
   /**
    * The default configuration options which are assigned to every instance of this Application class.
    * @type {Partial<ApplicationConfiguration>}
@@ -154,12 +153,81 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
    */
   static async #onSubmit(_event, _form, formData) {
     const expanded = foundry.utils.expandObject(formData.object);
-    const updated = foundry.utils.mergeObject(
-      HUDConfig.SETTING,
-      expanded,
-      { inplace: false },
-    );
+    const updated = foundry.utils.mergeObject(HUDConfig.SETTING, expanded, {
+      inplace: false,
+    });
     await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, updated);
+  }
+
+  /* -------------------------------------------- */
+  /*  Drag and Drop                               */
+  /* -------------------------------------------- */
+
+  /**@inheritdoc */
+  _canDragStart() {
+    return true;
+  }
+
+  /* -------------------------------------------- */
+
+  /**@inheritdoc */
+  _canDragDrop() {
+    return true;
+  }
+
+  /* -------------------------------------------- */
+
+  static DRAG_TAB_TYPE = `${MODULE_ID}.Tab`;
+
+  /**
+   * An event that occurs when a drag workflow begins for a draggable item on the sheet.
+   * @param {DragEvent} event       The initiating drag start event
+   * @returns {Promise<void>}
+   * @protected
+   */
+  async _onDragStart(event) {
+    const target = event.currentTarget;
+    if ("link" in event.target.dataset) return;
+
+    const tabId = target.closest("[data-tab-id]")?.dataset.tabId;
+
+    if (!tabId) return;
+
+    const dragData = {
+      type: HUDConfig.DRAG_TAB_TYPE,
+      tabId,
+    };
+
+    event.dataTransfer.setData("text/plain", JSON.stringify(dragData));
+  }
+
+  /* -------------------------------------------- */
+
+  /**
+   * An event that occurs when data is dropped into a drop target.
+   * @param {DragEvent} event
+   * @returns {Promise<void>}
+   * @protected
+   */
+  async _onDrop(event) {
+    const data = TextEditor.getDragEventData(event);
+    if (data.type !== HUDConfig.DRAG_TAB_TYPE ) return;
+
+    const dropTarget = event.target.closest("[data-tab-id]");
+    const dropTabId = dropTarget?.dataset.tabId;
+    const dragTabId = data.tabId;
+
+    if (!dropTabId || dragTabId === dropTabId) return;
+
+    const settings = foundry.utils.deepClone(HUDConfig.SETTING);
+    const entries = Object.entries(settings);
+    const dragIndex = entries.findIndex(([id]) => id === dragTabId);
+    const dropIndex = entries.findIndex(([id]) => id === dropTabId);
+
+    const [removed] = entries.splice(dragIndex, 1);
+    entries.splice(dropIndex, 0, removed);
+
+    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION,  Object.fromEntries(entries));
   }
 
   /* -------------------------------------------- */
@@ -191,13 +259,25 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this {HUDConfig}
    */
-  static async #onDeleteTab(_event, target) {
+  static async #onDeleteTab(event, target) {
     const tabId = target.closest("[data-tab-id]")?.dataset.tabId;
     if (!tabId) return;
 
-    const settings = foundry.utils.deepClone(HUDConfig.SETTING);
-    delete settings[tabId];
-    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
+    const deleteTab = () => {
+      const settings = foundry.utils.deepClone(HUDConfig.SETTING);
+      delete settings[tabId];
+      game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
+    };
+
+    if (event.shiftKey) {
+      deleteTab();
+    } else {
+      Dialog.confirm({
+        title: `${game.i18n.format("DOCUMENT.Delete", { type: "Tab" })}: ${this.tabId}}`,
+        content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.format("SIDEBAR.DeleteWarning", { type: "Tab" })}</p>`,
+        yes: () => deleteTab(),
+      });
+    }
   }
 
   /**
@@ -240,7 +320,7 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this {HUDConfig}
    */
-  static async #onDeleteSegment(_event, target) {
+  static async #onDeleteSegment(event, target) {
     const tabId = target.closest("[data-tab-id]")?.dataset.tabId;
     const segmentId = target.closest("[data-segment-id]")?.dataset.segmentId;
     const settings = foundry.utils.deepClone(HUDConfig.SETTING);
@@ -248,12 +328,24 @@ export default class HUDConfig extends HandlebarsApplicationMixin(
 
     if (!tabData || !segmentId) return;
 
-    for (const app of foundry.applications.instances.values()) {
-      if (app instanceof SegmentConfig && app.segment.id === segmentId)
-        app.close();
-    }
+    const deleteSegment = () => {
+      for (const app of foundry.applications.instances.values()) {
+        if (app instanceof SegmentConfig && app.segment.id === segmentId)
+          app.close();
+      }
 
-    tabData.segments = tabData.segments.filter((s) => s.id !== segmentId);
-    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
+      tabData.segments = tabData.segments.filter((s) => s.id !== segmentId);
+      game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION, settings);
+    };
+
+    if (event.shiftKey) {
+      deleteSegment();
+    } else {
+      Dialog.confirm({
+        title: `${game.i18n.format("DOCUMENT.Delete", { type: "Segment" })}: ${tabId} - ${segmentId}`,
+        content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.format("SIDEBAR.DeleteWarning", { type: "Segment" })}</p>`,
+        yes: () => deleteSegment(),
+      });
+    }
   }
 }

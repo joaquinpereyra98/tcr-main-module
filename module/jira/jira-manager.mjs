@@ -72,7 +72,10 @@ export default class JiraIssueManager {
         break;
       case "UPDATE_ISSUE":
         const issueToUpdate = this.#issues.get(payload.key);
-        if (issueToUpdate) issueToUpdate.updateSource(payload.data);
+        if (issueToUpdate) {
+          issueToUpdate.updateSource(payload.data);
+          issueToUpdate.app?.render();
+        }
         break;
       case "DELETE_ISSUE":
         const issueToDelete = this.#issues.get(payload.key);
@@ -312,25 +315,24 @@ export default class JiraIssueManager {
    * Updates an existing Jira issue with the provided changes.
    * @param {string} issueID - The unique Jira key (e.g., "PROJ-123").
    * @param {object} changes - An object containing the fields to update.
-   * @returns {Promise<void>}
+   * @returns {Promise<IssueData>}
    * @static
    */
   static async update(issueID, changes) {
-    if (!game.user.isGM) {
-      ui.notifications.error(
-        "Jira Integration | Access Denied. Only Gamemasters can sync changes to Jira.",
-      );
-      return;
+    if (changes instanceof IssueData) changes = changes.toObject();
+
+    /**@type {IssueData} */
+    const existing = this.issues.get(issueID);
+
+    if (!game.user.isGM && !existing.user.isSelf) {
+      ui.notifications.error("Jira Integration | Access Denied.");
+      return existing;
     }
 
     try {
-      /**@type {IssueData} */
-      const existing = this.issues.get(issueID);
+      if (changes.user !== existing.user?._id) delete changes.user;
 
-      if (changes.user !== existing.user?.id) delete changes.user;
-      
       const fullData = existing.clone(changes).toObject();
-
       const { message, result } = await this.#fetchAPI(`/${issueID}`, {
         method: "PUT",
         body: JSON.stringify(fullData),
@@ -401,6 +403,7 @@ export default class JiraIssueManager {
 
       if (issue) {
         issue.updateSource({ comments: result });
+        issue.app.render({ parts: ["footer"] });
         JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
           key: issue.key,
           data: issue.toObject(),
@@ -435,7 +438,7 @@ export default class JiraIssueManager {
 
       const issue = this.issues.get(issueID);
       issue.updateSource({ [`comments.${commentID}`]: result });
-
+      issue.app.render({ parts: ["footer"] });
       JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
         key: issue.key,
         data: issue.toObject(),
@@ -472,6 +475,7 @@ export default class JiraIssueManager {
       const issue = this.issues.get(issueID);
       if (issue && issue.comments) {
         issue.updateSource({ [`comments.-=${commentID}`]: null });
+        issue.app.render({ parts: ["footer"] });
         JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
           key: issue.key,
           data: issue.toObject(),
