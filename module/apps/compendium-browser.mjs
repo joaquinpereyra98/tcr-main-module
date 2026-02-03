@@ -31,6 +31,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
     const initialSources = this.options.sources?.initial ?? [];
     this.#sources = new Set(initialSources);
+
+    this._headerCollapsed = this.options.headerCollapsed ?? true;
   }
 
   /* -------------------------------------------- */
@@ -70,6 +72,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       height: 700,
     },
     hiddenSubtitle: false,
+    hideOnLock: true,
     filters: {
       locked: {},
       initial: {
@@ -85,7 +88,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       min: null,
       max: null,
     },
-    tab: "classes",
   };
 
   /* -------------------------------------------- */
@@ -227,7 +229,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   /* -------------------------------------------- */
 
   /**@type {Boolean} */
-  _headerCollapsed = false;
+  _headerCollapsed;
 
   /* -------------------------------------------- */
 
@@ -674,12 +676,16 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     context.headerCollapsed = this._headerCollapsed;
     context.gridSize = this.#gridSize;
 
-    context.isLocked = { documentClass: true };
-    context.isLocked.filters = "additional" in this.options.filters.locked;
-    context.isLocked.types =
-      "types" in this.options.filters.locked || context.isLocked.filters;
-    context.isLocked.documentClass =
-      "documentClass" in this.options.filters.locked || context.isLocked.types;
+    const lockedFilters = this.options.filters.locked;
+    const lockedSources = this.options.sources?.locked ?? [];
+
+    const hideOnLock = this.options.hideOnLock;
+
+    context.isLocked = {
+      hideSources: hideOnLock && lockedSources.length > 0,
+      hideTypes: hideOnLock && "types" in lockedFilters,
+      hideFilters: hideOnLock && "additional" in lockedFilters,
+    };
 
     const types =
       foundry.utils.getProperty(options, "dnd5e.browser.types") ?? [];
@@ -731,7 +737,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       if (types[0] === "physical")
         context.types = context.types.physical?.children ?? {};
 
-      if (context.isLocked.types) {
+      if (context.isLocked.hideTypes) {
         for (const [key, value] of Object.entries(context.types)) {
           if (!value.children && !value.chosen) delete context.types[key];
           else if (value.children) {
@@ -769,7 +775,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         const specialKeys = [
           "classIdentifier",
           "rankFilter",
-          `flags.${MODULE_ID}.${ITEM_FLAGS.SPELL_CLASSES}`,
+          "spellClasses",
         ];
         for (const key of specialKeys) {
           if (context.filterDefinitions.has(key)) {
@@ -1059,10 +1065,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @protected
    */
   async _onScrollResults(event) {
-    if (
-      this.#renderThrottle ||
-      !event.target.matches('.window-content')
-    )
+    if (this.#renderThrottle || !event.target.matches(".window-content"))
       return;
     if (
       this.#results instanceof Promise ||

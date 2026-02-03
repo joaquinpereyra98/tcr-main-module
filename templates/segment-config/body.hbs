@@ -33,8 +33,9 @@
     {{!-- Actions Section (Scripts) --}}
     <fieldset>
         <legend><i class="fa-solid fa-terminal"></i> Interaction Scripts</legend>
-        {{formGroup fields.actions.fields.doc value=segment.actions.value}}
+        {{formGroup fields.actions.fields.docClick value=segment.actions.docClick}}
         {{formGroup fields.actions.fields.click value=segment.actions.click}}
+        {{formGroup fields.actions.fields.docContextMenu value=segment.actions.docContextMenu}}
         {{formGroup fields.actions.fields.contextMenu value=segment.actions.contextMenu}}
     </fieldset>
 </div>

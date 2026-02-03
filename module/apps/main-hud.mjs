@@ -389,6 +389,20 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    */
   async _prepareIssueTrackerContext(context, _options) {
     context.filters = this.#filters;
+    context.filterIcon = {
+      type: Object.fromEntries(
+        Object.values(ISSUE_TYPES).map(({ key, iconClass }) => [
+          key,
+          `fa-solid ${iconClass}`,
+        ]),
+      ),
+      statuses: Object.fromEntries(
+        Object.values(ISSUE_STATUSES).map(({ key, iconClass }) => [
+          key,
+          `${iconClass}`,
+        ]),
+      ),
+    };
   }
 
   /* -------------------------------------------- */
@@ -640,7 +654,10 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const tab = new TabData(tabData);
     const segment = tab.segments.find((s) => s.id === segmentId);
 
-    if (event.button === 2) return segment?.app?.render({ force: true });
+    if (event.button === 1) {
+      if (!game.user.isGM) return;
+      return segment?.app?.render({ force: true });
+    }
     return segment.onClickAction(event);
   }
 

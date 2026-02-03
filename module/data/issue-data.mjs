@@ -95,7 +95,6 @@ export default class IssueData extends foundry.abstract.DataModel {
         new f.SchemaField({
           userId: new f.ForeignDocumentField(foundry.documents.BaseUser, {
             required: false,
-            initial: game.user.id,
             idOnly: true,
           }),
           vote: new f.NumberField({ required: true, choices: [-1, 1] }),

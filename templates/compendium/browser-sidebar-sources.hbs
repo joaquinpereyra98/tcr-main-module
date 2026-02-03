@@ -1,7 +1,7 @@
 {{!-- Main Layout --}}
 {{#if headerCollapsed}}
 {{!-- Only show selected items when collapsed --}}
-<div class="filter-tag-container flexrow">
+<div class="filter-tag-container flexrow {{ifThen isLocked.hideSources "hidden" ""}}">
     {{#each sources}}
     {{#if selected}}
     {{> "source-entry" source=this}}
@@ -10,7 +10,7 @@
 </div>
 {{else}}
 {{!-- Show full collapsible section when expanded --}}
-<div class="flexcol padding-part">
+<div class="flexcol padding-part {{ifThen isLocked.hideSources "hidden" ""}}">
     <section class="filter filter-set collapsible">
         <div class="filter-header">
             <label data-action="toggleCollapse">

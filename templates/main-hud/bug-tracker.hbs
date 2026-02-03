@@ -76,7 +76,7 @@
                 class="col-score"
             >
                 {{#if (eq filters.sort.key "score")}}
-                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                <i class="filter-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
                 {{/if}}
                 Score
             </div>
@@ -85,7 +85,9 @@
                 data-action="openFilterMenu"
                 data-key="issueType"
             >
-                <i class="sort-icon fa-solid fa-filter {{ifThen filters.activeFilters.issueType "" "inactive"}}"></i>
+                <i class="filter-icon fa-solid fa-filter {{ifThen filters.activeFilters.issueType "" "inactive"}}">
+                    <i class="filter-icon {{lookup filterIcon.type filters.activeFilters.issueType}}"></i>
+                </i>
                 Type
             </div>
             <div
@@ -94,7 +96,7 @@
                 class="col-priority"
             >
                 {{#if (eq filters.sort.key "priority")}}
-                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                <i class="filter-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
                 {{/if}}
                 Priority
             </div>
@@ -104,7 +106,7 @@
                 class="col-id"
             >
                 {{#if (eq filters.sort.key "numericID")}}
-                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                <i class="filter-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
                 {{/if}}
                 ID
             </div>
@@ -114,7 +116,7 @@
                 class="col-summary"
             >
                 {{#if (eq filters.sort.key "summary")}}
-                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                <i class="filter-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
                 {{/if}}
                 Subject
             </div>
@@ -123,7 +125,9 @@
                 data-action="openFilterMenu"
                 data-key="status"
             >
-                <i class="sort-icon fa-solid fa-filter  {{ifThen filters.activeFilters.status "" "inactive"}}"></i>
+                <i class="filter-icon fa-solid fa-filter  {{ifThen filters.activeFilters.status "" "inactive"}}">
+                    <i class="filter-icon {{lookup filterIcon.statuses filters.activeFilters.status}}"></i>
+                </i>
                 Status
             </div>
             <div
@@ -132,7 +136,7 @@
                 class="col-last-modified"
             >
                 {{#if (eq filters.sort.key "updated")}}
-                <i class="sort-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
+                <i class="filter-icon fa-regular fa-arrow-{{ifThen (eq filters.sort.direction 1) 'up' 'down'}}-short-wide"></i>
                 {{/if}}
                 Last Update
             </div>

@@ -10,6 +10,7 @@ import JiraIssueManager from "../jira/jira-manager.mjs";
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 /**
+ * @import HTMLProseMirrorElement from "../../foundry/resources/app/client-esm/applications/elements/prosemirror-editor.mjs";
  * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationFormSubmission} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  * @import ApplicationV2 from "../../foundry/resources/app/client-esm/applications/api/application.mjs";
  * @import {HandlebarsTemplatePart} from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
@@ -127,11 +128,50 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
   _attachPartListeners(partId, htmlElement, options) {
     super._attachPartListeners(partId, htmlElement, options);
 
+    this._addProsemirrorListener(htmlElement);
     this._addSelectTypeListener(htmlElement);
     this._renderAttachments(htmlElement);
     this._addAttachImgListener(htmlElement);
     this._addSelectPriorityAndStatus(htmlElement);
     this._addEditCommentListener(htmlElement);
+  }
+
+  /**
+   * @param {HTMLElement} element - The parent element containing the type selector.
+   */
+  _addProsemirrorListener(element) {
+    if (!this.isEditable) return;
+    const prosemirrors = element.querySelectorAll("prose-mirror");
+
+    prosemirrors.forEach((el) => {
+      el.addEventListener("dblclick", (event) => {
+        const pmContainer = event.currentTarget;
+
+        const editor = pmContainer.querySelector(".ProseMirror");
+        const menu = pmContainer.querySelector(".editor-menu");
+
+        const rect = editor.getBoundingClientRect();
+        const isExpanded = pmContainer.classList.contains("expanded");
+
+        const isInResizeHandle =
+          event.clientX > rect.right - 25 && event.clientY > rect.bottom - 25;
+
+        if (isInResizeHandle) {
+          if (!isExpanded) {
+            const menuHeight = menu.offsetHeight;
+            const contentHeight = editor.scrollHeight;
+
+            pmContainer.classList.add("expanded");
+            pmContainer.style.height = contentHeight + menuHeight + 20 + "px";
+
+            editor.scrollIntoView({ behavior: "smooth", block: "end" });
+          } else {
+            pmContainer.classList.remove("expanded");
+            pmContainer.style.height = "145px";
+          }
+        }
+      });
+    });
   }
 
   /**
@@ -384,13 +424,15 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
       form.querySelectorAll("img.attachment-thumb"),
     ).map((img) => img.src);
 
-    const normalizeDescription = ({ description = "" }) =>
-      foundry.applications.parseHTML(description).outerHTML;
-
     const issueData = this.issue.toObject();
 
-    issueData.description = normalizeDescription(issueData);
-    expanded.description = normalizeDescription(expanded);
+    if (issueData.description && expanded.description) {
+      const normalizeDescription = ({ description = "" }) =>
+        foundry.applications.parseHTML(description)?.outerHTML ?? "";
+
+      issueData.description = normalizeDescription(issueData);
+      expanded.description = normalizeDescription(expanded);
+    }
 
     const diff = foundry.utils.diffObject(issueData, expanded);
     if (foundry.utils.isEmpty(diff)) return;

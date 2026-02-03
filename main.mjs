@@ -38,12 +38,14 @@ Hooks.on("init", () => {
     apps.elements.HTMLDocumentTagsElementV2,
   );
 
-  JiraIssueManager.instance
-    .initialize()
-    .then(() => console.log(`${MODULE_ID} | Jira Issues Loaded!`));
 });
 
 Hooks.once("setup", () => {
+
+  JiraIssueManager.instance
+    .initialize()
+    .then(() => console.log(`${MODULE_ID} | Jira Issues Loaded!`));
+    
   const SpellModel = CONFIG.Item.dataModels.spell;
   const descriptor = Object.getOwnPropertyDescriptor(
     SpellModel,

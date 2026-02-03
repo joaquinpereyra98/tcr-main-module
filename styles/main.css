@@ -106,8 +106,10 @@
     display: flex;
     align-items: center;
     gap: 10px;
+
     select {
       color: var(--input-text-color);
+
       option {
         background-color: var(--input-background-color);
       }
@@ -115,9 +117,10 @@
   }
 
   .editor.prosemirror.active {
-    height: 300px;
-
+    resize: vertical;
+    
     .editor-content.ProseMirror {
+      margin-bottom: 15px;
       overflow: hidden auto;
     }
   }
@@ -557,7 +560,7 @@
         position: relative;
         z-index: 1;
         overflow: hidden;
-        border: 1px solid var(--wow-panel-border);
+        border: var(--border-width, 0px) solid var(--wow-panel-border);
         border-radius: 4px;
         box-shadow: 0 0 20px var(--hud-black-05), var(--wow-glow);
         transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
@@ -823,10 +826,11 @@
             justify-content: center;
             gap: 3px;
 
-            i {
+            .filter-icon {
               font-size: var(--font-size-10);
               color: white;
               transition: 0.3s opacity ease;
+
               &.inactive {
                 opacity: 0.3;
               }
@@ -834,6 +838,7 @@
 
             &[data-action] {
               cursor: pointer;
+
               &:hover {
                 text-shadow: 0px 0px 1px var(--hud-white-05);
               }

@@ -1,5 +1,5 @@
 {{#if headerCollapsed}}
-<div>
+<div class="{{ifThen isLocked.hideFilters "hidden" ""}}">
     {{#each additional}}
     {{#if (eq type "boolean")}}
     {{#if value}}{{> "boolean-tag" }}{{/if}}
@@ -27,7 +27,7 @@
     {{/each}}
 </div>
 {{else}}
-<div class="flexcol filter-part">
+<div class="flexcol filter-part {{ifThen isLocked.hideFilters "hidden" ""}}">
     {{#each additional}}
     {{#if (eq type "boolean")}}
     <div class="filter filter-boolean collapsible" data-filter-id="{{ key }}">

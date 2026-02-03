@@ -32,6 +32,12 @@ export default class SegmentData extends foundry.abstract.DataModel {
           placeholder: "1.2em",
           label: "Text Size",
         }),
+        border: new f.NumberField({
+          placeholder: 0,
+          min: 0,
+          integer: true,
+          label: "Border Width"
+        }),
       }),
 
       geometry: new f.SchemaField({
@@ -82,12 +88,16 @@ export default class SegmentData extends foundry.abstract.DataModel {
 
       actions: new f.SchemaField({
         click: createScriptField({ label: "Left Click Script" }),
-        doc: new f.DocumentUUIDField({
-          label: "Linked Document",
+        docClick: new f.DocumentUUIDField({
+          label: "Left Click Linked Document",
           hint: "The UUID of a document to trigger. You can drag and drop a sidebar entry or compendium link here.",
         }),
         contextMenu: createScriptField({
           label: "Right Click Script (GM only)",
+        }),
+        docContextMenu: new f.DocumentUUIDField({
+          label: "Right Click Linked Document",
+          hint: "The UUID of a document to trigger. You can drag and drop a sidebar entry or compendium link here.",
         }),
       }),
     };
@@ -132,6 +142,7 @@ export default class SegmentData extends foundry.abstract.DataModel {
     // --- Visual Display ---
     if (display.textColor) styles.push(`color: ${display.textColor}`);
     if (display.textSize) styles.push(`--font-size: ${display.textSize}`);
+    if(display.border) styles.push(`--border-width: ${display.textSize}px`);
 
     // --- Content Background ---
     if (content.src) {
@@ -171,9 +182,11 @@ export default class SegmentData extends foundry.abstract.DataModel {
     if (isContext && !game.user.isGM) return;
 
     try {
-      if (this.doc && !isContext) {
-        const doc = await fromUuid(this.doc);
-        if (!doc) throw new Error(`Document not found for UUID: ${this.doc}`);
+      
+      const uuid = isContext ? this.docContextMenu : this.docClick;
+      if (uuid) {
+        const doc = await fromUuid(uuid);
+        if (!doc) throw new Error(`Document not found for UUID: ${uuid}`);
 
         return doc instanceof Macro && doc.canExecute
           ? doc.execute()
