@@ -1,119 +1,118 @@
-{{#if headerCollapsed}}
-<div class="{{ifThen isLocked.hideFilters "hidden" ""}}">
-    {{#each additional}}
-    {{#if (eq type "boolean")}}
-    {{#if value}}{{> "boolean-tag" }}{{/if}}
-            
-    {{else if (eq type "range")}}
-    {{#if (or value.min value.max)}}{{> "range-display" }}{{/if}}
+<div>
+    <div class="{{ifThen headerCollapsed "" "hidden"}}">
+        {{#each additional}}
+        {{#if (eq type "boolean")}}
+        {{#if value}}{{> "boolean-tag" }}{{/if}}
+                
+        {{else if (eq type "range")}}
+        {{#if (or value.min value.max)}}{{> "range-display" }}{{/if}}
 
-    {{else if (eq type "set")}}
-    {{#if value._blank}}{{> "blank-tag" }}{{/if}}
-    {{#each config.choices}}
-    {{#if (lookup ../value @key)}}
-    <div class="type-tag stateful-tag">
-        <label>  
-            <filter-state
-                name="additional.{{ ../key }}.{{ @key }}"
-                value="{{ lookup ../value @key }}"
-                {{ disabled (lookup ../locked @key) }}
-            ></filter-state>
-            <span>{{ ifThen label label this }}</span>
-        </label>
-    </div>
-    {{/if}}
-    {{/each}}
-    {{/if}}
-    {{/each}}
-</div>
-{{else}}
-<div class="flexcol filter-part {{ifThen isLocked.hideFilters "hidden" ""}}">
-    {{#each additional}}
-    {{#if (eq type "boolean")}}
-    <div class="filter filter-boolean collapsible" data-filter-id="{{ key }}">
-        <div class="filter-header">
-            <label data-action="toggleCollapse">
-                <span class="roboto-upper">{{ localize label }}</span>
-                <i class="fa-solid fa-caret-down"></i>
+        {{else if (eq type "set")}}
+        {{#if value._blank}}{{> "blank-tag" }}{{/if}}
+        {{#each config.choices}}
+        {{#if (lookup ../value @key)}}
+        <div class="type-tag stateful-tag {{ifThen (and ../locked @root.isLocked.hideFilters) "hidden" ""}}">
+            <label>  
+                <filter-state
+                    name="additional.{{ ../key }}.{{ @key }}"
+                    value="{{ lookup ../value @key }}"
+                    {{ disabled (lookup ../locked @key) }}
+                ></filter-state>
+                <span>{{ ifThen label label this }}</span>
             </label>
         </div>
-        <div class="collapsible-content">
-            <div class="wrapper filter-tag-container">{{> "boolean-tag" }}</div>
-        </div>
+        {{/if}}
+        {{/each}}
+        {{/if}}
+        {{/each}}
     </div>
-    {{else if (eq type "range")}}
-    <div class="filter filter-range collapsible" data-filter-id="{{ key }}">
-        <div class="filter-header">
-            <label data-action="toggleCollapse">
-                <span class="roboto-upper">{{ localize label }}</span>
-                <i class="fa-solid fa-caret-down"></i>
-            </label>
-        </div>
-        <div class="collapsible-content">
-            <div class="wrapper filter-tag-container">{{> "range-inputs" }}</div>
-        </div>
-    </div>
-
-    {{else if (eq type "set")}}
-    <section class="filter filter-set collapsible" data-filter-id="{{ key }}">
-        <div class="filter-header">
-            <label data-action="toggleCollapse">
-                <span class="roboto-upper">{{ localize label }}</span>
-                <i class="fa-solid fa-caret-down"></i>
-            </label>
-            <div class="filter-counters flex0">
-                {{#if posCount}}
-                <span class="count pos">{{posCount}}</span>
-                {{/if}}
-                {{#if negCount}}
-                <span class="count neg">{{negCount}}</span>
-                {{/if}}
+    <div class="flexcol filter-part {{ifThen headerCollapsed "hidden" ""}}">
+        {{#each additional}}
+        {{#if (eq type "boolean")}}
+        <div class="filter filter-boolean collapsible {{ifThen (and locked @root.isLocked.hideFilters) "hidden" ""}}" data-filter-id="{{ key }}">
+            <div class="filter-header">
+                <label data-action="toggleCollapse">
+                    <span class="roboto-upper">{{ localize label }}</span>
+                    <i class="fa-solid fa-caret-down"></i>
+                </label>
             </div>
-            <div class="logic-group flexrow flex0">
-                <button
-                    type="button"
-                    data-action="toggleLogic"
-                    data-filter="{{key}}"
-                    data-logic-type="pos"
-                    class="logic-btn pos {{operators.pos}}"
-                > {{operators.pos}}
-                </button>
-                <button
-                    type="button"
-                    data-action="toggleLogic"
-                    data-filter="{{key}}"
-                    data-logic-type="neg"
-                    class="logic-btn neg {{operators.neg}}"
-                >{{operators.neg}}
-                </button>
+            <div class="collapsible-content">
+                <div class="wrapper filter-tag-container">{{> "boolean-tag" }}</div>
             </div>
         </div>
-        <div class="collapsible-content">
-            <div class="wrapper filter-tag-container">
-                {{#if config.blank}}{{> "blank-tag" }}{{/if}}
-                {{#each config.choices}}
-                <div class="type-tag stateful-tag">
-                    <label>  
-                        <filter-state
-                            name="additional.{{ ../key }}.{{ @key }}"
-                            value="{{ lookup ../value @key }}"
-                            {{ disabled (lookup ../locked @key) }}
-                        ></filter-state>
-                        <span>{{ ifThen label label this }}</span>
-                    </label>
+        {{else if (eq type "range")}}
+        <div class="filter filter-range collapsible {{ifThen (and locked @root.isLocked.hideFilters) "hidden" ""}}" data-filter-id="{{ key }}">
+            <div class="filter-header">
+                <label data-action="toggleCollapse">
+                    <span class="roboto-upper">{{ localize label }}</span>
+                    <i class="fa-solid fa-caret-down"></i>
+                </label>
+            </div>
+            <div class="collapsible-content">
+                <div class="wrapper filter-tag-container">{{> "range-inputs" }}</div>
+            </div>
+        </div>
+
+        {{else if (eq type "set")}}
+        
+        <section class="filter filter-set collapsible {{ifThen (and locked @root.isLocked.hideFilters) "hidden" ""}} {{ifThen (lookup @root.collapsedFilters key) "collapsed" ""}}" data-filter-id="{{ key }}">
+            <div class="filter-header">
+                <label data-action="toggleCollapse">
+                    <span class="roboto-upper">{{ localize label }}</span>
+                    <i class="fa-solid fa-caret-down"></i>
+                </label>
+                <div class="filter-counters flex0">
+                    {{#if posCount}}
+                    <span class="count pos">{{posCount}}</span>
+                    {{/if}}
+                    {{#if negCount}}
+                    <span class="count neg">{{negCount}}</span>
+                    {{/if}}
                 </div>
-                {{/each}}
+                <div class="logic-group flexrow flex0">
+                    <button
+                        type="button"
+                        data-action="toggleLogic"
+                        data-filter="{{key}}"
+                        data-logic-type="pos"
+                        class="logic-btn pos {{operators.pos}}"
+                    > {{operators.pos}}
+                    </button>
+                    <button
+                        type="button"
+                        data-action="toggleLogic"
+                        data-filter="{{key}}"
+                        data-logic-type="neg"
+                        class="logic-btn neg {{operators.neg}}"
+                    >{{operators.neg}}
+                    </button>
+                </div>
             </div>
-        </div>
-    </section>
-    {{/if}}
-    {{/each}}
+            <div class="collapsible-content">
+                <div class="wrapper filter-tag-container">
+                    {{#if config.blank}}{{> "blank-tag" }}{{/if}}
+                    {{#each config.choices}}
+                    <div class="type-tag stateful-tag">
+                        <label>  
+                            <filter-state
+                                name="additional.{{ ../key }}.{{ @key }}"
+                                value="{{ lookup ../value @key }}"
+                                {{ disabled (lookup ../locked @key) }}
+                            ></filter-state>
+                            <span>{{ ifThen label label this }}</span>
+                        </label>
+                    </div>
+                    {{/each}}
+                </div>
+            </div>
+        </section>
+        {{/if}}
+        {{/each}}
+    </div>
 </div>
-{{/if}}
-
 
 {{#*inline "boolean-tag"}}
-<div class="type-tag stateful-tag">
+<div class="type-tag stateful-tag {{ifThen (and locked @root.isLocked.hideFilters) "hidden" ""}}">
     <label>
         <filter-state
             name="additional.{{key}}"
@@ -126,7 +125,7 @@
 {{/inline}}
 
 {{#*inline "range-inputs"}}
-<div class="form-fields">
+<div class="form-fields {{ifThen (and locked @root.isLocked.hideFilters) "hidden" ""}}">
     <input
         type="number"
         name="additional.{{key}}.min"

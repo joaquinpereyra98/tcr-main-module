@@ -32,6 +32,7 @@ Hooks.on("init", () => {
   settings.SourcesConfig.registerSetting();
   settings.LoginTracker.registerSetting();
   settings.registerMetricsSetting();
+  JiraIssueManager.registerTokenSetting();
 
   window.customElements.define(
     apps.elements.HTMLDocumentTagsElementV2.tagName,

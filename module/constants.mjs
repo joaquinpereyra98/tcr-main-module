@@ -13,6 +13,7 @@ export const SETTINGS = {
   METRICS_TIME_VALUE: "metricsTimeValue",
   METRICS_TIME_UNIT: "metricsTimeUnit",
   INACTIVE_THRESHOLD: "inactiveThreshold",
+  TOKEN_API: "tokenApi",
 };
 export const ISSUE_TYPES = {
   bug: {

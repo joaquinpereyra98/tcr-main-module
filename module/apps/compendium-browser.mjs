@@ -37,7 +37,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
   /* -------------------------------------------- */
 
-  /** @type {ApplicationConfiguration & {filters: CompendiumBrowserFilterState}} */
+  /** @type {CompendiumBrowserConfiguration} */
   static DEFAULT_OPTIONS = {
     id: "compendium-browser-{id}",
     classes: ["dnd5e2", "compendium-browser", MODULE_ID, "compendium-browser"],
@@ -154,10 +154,16 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   static SEARCH_DELAY = 200;
 
-  static renderCompendiumBrowser(options = {}) {
+  /**
+   *
+   * @param {CompendiumBrowserConfiguration} options
+   * @returns {Promise<ApplicationV2>}
+   */
+  static async renderCompendiumBrowser(options = {}) {
+    /**@type {typeof CompendiumBrowser} */
     const cls = game.modules.get("tcr-main-module").api.apps.CompendiumBrowser;
     const app = new cls(options);
-    return app.render({ force: true });
+    return await app.render({ force: true });
   }
 
   /* -------------------------------------------- */
@@ -266,6 +272,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   /*  Rendering                                   */
   /* -------------------------------------------- */
 
+  /**@inheritdoc */
   async _renderFrame(options) {
     const frame = await super._renderFrame(options);
 
@@ -277,6 +284,39 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (src || color) this.#applyBackgroundTransition(src, color);
 
     return frame;
+  }
+
+  /**@inheritdoc */
+  _preSyncPartState(partId, newElement, priorElement, state) {
+    if (partId === "filters") {
+      const selector = ".collapsible[data-filter-id]";
+      const oldAccordions = priorElement.querySelectorAll(selector);
+      const newAccordions = newElement.querySelectorAll(selector);
+
+      const stateMap = new Map(
+        Array.from(oldAccordions, (el) => [
+          el.dataset.filterId,
+          el.classList.contains("collapsed"),
+        ]),
+      );
+
+      for (const accordion of newAccordions) {
+        const filterId = accordion.dataset.filterId;
+        if (stateMap.has(filterId)) {
+          accordion.classList.toggle("collapsed", stateMap.get(filterId));
+        }
+      }
+    }
+
+    super._preSyncPartState(partId, newElement, priorElement, state);
+  }
+
+  _onFirstRender(context, options) {
+    super._onFirstRender(context, options);
+
+    this._collapsedFilters = {
+      spellClasses_sub: true,
+    };
   }
 
   /** @inheritDoc */
@@ -460,19 +500,52 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     }
 
     if (classUuids.size > 0) {
-      context.filterDefinitions.set(ITEM_FLAGS.SPELL_CLASSES, {
+      const categorizedChoices =
+        await this.#prepareSpellClassChoices(classUuids);
+      const activeClassFilters =
+        context.filters.additional?.[`${ITEM_FLAGS.SPELL_CLASSES}_base`] || {};
+
+      const selectedClasses = Object.entries(activeClassFilters)
+        .filter(([_, value]) => value === 1)
+        .map(([id]) => id);
+
+      let filteredSubclasses = categorizedChoices.subclass;
+      if (selectedClasses.length > 0) {
+        filteredSubclasses = Object.fromEntries(
+          Object.entries(categorizedChoices.subclass).filter(([_, data]) =>
+            selectedClasses.includes(data.parent),
+          ),
+        );
+      }
+
+      context.filterDefinitions.set(`${ITEM_FLAGS.SPELL_CLASSES}_base`, {
         type: "set",
         label: "Sources Class",
         config: {
           keyPath: "_classIdentifiers",
-          choices: await this.#preprareSpellClassChoices(classUuids),
+          choices: categorizedChoices.class,
+          multiple: true,
+        },
+      });
+
+      context.filterDefinitions.set(`${ITEM_FLAGS.SPELL_CLASSES}_sub`, {
+        type: "set",
+        label: "Sources Subclass",
+        config: {
+          keyPath: "_classIdentifiers",
+          choices: filteredSubclasses,
           multiple: true,
         },
       });
     }
   }
 
-  async #preprareSpellClassChoices(classUuids) {
+  /**
+   * Prepares a structured object of class and subclass choices for the spell browser.
+   * @param {string[]} classUuids - An array or set of Document UUIDs.
+   * @returns {Promise<{class: Object<string, {label: string}>, subclass: Object<string, {label: string}>}>}
+   */
+  async #prepareSpellClassChoices(classUuids) {
     const packs = new Set(
       Array.from(classUuids).map(
         (uuid) => foundry.utils.parseUuid(uuid).collection,
@@ -482,35 +555,46 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const indexMap = new Map();
     await Promise.all(
       Array.from(packs).map(async (pack) => {
-        const index = await pack?.getIndex({ fields: ["system.identifier"] });
+        const index = await pack?.getIndex({
+          fields: ["system.identifier", "system.classIdentifier"],
+        });
         if (index) indexMap.set(pack.metadata.id, index);
       }),
     );
 
-    const choiceData = Array.from(classUuids).map((uuid) => {
+    const results = {
+      class: {},
+      subclass: {},
+    };
+
+    const classesIdentifier = new Set();
+    for (const uuid of classUuids) {
       const { collection, id } = foundry.utils.parseUuid(uuid);
       const entry = indexMap.get(collection.metadata.id)?.get(id);
+      const identifier = entry?.system?.identifier || id;
 
-      CompendiumBrowser.#identifierMap.set(uuid, entry?.system?.identifier);
+      CompendiumBrowser.#identifierMap.set(uuid, identifier);
 
-      return {
-        identifier: entry?.system?.identifier || id,
-        name: entry?.name || uuid,
-        type: entry?.type || "unknown",
-      };
-    });
+      const label = entry?.name || uuid;
 
-    const priorities = { class: 1, subclass: 2 };
-    choiceData.sort((a, b) => {
-      const priorityA = priorities[a.type] || 3;
-      const priorityB = priorities[b.type] || 3;
-      if (priorityA !== priorityB) return priorityA - priorityB;
-      return a.name.localeCompare(b.name, game.i18n.lang);
-    });
+      if (entry?.type === "subclass") {
+        results.subclass[identifier] = {
+          label,
+          parent: entry?.system?.classIdentifier,
+        };
+      } else {
+        results.class[identifier] = { label };
+      }
+    }
 
-    return Object.fromEntries(
-      choiceData.map((i) => [i.identifier, { label: i.name }]),
-    );
+    for (const type of ["class", "subclass"]) {
+      results[type] = Object.fromEntries(
+        Object.entries(results[type]).sort(([, a], [, b]) =>
+          a.label.localeCompare(b.label, game.i18n.lang),
+        ),
+      );
+    }
+    return results;
   }
 
   /**
@@ -750,6 +834,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         }
       }
     } else if (partId === "filters") {
+      context.collapsedFilters = this._collapsedFilters
       if (!this.currentSources.size) {
         context.additional = [];
         return context;
@@ -772,11 +857,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             }
           }
         }
+
         const specialKeys = [
           "classIdentifier",
           "rankFilter",
-          "spellClasses",
+          "spellClasses_base",
+          "spellClasses_sub",
         ];
+
         for (const key of specialKeys) {
           if (context.filterDefinitions.has(key)) {
             if (key.includes("spell") && !activeTypes.has("spell")) continue;
@@ -1168,12 +1256,37 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       value === "" ? undefined : value,
     );
 
+    const isBaseClassFilter = name.startsWith(
+      `additional.${ITEM_FLAGS.SPELL_CLASSES}_base.`,
+    );
+    if (isBaseClassFilter) {
+      const classIdentifier = name.split(".").pop();
+      const subFilterKey = `additional.${ITEM_FLAGS.SPELL_CLASSES}_sub`;
+
+      const classUuids = Array.from(CompendiumBrowser.#identifierMap.entries())
+        .filter(([_, id]) => id === classIdentifier)
+        .map(([uuid]) => uuid);
+
+      const choices = await this.#prepareSpellClassChoices(classUuids);
+      const childSubclasses = Object.keys(choices.subclass);
+
+      for (const subId of childSubclasses) {
+        const fullSubPath = `${subFilterKey}.${subId}`;
+
+        if (value === -1) {
+          foundry.utils.setProperty(this.#filters, fullSubPath, -1);
+        } else if (value === 0) {
+          foundry.utils.setProperty(this.#filters, fullSubPath, undefined);
+        }
+      }
+    }
+
     if (target.tagName === "BUTTON")
       for (const button of this.element.querySelectorAll(`[name="${name}"]`)) {
         button.ariaPressed = button.value === value;
       }
 
-    this.render({ parts: ["results"] });
+    this.render({ parts: ["results", "filters"] });
   }
 
   /* -------------------------------------------- */
@@ -1224,14 +1337,18 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   static async #onToggleCollapse(_event, target) {
     const collapsible = target.closest(".collapsible");
     if (!collapsible) return;
+    const { filterId } = collapsible.dataset;
 
-    collapsible.classList.toggle("collapsed");
+    const state = collapsible.classList.toggle("collapsed");
+    if(!state &&  this._collapsedFilters[filterId]) {
+      delete this._collapsedFilters[filterId];
+    }
 
     const counters = collapsible.querySelector(".filter-counters");
     if (!counters) return;
 
     const values = Object.values(
-      this.#filters.additional?.[collapsible.dataset.filterId] ?? {},
+      this.#filters.additional?.[filterId] ?? {},
     );
 
     const posCount = values.filter((v) => v === 1).length;

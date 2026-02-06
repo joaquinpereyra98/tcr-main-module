@@ -43,7 +43,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     actions: {
       clickSegment: {
         handler: MainHud.#onClickSegment,
-        buttons: [0, 1, 2],
+        buttons: [0, 2],
       },
       addScoreIssue: MainHud.#onAddScoreIssue,
       toggleGrid: MainHud.#onToggleGrid,
@@ -361,12 +361,16 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     );
 
     const cells = [];
-    for (let r = 1; r <= tab.rows; r++) {
-      for (let c = 1; c <= tab.columns; c++) {
-        cells.push({
-          columnStart: c,
-          rowStart: r,
-        });
+    const isActiveTab = this.tabGroups.primary === tabData.id;
+
+    if (this._showGrid && isActiveTab) {
+      for (let r = 1; r <= tab.rows; r++) {
+        for (let c = 1; c <= tab.columns; c++) {
+          cells.push({
+            columnStart: c,
+            rowStart: r,
+          });
+        }
       }
     }
 
@@ -416,6 +420,10 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       const tabData = tabsConfig.tabs.find((t) => t.id === tab);
       const { src, color } = tabData?.background ?? {};
       this.#applyBackgroundTransition(src, color);
+
+      if (this._showGrid) {
+        this.render({ parts: [tab] });
+      }
     }
     super.changeTab(tab, group, options);
   }
@@ -654,7 +662,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const tab = new TabData(tabData);
     const segment = tab.segments.find((s) => s.id === segmentId);
 
-    if (event.button === 1) {
+    if (event.buttons === 3) {
       if (!game.user.isGM) return;
       return segment?.app?.render({ force: true });
     }
@@ -666,11 +674,20 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    * @type {ApplicationClickAction}
    * @this MainHud
    */
-  static #onToggleGrid(_event, target) {
+  static async #onToggleGrid(_event, target) {
     this._showGrid = !this._showGrid;
+    
+    target.classList.toggle("active", this._showGrid);
+    
     const tabContainer = this.element.querySelector(".tab-container");
     tabContainer?.classList.toggle("show-grid", this._showGrid);
-    target.classList.toggle("active", this._showGrid);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const activeTabId = this.tabGroups.primary;
+
+    if (activeTabId) {
+      this.render({ parts: [activeTabId] });
+    }
   }
 
   /**

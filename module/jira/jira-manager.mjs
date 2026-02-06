@@ -55,6 +55,18 @@ export default class JiraIssueManager {
 
   static SOCKET_EVENT = `${MODULE_ID}.refreshJira`;
 
+  static registerTokenSetting() {
+    game.settings.register(MODULE_ID, SETTINGS.TOKEN_API, {
+      name: "Jira Token Api",
+      hint: "",
+      scope: "world",
+      config: true,
+      type: String,
+      default: "",
+      onChange: (t) => JiraIssueManager.instance.#updateJiraToken(t),
+    });
+  }
+
   /**
    * Handles incoming socket broadcasts from other clients to synchronize the local state.
    * @this {JiraIssueManager}
@@ -218,6 +230,26 @@ export default class JiraIssueManager {
       console.error("API Fetch Error:", error.message);
       return { error: true, message: error.message };
     }
+  }
+
+  /**
+   *
+   * @param {String} token
+   */
+  async #updateJiraToken(token) {
+    const response = await fetch("https://jira.tcrdnd.com/api/config/token", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to update token');
+    }
+
+    console.log('Success:', data.message);
   }
 
   async loadMetrics() {

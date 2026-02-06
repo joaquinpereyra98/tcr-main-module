@@ -60,3 +60,13 @@
  * @param {HandlebarsRenderOptions} options - Options which configure application rendering behavior.
  * @returns {Promise<ApplicationRenderContext>} - Context data for a specific part.
  */
+
+/**
+ * @typedef {ApplicationConfiguration} CompendiumBrowserConfiguration
+ * @property {CompendiumBrowserFilterState} filters - Filter state configuration for the browser
+ * @property {object} sources - Source configuration
+ * @property {string[]} sources.locked - Sources that cannot be toggled
+ * @property {string[]} sources.initial - Initial source selection
+ * @property {boolean} hiddenSubtitle - Whether to hide the entries subtitles
+ * @property {boolean} hideOnLock - Hide filters when locked
+ */

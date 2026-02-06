@@ -118,7 +118,7 @@
 
   .editor.prosemirror.active {
     resize: vertical;
-    
+
     .editor-content.ProseMirror {
       margin-bottom: 15px;
       overflow: hidden auto;
@@ -443,8 +443,6 @@
 
         .cell {
           opacity: 1;
-          z-index: 2;
-          text-shadow: 0 0 10px light-dark(var(--color-dark-1), var(--color-light-1));
         }
       }
     }
@@ -512,10 +510,21 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        pointer-events: none;
+
+        container-type: size;
+        overflow: hidden;
+        pointer-events: visible;
         opacity: 0;
-        transition: opacity 0.3s ease;
         border: 1px solid var(--hud-white-03);
+        z-index: 2;
+        text-shadow: 0 0 10px light-dark(var(--color-dark-1), var(--color-light-1));
+        transition: opacity 0.3s ease;
+
+        span {
+          font-size: clamp(2px, 35cqmin, 30cqh);
+          white-space: nowrap;
+          text-align: center;
+        }
       }
 
       &::before {

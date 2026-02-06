@@ -5,8 +5,12 @@
 >
     <div class="content grid-container" style="{{tab.style}}">
         {{#each tab.cells}}
-        <div class="cell" style="grid-column-start:{{columnStart}} ;grid-row-start:{{rowStart}};">
-            {{columnStart}} - {{rowStart}}
+        <div
+            class="cell"
+            style="grid-column-start:{{columnStart}} ;grid-row-start:{{rowStart}};"
+            data-tooltip="{{columnStart}} - {{rowStart}}"
+        >
+            <span>{{columnStart}} - {{rowStart}}</span>
         </div>
         {{/each}}
         {{#each tab.segments}}
