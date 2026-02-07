@@ -118,6 +118,11 @@ Hooks.once("setup", () => {
 
 Hooks.on("ready", () => {
   settings.LoginTracker.initialize();
+  Hooks.on("renderApplicationV2", (_, element) => {
+    /**@type {HTMLButtonElement} */
+    const btn = element.querySelector('button.header-control.fa-window-minimize[data-action="minimize"]');
+    if(btn && btn.type === "submit") btn.type = "button";
+  })
 });
 
 Hooks.on("renderItemSheet", hooks.onRenderItemSheet);

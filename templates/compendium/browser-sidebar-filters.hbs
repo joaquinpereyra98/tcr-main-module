@@ -1,5 +1,5 @@
 <div>
-    <div class="{{ifThen headerCollapsed "" "hidden"}}">
+    <div class="flexrow {{ifThen headerCollapsed "" "hidden"}}" style="gap: 5px;">
         {{#each additional}}
         {{#if (eq type "boolean")}}
         {{#if value}}{{> "boolean-tag" }}{{/if}}

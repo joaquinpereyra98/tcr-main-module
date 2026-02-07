@@ -41,10 +41,6 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       height: 700,
     },
     actions: {
-      clickSegment: {
-        handler: MainHud.#onClickSegment,
-        buttons: [0, 2],
-      },
       addScoreIssue: MainHud.#onAddScoreIssue,
       toggleGrid: MainHud.#onToggleGrid,
       openSetting: MainHud.#onOpenSetting,
@@ -298,6 +294,14 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     tabContainer.append(...tabs);
 
     this.element.querySelector(".window-content").append(tabContainer);
+
+    this.element
+      .querySelectorAll('[data-action="clickSegment"]')
+      .forEach((el) =>
+        el.addEventListener("mousedown", (ev) =>
+          MainHud.#onClickSegment.call(this, ev, el),
+        ),
+      );
   }
 
   /* -------------------------------------------- */
@@ -649,24 +653,49 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     this._renderIssues();
   }
 
+  #buffer = {
+    clickTimer: null,
+    lastBtn: null,
+    lastTime: 0,
+  };
+
   /**
    * Handle clicking a tab segment to trigger its specific action
-   * @type {ApplicationClickAction}
+   * @param {MouseEvent} event
+   * @param {HTMLElement} target
    * @this MainHud
    */
   static #onClickSegment(event, target) {
-    event.preventDefault();
     const { tabId, segmentId } = target.dataset;
     const tabData = this.setting[tabId];
     if (!tabData) return;
+
     const tab = new TabData(tabData);
     const segment = tab.segments.find((s) => s.id === segmentId);
+    if (!segment) return;
 
-    if (event.buttons === 3) {
-      if (!game.user.isGM) return;
-      return segment?.app?.render({ force: true });
+    const now = Date.now();
+    const timeSinceLast = now - this.#buffer.lastTime;
+    const COMBO_WINDOW = 300;
+
+    const isBothHeld = event.buttons === 3;
+    const isSequentialCombo =
+      timeSinceLast < COMBO_WINDOW && this.#buffer.lastBtn !== event.button;
+
+    if (isBothHeld || isSequentialCombo) {
+      clearTimeout(this.#buffer.clickTimer);
+      this.#buffer.clickTimer = null;
+      this.#buffer.lastTime = 0;
+      if (game.user.isGM) return segment.app?.render({ force: true });
     }
-    return segment.onClickAction(event);
+    this.#buffer.lastBtn = event.button;
+    this.#buffer.lastTime = now;
+
+    clearTimeout(this.#buffer.clickTimer);
+    this.#buffer.clickTimer = setTimeout(() => {
+      segment.onClickAction(event);
+      this.#buffer.clickTimer = null;
+    }, 150);
   }
 
   /**
@@ -676,9 +705,9 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    */
   static async #onToggleGrid(_event, target) {
     this._showGrid = !this._showGrid;
-    
+
     target.classList.toggle("active", this._showGrid);
-    
+
     const tabContainer = this.element.querySelector(".tab-container");
     tabContainer?.classList.toggle("show-grid", this._showGrid);
     await new Promise((r) => setTimeout(r, 300));

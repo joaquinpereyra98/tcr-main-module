@@ -211,7 +211,7 @@ export default class HUDConfig extends InteractiveMixin(ApplicationV2) {
    */
   async _onDrop(event) {
     const data = TextEditor.getDragEventData(event);
-    if (data.type !== HUDConfig.DRAG_TAB_TYPE ) return;
+    if (data.type !== HUDConfig.DRAG_TAB_TYPE) return;
 
     const dropTarget = event.target.closest("[data-tab-id]");
     const dropTabId = dropTarget?.dataset.tabId;
@@ -227,7 +227,11 @@ export default class HUDConfig extends InteractiveMixin(ApplicationV2) {
     const [removed] = entries.splice(dragIndex, 1);
     entries.splice(dropIndex, 0, removed);
 
-    await game.settings.set(MODULE_ID, SETTINGS.TAB_CONFIGURATION,  Object.fromEntries(entries));
+    await game.settings.set(
+      MODULE_ID,
+      SETTINGS.TAB_CONFIGURATION,
+      Object.fromEntries(entries),
+    );
   }
 
   /* -------------------------------------------- */

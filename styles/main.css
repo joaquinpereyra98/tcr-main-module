@@ -575,7 +575,7 @@
         transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
         padding: 5px;
         background-color: var(--bg-color, rgba(0, 0, 0, 0.5));
-        container-type: inline-size;
+        container-type: size;
 
         &::before {
           margin: 5px;

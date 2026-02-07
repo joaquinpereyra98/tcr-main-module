@@ -834,7 +834,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         }
       }
     } else if (partId === "filters") {
-      context.collapsedFilters = this._collapsedFilters
+      context.collapsedFilters = this._collapsedFilters;
       if (!this.currentSources.size) {
         context.additional = [];
         return context;
@@ -1340,16 +1340,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const { filterId } = collapsible.dataset;
 
     const state = collapsible.classList.toggle("collapsed");
-    if(!state &&  this._collapsedFilters[filterId]) {
+    if (!state && this._collapsedFilters[filterId]) {
       delete this._collapsedFilters[filterId];
     }
 
     const counters = collapsible.querySelector(".filter-counters");
     if (!counters) return;
 
-    const values = Object.values(
-      this.#filters.additional?.[filterId] ?? {},
-    );
+    const values = Object.values(this.#filters.additional?.[filterId] ?? {});
 
     const posCount = values.filter((v) => v === 1).length;
     const negCount = values.filter((v) => v === -1).length;
@@ -1366,11 +1364,11 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this CompendiumBrowser
    */
-  static #onToggleHeader(_event, target) {
-    this._headerCollapsed = target
-      .closest(".collapsible-filters")
-      .classList.toggle("collapsed");
-    this.render({ parts: ["filters", "types", "sources"] });
+  static async #onToggleHeader(_event, target) {
+    const collapsible = target.closest(".collapsible-filters");
+    this._headerCollapsed = !collapsible.classList.contains("collapsed");
+    await this.render({ parts: ["filters", "types", "sources"] });
+    collapsible.classList.toggle("collapsed", this._headerCollapsed)
   }
 
   /* -------------------------------------------- */
