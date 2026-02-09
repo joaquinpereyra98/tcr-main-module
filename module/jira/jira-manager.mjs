@@ -356,11 +356,6 @@ export default class JiraIssueManager {
     /**@type {IssueData} */
     const existing = this.issues.get(issueID);
 
-    if (!game.user.isGM && !existing.user.isSelf) {
-      ui.notifications.error("Jira Integration | Access Denied.");
-      return existing;
-    }
-
     try {
       if (changes.user !== existing.user?._id) delete changes.user;
 
@@ -433,17 +428,14 @@ export default class JiraIssueManager {
 
       const issue = this.issues.get(issueID);
 
-      if (issue) {
-        issue.updateSource({ comments: result });
-        issue.app.render({ parts: ["footer"] });
-        JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
-          key: issue.key,
-          data: issue.toObject(),
-        });
-      }
+      issue.updateSource({ comments: result });
+      JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
+        key: issue.key,
+        data: issue.toObject(),
+      });
 
       console.log(`Comment added to ${issueID}.`);
-      return result;
+      return issue;
     } catch (err) {
       ui.notifications.error(`Failed to add comment: ${err.message}`);
       throw err;

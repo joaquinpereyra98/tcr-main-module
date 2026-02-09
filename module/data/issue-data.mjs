@@ -1,9 +1,5 @@
 import IssueSheet from "../apps/issue-sheet.mjs";
-import {
-  ISSUE_STATUSES,
-  ISSUE_TYPES,
-  PRIORITY,
-} from "../constants.mjs";
+import { ISSUE_STATUSES, ISSUE_TYPES, PRIORITY } from "../constants.mjs";
 import JiraIssueManager from "../jira/jira-manager.mjs";
 import MappingFieldV2 from "./fields/mapping-field-v2.mjs";
 import IssueCommentData from "./issue-comment-data.mjs";
@@ -65,7 +61,7 @@ export default class IssueData extends foundry.abstract.DataModel {
 
       attachments: new f.ArrayField(
         new f.FilePathField({
-          categories: ["IMAGE"],
+          categories: ["IMAGE", "VIDEO"],
         }),
         {
           initial: [],
@@ -269,7 +265,7 @@ export default class IssueData extends foundry.abstract.DataModel {
   }
 
   async getEnrichDescription() {
-    return await TextEditor.enrichHTML(this.description);
+    return await TextEditor.enrichHTML(this.description, { links: true });
   }
 
   /* -------------------------------------------- */
@@ -293,7 +289,9 @@ export default class IssueData extends foundry.abstract.DataModel {
    * @returns {Promise<IssueData>}
    */
   static async create(data) {
-    const result = await JiraIssueManager.create(new IssueData(data).toObject(true));
+    const result = await JiraIssueManager.create(
+      new IssueData(data).toObject(true),
+    );
     return result;
   }
 

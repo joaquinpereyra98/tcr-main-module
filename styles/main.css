@@ -24,6 +24,12 @@
   --text-main: #e0e0e0;
   --text-dim: #888;
 
+  &.application {
+    --color-text-primary: var(--dnd5e-color-blue-white);
+    --background: var(--color-cool-5-90);
+  }
+
+
   .flex1 {
     flex: 1;
   }
@@ -983,7 +989,7 @@
     }
 
     .type-tag {
-      background: var(--dnd5e-color-iron-gray);
+      background: var(--dnd5e-color-blue-gray-2);
       border: 1px solid black;
       border-radius: 3px;
       margin: 1px;
@@ -994,11 +1000,12 @@
       transition: background 0.2s ease, box-shadow 0.2s ease;
 
       span {
-        color: var(--color-text-dark-primary);
+        color: var(--dnd5e-color-blue-white);
         pointer-events: none;
       }
 
       i {
+        color: var(--dnd5e-color-blue-white);
         pointer-events: none;
       }
 
@@ -1020,6 +1027,10 @@
         span {
           color: black;
           font-weight: bold;
+        }
+
+        i {
+          color: black;
         }
       }
 
@@ -1071,6 +1082,12 @@
       overflow: auto;
       --color-scrollbar: var(--wow-panel-border);
       padding-right: 5px;
+
+      .search-part {
+        search {
+          background-color: var(--dnd5e-color-blue-gray-2);
+        }
+      }
 
       .header {
         font-family: var(--dnd5e-font-roboto-condensed);
@@ -1224,6 +1241,7 @@
             font-family: var(--dnd5e-font-roboto-condensed);
             font-size: var(--font-size-14);
             text-wrap: nowrap;
+            color: var(--dnd5e-color-blue-white);
           }
 
           .size-range-picker {
@@ -1233,12 +1251,14 @@
               --input-height: 1.5rem;
               font-size: 1rem;
               background: transparent;
+              border-color: transparent;
+              color: var(--color-light-1);
             }
 
             input[type="range"] {
               --range-thumb-background-color: var(--dnd5e-color-card);
               --range-thumb-border-color: var(--dnd5e-color-gold);
-              --range-track-border-color: transparent;
+              --range-track-border-color: var(--hud-white-01);
               border: none;
 
               /* Hover & Focus States */
@@ -1366,12 +1386,14 @@
           font-weight: bold;
           display: block;
           line-height: 1.2;
+          color: var(--dnd5e-color-blue-white);
         }
 
         .subtitle {
           font-size: var(--font-size-10);
           opacity: 0.7;
           display: block;
+          color: var(--dnd5e-color-blue-white);
         }
 
         .item-source {
@@ -1385,6 +1407,7 @@
   }
 
   &.issue-sheet {
+    background: var(--color-cool-5-90);
     .window-content.scrollable {
       margin-right: 0 !important;
     }

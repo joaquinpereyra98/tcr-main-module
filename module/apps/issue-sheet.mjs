@@ -171,6 +171,17 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
           }
         }
       });
+
+      el.addEventListener("change", async (ev) => {
+        const value = ev.target.value;
+        const enrichedHTML = await TextEditor.enrichHTML(value, {
+          links: true,
+        });
+        setTimeout(() => {
+          ev.target.querySelector("div.editor-content").innerHTML =
+            enrichedHTML;
+        }, 50);
+      });
     });
   }
 
@@ -329,13 +340,6 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
   }
 
   /**@inheritdoc */
-  _replaceHTML(result, content, options) {
-    requestAnimationFrame(() => {
-      super._replaceHTML(result, content, options);
-    });
-  }
-
-  /**@inheritdoc */
   async _preClose(options) {
     await super._preClose(options);
 
@@ -420,9 +424,10 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     const rawData = data || new FormDataExtended(form).object;
     const expanded = foundry.utils.expandObject(rawData);
 
-    expanded.attachments = Array.from(
-      form.querySelectorAll("img.attachment-thumb"),
-    ).map((img) => img.src);
+    expanded.attachments = [
+      ...form.querySelectorAll(".attachment-item img"),
+      ...form.querySelectorAll(".attachment-item video"),
+    ].map((attch) => attch.src);
 
     const issueData = this.issue.toObject();
 
@@ -609,12 +614,12 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     const id = target.closest("[data-id]").dataset.id;
 
     target.disabled = true;
-    target.classList.remove("fa-paper-plane");
+    target.classList.remove("fa-trash");
     target.classList.add("fa-spinner", "fa-spin");
     if (event.shiftKey) {
       await JiraIssueManager.deleteComment(this.issue.key, id);
     } else {
-      Dialog.confirm({
+      await Dialog.confirm({
         title: `${game.i18n.format("DOCUMENT.Delete", { type: "Comment" })}: ${this.issue.key} - ${id}`,
         content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.format("SIDEBAR.DeleteWarning", { type: "Comment" })}</p>`,
         yes: () => JiraIssueManager.deleteComment(this.issue.key, id),

@@ -2,6 +2,7 @@ import { ITEM_FLAGS, MODULE_ID } from "../constants.mjs";
 import SourcesConfig from "../settings/sources-config.mjs";
 import {
   formatIdentifier,
+  getAllRankFolderNames,
   getRankFolderNames,
   getSubfoldersInCompenidum,
   hasDocumentsInFolder,
@@ -389,23 +390,33 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       return dataModels.filter(([type]) => context.filters.types.has(type));
     }
 
+    const allRankNames = getAllRankFolderNames() ?? [];
     const availableTypeKeys = new Set();
+
     for (const sourceId of this.currentSources) {
       const pack = game.packs.get(sourceId);
       if (!pack) continue;
-      const index = await pack.getIndex();
 
+      const index = await pack.getIndex();
       for (const entry of index) {
         const folder = pack.folders.get(entry.folder);
+
+        const isInRankedBranch =
+          folder &&
+          (allRankNames.includes(folder.name) ||
+            folder.ancestors.some((f) => allRankNames.includes(f.name)));
+
         const isVisible =
           game.user.isGM ||
           !entry.folder ||
-          folder?.ancestors.some((f) => rankNames.includes(f.name)) ||
-          rankNames.includes(folder?.name);
+          !isInRankedBranch ||
+          rankNames.includes(folder?.name) ||
+          folder?.ancestors.some((f) => rankNames.includes(f.name));
 
         if (isVisible) availableTypeKeys.add(entry.type);
       }
     }
+
     return dataModels.filter(([type]) => availableTypeKeys.has(type));
   }
 
@@ -691,32 +702,44 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @returns {Object[]} An array of formatted and sorted source options.
    */
   _getSourcesOptions() {
+    // Fetch these once outside the loop to save performance
     const allowedNames = getRankFolderNames() ?? [];
-
+    const allRankNames = getAllRankFolderNames() ?? [];
     const lockedSources = new Set(this.options.sources?.locked ?? []);
 
-    // 2. Iterate through all defined settings to build the final list
     return Object.entries(SourcesConfig.SETTING)
       .reduce((acc, [id, { label }]) => {
         const pack = game.packs.get(id);
         if (!pack) return acc;
 
-        // Check conditions for visibility:
-        // A. Always show to GM if pack is not empty
-        // B. Show if there are documents not inside any folder (loose items)
-        // C. Show if user has rank-access to at least one top-level folder that contains documents
-        const isVisible =
-          (game.user.isGM && pack.index.size > 0) ||
-          pack.index.some((i) => !i.folder) ||
-          (allowedNames.length > 0 &&
-            pack.folders.some(
-              (f) =>
-                f.depth === 1 &&
-                allowedNames.includes(f.name) &&
-                hasDocumentsInFolder(f),
-            ));
+        // Logic Check:
+        // 1. GM with a non-empty pack
+        const isGMWithContent = game.user.isGM && pack.index.size > 0;
 
-        if (isVisible) {
+        // 2. Loose items (not in any folder)
+        const hasLooseItems = pack.index.some((i) => !i.folder);
+
+        // 3. User has access to at least one valid rank folder
+        const hasAllowedFolder =
+          allowedNames.length > 0 &&
+          pack.folders.some(
+            (f) =>
+              f.depth === 1 &&
+              allowedNames.includes(f.name) &&
+              hasDocumentsInFolder(f),
+          );
+
+        // 4. Are there ANY rank folders at all in this pack?
+        const noRankFoldersExist = !pack.folders.some(
+          (f) => f.depth === 1 && allRankNames.includes(f.name),
+        );
+
+        if (
+          isGMWithContent ||
+          hasLooseItems ||
+          hasAllowedFolder ||
+          noRankFoldersExist
+        ) {
           acc.push({
             id,
             label: label ?? pack.metadata.label,
@@ -727,7 +750,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
         return acc;
       }, [])
-      .sort((a, b) => a.label.localeCompare(b.label)); // Alphabetical sort by label
+      .sort((a, b) => a.label.localeCompare(b.label));
   }
 
   /* -------------------------------------------- */
@@ -1368,7 +1391,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const collapsible = target.closest(".collapsible-filters");
     this._headerCollapsed = !collapsible.classList.contains("collapsed");
     await this.render({ parts: ["filters", "types", "sources"] });
-    collapsible.classList.toggle("collapsed", this._headerCollapsed)
+    collapsible.classList.toggle("collapsed", this._headerCollapsed);
   }
 
   /* -------------------------------------------- */
@@ -1430,6 +1453,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (!indexFields.has("folder")) indexFields.add("folder");
 
     const rankNames = getRankFolderNames() ?? [];
+    const allRankNames = getAllRankFolderNames() ?? [];
 
     // Iterate over all packs
     /** @type {Promise<Document[]>}*/
@@ -1455,13 +1479,17 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         return isCorrectType && isVisible && matchesSource && matchesTypes;
       })
       .map(async (p) => {
-        const allowedFolderIds = new Set(
-          rankNames.flatMap((name) => {
-            const parent = p.folders.getName(name);
-            return parent
-              ? [parent, ...getSubfoldersInCompenidum(parent)].map((f) => f.id)
-              : [];
-          }),
+        const restrictedRankFolderIds = new Set(
+          allRankNames
+            .filter((name) => !rankNames.includes(name))
+            .flatMap((name) => {
+              const parent = p.folders.getName(name);
+              return parent
+                ? [parent, ...getSubfoldersInCompenidum(parent)].map(
+                    (f) => f.id,
+                  )
+                : [];
+            }),
         );
 
         // Fetch the index
@@ -1491,9 +1519,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           const matchesFilters =
             !filters.length || dnd5e.Filter.performCheck(i, filters);
 
-          // Always allow if GM or if item has no folder. Otherwise, check if folder is in the allowed set.
-          const matchesFolder =
-            game.user.isGM || !i.folder || allowedFolderIds?.has(i.folder);
+          const isRestricted = restrictedRankFolderIds.has(i.folder);
+          const matchesFolder = game.user.isGM || !i.folder || !isRestricted;
 
           return matchesType && matchesFilters && matchesFolder;
         });

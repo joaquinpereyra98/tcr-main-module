@@ -86,7 +86,7 @@
             <h2 class="section-title">Description</h2>
             <div class="description-content">
                 {{#if editable}}
-                {{formInput description.field value=description.value compact=true toggled=false}}
+                {{formInput description.field enriched=description.enrich value=description.value compact=true toggled=true}}
                 {{else}}
                 {{{description.enrich}}}
                 {{/if}}

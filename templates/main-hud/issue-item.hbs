@@ -1,47 +1,47 @@
 <div
     class="grid-row"
-    data-key="{{key}}"
+    data-key="{{issue.key}}"
     data-action="editIssue"
 >
     <div class="col-score">
         <div class="flexcol">
             <a
-                class="score-anchor up fa-solid fa-arrow-up  {{#if (eq userVote 1)}}active{{/if}}"
+                class="score-anchor up fa-solid fa-arrow-up  {{#if (eq issue.userVote 1)}}active{{/if}}"
                 data-action="addScoreIssue"
                 data-score="1"
             ></a>
-            <span>{{score}}</span>
+            <span>{{issue.score}}</span>
             <a
-                class="score-anchor down fa-solid fa-arrow-down {{#if (eq userVote -1)}}active{{/if}}"
+                class="score-anchor down fa-solid fa-arrow-down {{#if (eq issue.userVote -1)}}active{{/if}}"
                 data-action="addScoreIssue"
                 data-score="-1"
             ></a>
         </div>
     </div>
-    <div class="col-issueType" data-tooltip="{{typeLabel}}">{{{typeIcon}}}</div>
+    <div class="col-issueType" data-tooltip="{{issue.typeLabel}}">{{{issue.typeIcon}}}</div>
 
     <div class="col-priority">
-        {{{priorityIcon}}} <span>{{priorityLabel}}</span>
+        {{{issue.priorityIcon}}} <span>{{issue.priorityLabel}}</span>
     </div>
-    <div class="col-id">{{numericID}}</div>
+    <div class="col-id">{{issue.numericID}}</div>
     <div class="col-summary">
-        {{summary}}
+        {{issue.summary}}
     </div>
     <div class="col-status">
-        {{{statusIcon}}}
-        {{statusLabel}}
+        {{{issue.statusIcon}}}
+        {{issue.statusLabel}}
     </div>
     <div class="col-last-modified">
         <div class="flexcol">
             <div class="date-label">
-                {{createdLabel.date}}
+                {{issue.createdLabel.date}}
             </div>
             <div class="time-label">
-                {{createdLabel.time}}
+                {{issue.createdLabel.time}}
             </div>
         </div>
     </div>
-    {{#if user.isGM}}
+    {{#if currentUser.isGM}}
     <div class="controls">
         <a
             class="fa-solid fa-trash"

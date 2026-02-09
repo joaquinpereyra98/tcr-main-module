@@ -63,6 +63,21 @@ export function getRankFolderNames() {
     );
 }
 
+export function getAllRankFolderNames() {
+  if (!game.modules.get("donation-tracker")?.active) return [];
+
+  const ranks = game.membership?.RANKS || {};
+
+  return Object.entries(ranks)
+    .filter(([_, value]) => value !== -1)
+    .map(([key]) =>
+      game.settings.get(
+        "foundryvtt-actor-studio",
+        `donation-tracker-rank-${key}`,
+      ),
+    );
+}
+
 /**
  * Checks if a folder or any of its subfolders contain at least one document.
  * @param {BaseFolder} folder - The folder itself.
