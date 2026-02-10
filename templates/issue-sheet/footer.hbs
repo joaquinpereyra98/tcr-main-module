@@ -21,7 +21,7 @@
                     {{#if (or user.isSelf ../user.isGM)}}
                     {{formInput schema.fields.body value=_source.body enriched=enrichBody toggled=true}}
                     {{else}}
-                    <div>{{{enrichBody}}}</div>
+                    <div class="enrich-value">{{{enrichBody}}}</div>
                     {{/if}}
                 </div>
                 <div class="sidebar-card">

@@ -656,5 +656,6 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     span.classList.add("fa-solid", "fa-spinner", "fa-spin");
     span.style.opacity = 0.5;
     await this.issue.update({ voters: newVoters });
+    this.render()
   }
 }

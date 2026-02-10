@@ -1518,6 +1518,13 @@
         align-items: center;
       }
 
+
+      .editor-content,
+      .enrich-value {
+        text-wrap: wrap;
+        word-break: break-word;
+      }
+
       .thumbnail {
         width: 50px;
       }

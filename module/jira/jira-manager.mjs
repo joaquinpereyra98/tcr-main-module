@@ -385,13 +385,6 @@ export default class JiraIssueManager {
    * @static
    */
   static async delete(issueID) {
-    if (!game.user.isGM) {
-      ui.notifications.error(
-        "Jira Integration | Access Denied. Only Gamemasters can sync changes to Jira.",
-      );
-      return;
-    }
-
     try {
       await this.#fetchAPI(`/${issueID}`, { method: "DELETE" });
 
@@ -484,13 +477,6 @@ export default class JiraIssueManager {
    * @static
    */
   static async deleteComment(issueID, commentID) {
-    if (!game.user.isGM) {
-      ui.notifications.error(
-        "Jira Integration | Access Denied. Only Gamemasters can sync changes to Jira.",
-      );
-      return;
-    }
-
     try {
       await this.#fetchAPI(`/${issueID}/comments/${commentID}`, {
         method: "DELETE",
