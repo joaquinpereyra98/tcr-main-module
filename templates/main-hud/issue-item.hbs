@@ -41,7 +41,7 @@
             </div>
         </div>
     </div>
-    {{#if currentUser.isGM}}
+    {{#if (or currentUser.isGM issue.user.isSelf)}}
     <div class="controls">
         <a
             class="fa-solid fa-trash"

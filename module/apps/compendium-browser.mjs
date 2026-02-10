@@ -167,6 +167,48 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     return await app.render({ force: true });
   }
 
+  /**
+   * Get a set of restricted folder IDs based on user permissions and rank access.
+   * @param {CompendiumCollection} pack - The compendium pack to check folders from
+   * @returns {Set<string>} Set of folder IDs that should be restricted from the current user
+   */
+  static getRestrictedFolderIds(pack) {
+    const allRankNames = getAllRankFolderNames();
+    const rankNames = getRankFolderNames();
+
+    const restrictedRankFolderIds = new Set(
+      pack.folders
+        .filter((f) => {
+          const isSuperficial = f.depth === 1;
+          if (!isSuperficial) return false;
+
+          const isRankFolder = allRankNames.includes(f.name);
+          const isUnauthorizedRank =
+            isRankFolder && !rankNames.includes(f.name);
+
+          const isRestrictedGMFolder =
+            f.name.includes("GMO") && !game.user.isGM;
+
+          return isUnauthorizedRank || isRestrictedGMFolder;
+        })
+        .flatMap((f) => [f, ...getSubfoldersInCompenidum(f)].map((f) => f.id)),
+    );
+
+    return restrictedRankFolderIds;
+  }
+
+  /**
+   * Check if a entry should be filtered out based on folder restrictions.
+   * @param {object} entry - The entry to check
+   * @param {Set<string>} restrictedFolderIds - Set of restricted folder IDs
+   * @returns {boolean} True if the entry should be shown, false if it should be filtered out
+   */
+  static checkFolderAccess(entry, restrictedFolderIds) {
+    const isRestricted = restrictedFolderIds.has(entry.folder);
+    const matchesFolder = game.user.isGM || !entry.folder || !isRestricted;
+    return matchesFolder;
+  }
+
   /* -------------------------------------------- */
   /*  Properties                                  */
   /* -------------------------------------------- */
@@ -397,21 +439,15 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       const pack = game.packs.get(sourceId);
       if (!pack) continue;
 
+      const restrictedFolderIds =
+        CompendiumBrowser.getRestrictedFolderIds(pack);
+
       const index = await pack.getIndex();
       for (const entry of index) {
-        const folder = pack.folders.get(entry.folder);
-
-        const isInRankedBranch =
-          folder &&
-          (allRankNames.includes(folder.name) ||
-            folder.ancestors.some((f) => allRankNames.includes(f.name)));
-
-        const isVisible =
-          game.user.isGM ||
-          !entry.folder ||
-          !isInRankedBranch ||
-          rankNames.includes(folder?.name) ||
-          folder?.ancestors.some((f) => rankNames.includes(f.name));
+        const isVisible = CompendiumBrowser.checkFolderAccess(
+          entry,
+          restrictedFolderIds,
+        );
 
         if (isVisible) availableTypeKeys.add(entry.type);
       }
@@ -806,22 +842,16 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         chosen: context.filters.types,
       });
 
-      const rankNames = getRankFolderNames();
       const availableTypeKeys = new Set();
 
       for (const sourceId of this.currentSources) {
         const pack = game.packs.get(sourceId);
         if (!pack) continue;
 
+        const restrictedFolderIds = CompendiumBrowser.getRestrictedFolderIds(pack);
         const index = await pack.getIndex();
         for (const entry of index) {
-          const folder = pack.folders.get(entry.folder);
-          const isVisible =
-            game.user.isGM ||
-            !entry.folder ||
-            folder?.ancestors.some((f) => rankNames.includes(f.name)) ||
-            rankNames.includes(folder?.name);
-
+          const isVisible = CompendiumBrowser.checkFolderAccess(entry, restrictedFolderIds);
           if (isVisible) availableTypeKeys.add(entry.type);
         }
       }
@@ -1452,9 +1482,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     // Ensure folder is always indexed
     if (!indexFields.has("folder")) indexFields.add("folder");
 
-    const rankNames = getRankFolderNames() ?? [];
-    const allRankNames = getAllRankFolderNames() ?? [];
-
     // Iterate over all packs
     /** @type {Promise<Document[]>}*/
     let documents = game.packs
@@ -1479,18 +1506,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         return isCorrectType && isVisible && matchesSource && matchesTypes;
       })
       .map(async (p) => {
-        const restrictedRankFolderIds = new Set(
-          allRankNames
-            .filter((name) => !rankNames.includes(name))
-            .flatMap((name) => {
-              const parent = p.folders.getName(name);
-              return parent
-                ? [parent, ...getSubfoldersInCompenidum(parent)].map(
-                    (f) => f.id,
-                  )
-                : [];
-            }),
-        );
+        const restrictedRankFolderIds =
+          CompendiumBrowser.getRestrictedFolderIds(p);
 
         // Fetch the index
         /**@type {foundry.utils.Collection} */
@@ -1519,8 +1536,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           const matchesFilters =
             !filters.length || dnd5e.Filter.performCheck(i, filters);
 
-          const isRestricted = restrictedRankFolderIds.has(i.folder);
-          const matchesFolder = game.user.isGM || !i.folder || !isRestricted;
+          const matchesFolder = CompendiumBrowser.checkFolderAccess(
+            i,
+            restrictedRankFolderIds,
+          );
 
           return matchesType && matchesFilters && matchesFolder;
         });

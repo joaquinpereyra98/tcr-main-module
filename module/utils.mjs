@@ -99,11 +99,7 @@ export function hasDocumentsInFolder(folder) {
  * @returns {BaseFolder[]}
  */
 export function getSubfoldersInCompenidum(folder) {
-  const subfolders = folder.compendium.folders.filter(
-    (f) => f.folder?.id === folder.id,
-  );
-
-  return subfolders.concat(subfolders.flatMap((f) => f.getSubfolders(true)));
+  return folder.compendium.folders.filter(f => f.ancestors.some(f => f.id === folder.id));
 }
 
 /**
