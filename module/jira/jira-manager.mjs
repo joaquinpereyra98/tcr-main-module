@@ -454,14 +454,11 @@ export default class JiraIssueManager {
       );
 
       const issue = this.issues.get(issueID);
-      issue.updateSource({ [`comments.${commentID}`]: result });
-      issue.app.render({ parts: ["footer"] });
+      issue.updateSource({ [`comments.${commentID}`]: result[commentID] });
       JiraIssueManager._emitRefresh("UPDATE_ISSUE", {
         key: issue.key,
         data: issue.toObject(),
       });
-
-      JiraIssueManager._refreshApps();
       return result;
     } catch (err) {
       ui.notifications.error(`Failed to edit comment: ${err.message}`);

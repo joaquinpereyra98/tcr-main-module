@@ -19,7 +19,7 @@
                 <div class="flexcol">
                     <label class="detail-label">{{author}} <span class="subtitle">{{createdLabel.date}} - {{createdLabel.time}}</span></label>
                     {{#if (or user.isSelf ../user.isGM)}}
-                    {{formInput schema.fields.body value=_source.body enriched=enrichBody toggled=true}}
+                    {{formInput schema.fields.body value=_source.body enriched=enrichBody compact=true toggled=true}}
                     {{else}}
                     <div class="enrich-value">{{{enrichBody}}}</div>
                     {{/if}}
