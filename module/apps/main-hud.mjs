@@ -1,15 +1,9 @@
 import InteractiveMixin from "./interactive-mixin.mjs";
 import {
-  ISSUE_STATUSES,
-  ISSUE_TYPES,
   MODULE_ID,
-  PRIORITY,
   SETTINGS,
 } from "../constants.mjs";
 import TabData from "../data/tab-data.mjs";
-import JiraIssueManager from "../jira/jira-manager.mjs";
-import IssueData from "../data/issue-data.mjs";
-import Fuse from "../lib/fuse.mjs";
 
 const { ApplicationV2 } = foundry.applications.api;
 
@@ -345,10 +339,9 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       });
     });
 
-    // 3. Cleanup
     setTimeout(() => {
       oldLayers.forEach((el) => el.remove());
-    }, 850); // Slightly longer than transition to be safe
+    }, 850);
   }
 
   /* -------------------------------------------- */
