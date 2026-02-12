@@ -1,4 +1,3 @@
-import { getRanks } from "../utils.mjs";
 import SegmentData from "./segment-data.mjs";
 
 /**
@@ -53,15 +52,6 @@ export default class TabData extends foundry.abstract.DataModel {
         }),
       }),
       segments: new f.ArrayField(new f.EmbeddedDataField(SegmentData)),
-      visibility: new f.SchemaField({
-        notMember: new f.BooleanField({ label: "Not Member", initial: true }),
-        ...Object.fromEntries(
-          (getRanks() ?? []).map(({ k, label }) => [
-            k,
-            new f.BooleanField({ label, initial: true }),
-          ]),
-        ),
-      }),
     };
   }
 
