@@ -301,6 +301,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
           MainHud.#onClickSegment.call(this, ev, el),
         ),
       );
+
+    if (options.force) this.bringToFront();
   }
 
   /* -------------------------------------------- */
@@ -489,7 +491,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    */
   async _renderIssue(issue) {
     const path = `modules/${MODULE_ID}/templates/main-hud/issue-item.hbs`;
-    const html = await renderTemplate(path, {issue, currentUser: game.user});
+    const html = await renderTemplate(path, { issue, currentUser: game.user });
     const temp = document.createElement("div");
     temp.innerHTML = html;
     return temp.firstElementChild;
