@@ -217,9 +217,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const isMobile = clientWidth <= 768;
 
     if (isMobile) {
-      const widthScale = (clientWidth * 0.9) / options.position.width;
-      const heightScale = (clientHeight * 0.8) / options.position.height;
-      options.position.scale = Math.min(1.0, widthScale, heightScale);
+      options.position.width = clientWidth * 0.95;
+      options.position.height = clientHeight;
     }
 
     return options;
