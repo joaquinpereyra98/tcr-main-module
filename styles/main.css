@@ -114,7 +114,7 @@
     gap: 10px;
 
     select {
-      color: var(--input-text-color);
+      color: var(--color-light-3);
 
       option {
         background-color: var(--input-background-color);
@@ -1843,6 +1843,13 @@
         }
       }
     }
+  }
+}
+
+@media (max-width: 768px) {
+  .tcr-main-module.main-hud {
+    width: 100vw;
+    height: 100vh;
   }
 }
 

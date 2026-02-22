@@ -213,14 +213,13 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    */
   _initializeApplicationOptions(options) {
     options = super._initializeApplicationOptions(options);
-    const { clientWidth, clientHeight } = document.documentElement;
+    const { clientWidth } = document.documentElement;
     const isMobile = clientWidth <= 768;
 
     if (isMobile) {
-      options.position.width = clientWidth * 0.95;
-      options.position.height = clientHeight;
+      options.window.positioned = false;
+      options.window.resizable = false;
     }
-
     return options;
   }
 
