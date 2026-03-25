@@ -3,6 +3,9 @@ export const MAIN_HUD_KEY = `${MODULE_ID}.MainHud`;
 export const LOGIN_TRACKER_KEY = `${MODULE_ID}.LoginTracker`;
 export const USER_FLAGS = {
   LOGIN_DATA: "loginData",
+  AVAILABILITY: "availabilityGrid",
+  TIME_ZONE: "timeZone",
+  TIME_MODE: "timeMode",
 };
 export const ITEM_FLAGS = {
   SPELL_CLASSES: "spellClasses"

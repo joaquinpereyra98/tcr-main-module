@@ -1408,6 +1408,7 @@
 
   &.issue-sheet {
     background: var(--color-cool-5-90);
+
     .window-content.scrollable {
       margin-right: 0 !important;
     }
@@ -1755,7 +1756,7 @@
         }
 
         .comment prose-mirror.active {
-            min-height: 150px;
+          min-height: 150px;
         }
       }
     }
@@ -1843,6 +1844,264 @@
         }
       }
     }
+  }
+
+  &.availability-tracker {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    color: #d0d7de;
+    background: #0d1117;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    --color-shadow-primary: rgba(56, 139, 253, 0.8);
+    --color-scrollbar-border: rgba(56, 139, 253, 0.3);
+    --color-scrollbar: rgba(56, 139, 253, 0.1);
+
+    header.window-header {
+      --header-height: 28px;
+      background-color: transparent;
+      border: 0;
+    }
+
+    .window-content {
+      padding: 5px 10px;
+    }
+
+    .tracker-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+
+      .time-mode-contianer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: nowrap;
+        position: relative;
+
+
+        a.time-mode-toggler {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+        }
+
+        input.time-mode-checkbox {
+          width: 100%;
+          height: 100%;
+          position: absolute;
+          opacity: 0;
+          top: 0;
+          margin: 0;
+        }
+
+        i.time-mode-icon {
+          font-size: 18px;
+          margin-top: 3px;
+        }
+
+        .bold {
+          font-weight: bold;
+        }
+      }
+
+      .time-zone-container {
+        .time-zone-select {
+          text-align: center;
+          background-color: rgb(22, 27, 34);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 15px;
+
+
+
+          color: #d0d7de;
+          font-family: inherit;
+
+          font-size: 14px;
+          height: 30px;
+          cursor: pointer;
+          transition: border-color 0.2s, box-shadow 0.2s;
+
+          &:focus {
+            outline: none;
+            border-color: rgba(56, 139, 253, 0.5);
+            box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.3);
+          }
+
+          option {
+            background-color: rgb(13, 17, 23);
+            color: #d0d7de;
+          }
+
+        }
+
+      }
+    }
+
+    .tracker-body {
+      --cell-size: 30px;
+      --sidebar-width: 35px;
+      --gap: 3px;
+      --bg-cell: #161b22;
+      --separator-color: rgba(255, 255, 255, 0.2);
+
+      .grid-container {
+        display: flex;
+        gap: var(--gap);
+
+        .grid-sidebar {
+          margin-top: 16px;
+          flex: 0 0 var(--sidebar-width);
+          display: flex;
+          flex-direction: column;
+          gap: var(--gap);
+
+          .day-label {
+            height: var(--cell-size);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+        }
+
+        .days-grid {
+          position: relative;
+          display: grid;
+          grid-template-columns: repeat(12, 1fr) repeat(12, 1fr);
+          gap: var(--gap);
+
+          &.twelve-mode {
+            grid-template-columns: repeat(12, 1fr) 3px repeat(12, 1fr);
+
+            .noon-separator {
+              background: rgb(255, 255, 255, 0.3);
+              grid-column: 13;
+              grid-row: 1 / span 8;
+              width: 1px;
+              margin: 0 1px;
+              display: flex;
+              justify-content: center;
+              pointer-events: none;
+            }
+
+          }
+
+          .hour-label {
+            text-align: center;
+            font-size: 0.75rem;
+            color: rgba(208, 215, 222, 0.5);
+          }
+        }
+      }
+
+      .day-cell {
+        width: var(--cell-size);
+        aspect-ratio: 1;
+        background: var(--bg-cell);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        .cell-icon {
+          font-size: 24px;
+          opacity: 0.5;
+        }
+
+        &:hover {
+          filter: brightness(1.2);
+        }
+
+        &[data-state="1"] {
+          background: #053d95;
+
+          .cell-icon {
+            color: #58a6ff;
+          }
+        }
+
+        &[data-state="2"] {
+          background: #6e1d1a;
+
+          .cell-icon {
+            color: #ff7b72;
+          }
+        }
+      }
+    }
+
+    .tracker-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+
+      .tracker-legend {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 8px 12px;
+        border-radius: 6px;
+
+        .legend-title {
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: #7a7a7a;
+          margin-right: 4px;
+        }
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+
+          .swatch {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+
+            &.state-0 {
+              background: var(--bg-cell);
+            }
+
+            &.state-1 {
+              background: #053d95;
+            }
+
+            &.state-2 {
+              background: #6e1d1a;
+            }
+          }
+
+        }
+      }
+    }
+
+    .clear-all-btn {
+      background: rgba(248, 81, 73, 0.1);
+      color: #f85149;
+      border: 1px solid rgba(248, 81, 73, 0.4);
+      padding: 2px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .clear-all-btn:hover {
+      background: #f85149;
+      color: white;
+    }
+
   }
 }
 

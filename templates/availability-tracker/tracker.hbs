@@ -1,0 +1,89 @@
+<section>
+    <div class="tracker-header">
+        <div class="time-mode-contianer">
+            <a class="time-mode-toggler">
+                <input
+                    class="time-mode-checkbox"
+                    type="checkbox"
+                    name="flags.tcr-main-module.timeMode"
+                    {{checked timeMode}}
+                >
+                <span class="{{ifThen timeMode '' 'bold'}}">24hs</span>
+                <i class="time-mode-icon fa-solid fa-toggle-{{ifThen timeMode 'on' 'off'}}"></i>
+                <span class="{{ifThen timeMode 'bold' ''}}">12hs</span>
+            </a>
+        </div>
+        <div class="time-zone-container">
+            <select name="flags.tcr-main-module.timeZone" class="time-zone-select">
+                {{selectOptions timeZonesOptions selected=timeZone}}
+            </select>
+        </div>
+    </div>
+    <div class="tracker-body">
+        <div class="grid-container">
+            <div class="grid-sidebar flexcol">
+                {{#each dayLabels as |day dayIdx|}}
+                <div
+                    class="day-label"
+                    data-action="toggleRow"
+                    data-day="{{dayIdx}}"
+                    data-tooltip="Click to toggle full day"
+                >
+                    {{day}}
+                </div>
+                {{/each}}
+            </div>
+            <div class="days-grid {{ifThen timeMode 'twelve-mode' ''}}">
+
+                {{#if timeMode}}
+                <div class="noon-separator"></div>
+                {{/if}}
+
+                {{#each hourLabels}}
+                <div class="hour-label">{{this}}</div>
+                {{/each}}
+
+                {{#each localAvailability as |state idx|}}
+                <div
+                    class="day-cell"
+                    data-action="toggleState"
+                    data-index="{{idx}}"
+                    data-state="{{state}}"
+                >
+                    {{#if (eq state 1)}}<i class="cell-icon fa-regular fa-circle"></i>{{/if}}
+                    {{#if (eq state 2)}}<i class="cell-icon fa-solid fa-xmark"></i>{{/if}}
+                </div>
+                {{/each}}
+
+            </div>
+        </div>
+    </div>
+    <div class="tracker-footer">
+        <div class="tracker-legend">
+            <div class="legend-title">Legend</div>
+            <div class="legend-item">
+                <span class="swatch state-0"></span> 
+                <span class="label">Undecided</span>
+            </div>
+            <div class="legend-item">
+                <span class="swatch state-1"></span> 
+                <span class="label">Available</span>
+            </div>
+            <div class="legend-item">
+                <span class="swatch state-2"></span> 
+                <span class="label">Unavailable</span>
+            </div>
+        </div>
+
+        <div class="tracker-actions">
+            <button
+                type="button"
+                class="clear-all-btn"
+                data-action="clearAll"
+                data-tooltip="Clear the entire week"
+            >
+                <i class="fa-solid fa-trash-can"></i> Clear All
+            </button>
+        </div>
+    </div>
+</section>
