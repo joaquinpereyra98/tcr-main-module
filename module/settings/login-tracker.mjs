@@ -1,6 +1,18 @@
-import { MODULE_ID, USER_FLAGS, SETTINGS, LOGIN_TRACKER_KEY } from "../constants.mjs";
+import {
+  MODULE_ID,
+  USER_FLAGS,
+  SETTINGS,
+  LOGIN_TRACKER_KEY,
+} from "../constants.mjs";
 
 const { HandlebarsApplicationMixin, ApplicationV2 } = foundry.applications.api;
+
+/**
+ * @typedef {object} LoginData
+ * @property {number|null} lastLogin - The Unix timestamp (ms) of the user's last login.
+ * @property {number} timeConnected - The total accumulated timein milliseconds the user has been active.
+ * @property {Object<string, number[]>} history - A map of date strings (`YYYY-MM-DD`) to arrays of hour values (0–23)
+ */
 
 /**
  * Application for tracking and displaying user login activity and session duration.
@@ -43,9 +55,10 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
 
   /**
    * The interval in milliseconds for the heartbeat tracker.
+   * MINUTES * 60 seconds * 1000 miliseconds
    * @type {number}
    */
-  static TIMER_INTERVAL = 300000;
+  static TIMER_INTERVAL = 10 * 60 * 1000;
 
   /**
    * Semantic status definitions for users.
@@ -96,6 +109,79 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
     return game.settings.get(MODULE_ID, SETTINGS.INACTIVE_THRESHOLD);
   }
 
+  /**
+   * Get normalized login data for a user, ensuring defaults exist.
+   * @param {foundry.documents.BaseUser} user
+   * @returns {LoginData}
+   */
+  static getLoginData(user) {
+    const rawData = user.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA) ?? {};
+
+    const data = foundry.utils.mergeObject(
+      {
+        lastLogin: null,
+        timeConnected: 0,
+        history: {},
+      },
+      rawData,
+      {
+        inplace: false,
+        insertKeys: true,
+        overwrite: false,
+      },
+    );
+
+    const cleanedHistory = this._cleanupHistory(data.history);
+
+    if (
+      Object.keys(cleanedHistory).length !== Object.keys(data.history).length &&
+      user.canUserModify(game.user, "update")
+    ) {
+      data.history = cleanedHistory;
+      user.setFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA, data);
+    }
+  }
+
+  /**
+   * Filters out history keys older than 3 months
+   * @param {Object<string, number[]>} history
+   * @returns {Object<string, number[]>}
+   * @private
+   */
+  static _cleanupHistory(history) {
+    if (!history || Object.keys(history).length === 0) return {};
+
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getUTCMonth() - 3);
+
+    // Convert to YYYY-MM-DD for string comparison or Date objects for safety
+    return Object.keys(history).reduce((acc, dateString) => {
+      const entryDate = new Date(dateString);
+      if (entryDate >= cutoff) {
+        acc[dateString] = history[dateString];
+      }
+      return acc;
+    }, {});
+  }
+
+  /**
+   * Safely update LOGIN_DATA flag for a user.
+   * @param {foundry.documents.BaseUser} user
+   * @param {Partial<LoginData>} updates
+   * @returns {Promise<LoginData>}
+   */
+  static async updateLoginData(user, updates = {}) {
+    const data = LoginTracker.getLoginData(user);
+
+    const updated = foundry.utils.mergeObject(data, updates, {
+      inplace: false,
+      insertKeys: true,
+      overwrite: true,
+    });
+
+    return await user.setFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA, updated);
+  }
+
   /* -------------------------------------------- */
   /* Logic & Tracking                            */
   /* -------------------------------------------- */
@@ -114,30 +200,44 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
    * @returns {Promise<User>}
    */
   static async updateLoginSession() {
-    return game.user.setFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA, {
+    if (!game.user) return;
+
+    const current = LoginTracker.getLoginData(game.user);
+
+    return LoginTracker.updateLoginData(game.user, {
       lastLogin: Date.now(),
-      timeConnected:
-        game.user.getFlag(
-          MODULE_ID,
-          `${USER_FLAGS.LOGIN_DATA}.timeConnected`,
-        ) ?? 0,
+      timeConnected: current.timeConnected,
     });
   }
 
   /**
    * Increment the total connection time for the current user.
-   * @returns {Promise<User>}
+   * @returns {Promise<foundry.documents.BaseUser>}
    */
   static async trackHeartbeat() {
-    const current = game.user.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA) ?? {};
-    const timeConnected = (current.timeConnected ?? 0) + this.TIMER_INTERVAL;
+    const user = game.user;
+    const current = LoginTracker.getLoginData(user);
 
-    await game.user.setFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA, {
-      ...current,
-      timeConnected,
-    });
+    const now = new Date();
+    const today = now.toISOString().split("T")[0]; // YYYY-MM-DD
+    const currentHour = now.getUTCHours(); // 0-23
+
+    const update = {};
+
+    const history = { ...current.history };
+    const hours = history[today] ?? [];
+    if (!hours.includes(currentHour)) {
+      hours.push(currentHour);
+      hours.sort((a, b) => a - b);
+      history[today] = hours;
+      update.history = history;
+    }
+
+    update.timeConnected = current.timeConnected + this.TIMER_INTERVAL;
+
+    await LoginTracker.updateLoginData(user, update);
+
     ui.loginTracker?.render();
-
     return game.user;
   }
 
@@ -189,15 +289,13 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
 
     const sortedUsers = [...users].sort((a, b) => {
       if (a.active !== b.active) return a.active ? -1 : 1;
-  
-      const dataA = a.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA)?.lastLogin ?? 0;
-      const dataB = b.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA)?.lastLogin ?? 0;
-      return dataB - dataA;
+      const { lastLogin: lastLoginA } = LoginTracker.getLoginData(a);
+      const { lastLogin: lastLoginB } = LoginTracker.getLoginData(b);
+      return lastLoginB - lastLoginA;
     });
 
     return sortedUsers.map((user) => {
-      const { lastLogin = null, timeConnected = 0 } =
-        user.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA) ?? {};
+      const { lastLogin, timeConnected } = LoginTracker.getLoginData(user);
 
       let lastLoginData = { date: "—", time: "—" };
       let timeSinceLabel = "—";
@@ -239,8 +337,7 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
       exportType === "pc" ? !u.isGM : u.isGM,
     );
     const inactiveUsers = users.filter((user) => {
-      const { lastLogin = null } =
-        user.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA) ?? {};
+      const { lastLogin } = LoginTracker.getLoginData(user);
       const status = LoginTracker.getUserStatus(lastLogin);
       return status === LoginTracker.STATUSES.INACTIVE;
     });
@@ -258,10 +355,11 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
     content += "========================================\n";
 
     inactiveUsers.forEach((u) => {
-      const data = u.getFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA);
-      const lastDate = data?.lastLogin
-        ? new Date(data.lastLogin).toLocaleDateString()
+      const { lastLogin } = LoginTracker.getLoginData(u);
+      const lastDate = lastLogin
+        ? new Date(lastLogin).toLocaleDateString()
         : "Never";
+
       content += `- ${u.name} (Last Login: ${lastDate})\n`;
     });
 
