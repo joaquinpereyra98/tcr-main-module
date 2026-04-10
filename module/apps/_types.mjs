@@ -1,5 +1,5 @@
 /**
- * @import { ApplicationConfiguration } from "../../foundry/resources/app/common/config.mjs"
+ * @import { ApplicationConfiguration } from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  */
 
 /**

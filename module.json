@@ -24,22 +24,13 @@
     "requires": [],
     "recommends": []
   },
-  "esmodules": [
-    "main.mjs"
-  ],
-  "styles": [
-    "styles/main.css"
-  ],
+  "scripts": ["lib/chart.umd.min.js"],
+  "esmodules": ["main.mjs"],
+  "styles": ["styles/main.css"],
   "flags": {
     "hotReload": {
-      "extensions": [
-        "css",
-        "hbs"
-      ],
-      "paths": [
-        "styles/",
-        "templates/"
-      ]
+      "extensions": ["css", "hbs"],
+      "paths": ["styles/", "templates/"]
     }
   }
 }

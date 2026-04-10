@@ -1,11 +1,15 @@
-import { MODULE_ID, USER_FLAGS } from "../constants.mjs";
+import {
+  AVAILABILITY_TRACKER_KEY,
+  MODULE_ID,
+  USER_FLAGS,
+} from "../constants.mjs";
 
 const { HandlebarsApplicationMixin, DocumentSheetV2 } =
   foundry.applications.api;
 
 /**
- * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationRenderContext, ApplicationRenderOptions} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
- * @import {HandlebarsRenderOptions, HandlebarsTemplatePart } from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
+ * @import { ApplicationClickAction, ApplicationConfiguration } from "../../foundry/resources/app/client-esm/applications/_types.mjs";
+ * @import { HandlebarsTemplatePart } from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
  */
 
 export default class AvailabilityTracker extends HandlebarsApplicationMixin(
@@ -38,39 +42,12 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
     },
   };
 
-  /**
-   * Enum for availability states.
-   * @readonly
-   * @enum {number}
-   */
-  static AVAILABILITY_STATES = Object.freeze({
-    NONE: 0,
-    AVAILABLE: 1,
-    UNAVAILABLE: 2,
-  });
-
-  /**
-   * @readonly
-   * @enum {number}
-   */
-  static WEEK_DAYS = Object.freeze({
-    SUNDAY: 0,
-    MONDAY: 1,
-    TUESDAY: 2,
-    WEDNESDAY: 3,
-    THURSDAY: 4,
-    FRIDAY: 5,
-    SATURDAY: 6,
-  });
-
-  /**
-   * @readonly
-   * @enum {boolean}
-   */
-  static TIME_MODE = Object.freeze({
-    H24: false,
-    H12: true,
-  });
+  static async renderAvailabilityTracker(options = {}) {
+    const sheet = ui[AVAILABILITY_TRACKER_KEY];
+    options.force ??= true;
+    await sheet.render(options);
+    return sheet;
+  }
 
   /**
    * Configure a registry of template parts which are supported for this application for partial rendering.
@@ -82,7 +59,11 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
     },
   };
 
-  get timeZone() {
+  /**
+   * Gets the preferred time zone offset for the current user.
+   * @returns {number}
+   */
+  static get timeZone() {
     return (
       game.user.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE) ??
       -(new Date().getTimezoneOffset() / 60)
@@ -99,7 +80,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
   get localAvailability() {
     return AvailabilityTracker.shiftAvailability(
       this.availabilityUTC,
-      this.timeZone,
+      AvailabilityTracker.timeZone,
     );
   }
 
@@ -125,7 +106,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
     return {
       ...context,
       timeZonesOptions: this.getTimeZoneOptions(),
-      timeZone: this.timeZone,
+      timeZone: AvailabilityTracker.timeZone,
       dayLabels: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
       localAvailability: this.localAvailability,
       timeMode,
@@ -168,7 +149,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
     const { index } = target.dataset;
     const localIndex = parseInt(index);
     const utcArray = [...this.availabilityUTC];
-    const offset = this.timeZone;
+    const offset = AvailabilityTracker.timeZone;
     const utcIndex = (localIndex - offset + 168) % 168;
     const nextState = ((utcArray[utcIndex] ?? 0) + 1) % 3;
 
@@ -185,7 +166,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
   static async #onToggleRow(_event, target) {
     const dayIndex = parseInt(target.dataset.day); // 0-6
     const utcArray = [...this.availabilityUTC];
-    const offset = this.timeZone;
+    const offset = AvailabilityTracker.timeZone;
 
     const startIdx = dayIndex * 24;
 

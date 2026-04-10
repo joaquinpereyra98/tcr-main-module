@@ -614,7 +614,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       subclass: {},
     };
 
-    const classesIdentifier = new Set();
     for (const uuid of classUuids) {
       const { collection, id } = foundry.utils.parseUuid(uuid);
       const entry = indexMap.get(collection.metadata.id)?.get(id);

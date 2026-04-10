@@ -7,6 +7,8 @@ import JiraIssueManager from "./module/jira/jira-manager.mjs";
 
 import { moduleToObject } from "./module/utils.mjs";
 import {
+  AVAILABILITY_TRACKER_KEY,
+  AVAILABILITY_VIEWER_KEY,
   LOGIN_TRACKER_KEY,
   MAIN_HUD_KEY,
   MODULE_ID,
@@ -23,10 +25,15 @@ Hooks.on("init", () => {
 
   globalThis.tcrMain = {
     renderCompendiumBrowser: apps.CompendiumBrowser.renderCompendiumBrowser,
+    renderAvailabilityTracker:
+      apps.AvailabilityTracker.renderAvailabilityTracker,
+    renderAvailabilityViewer: apps.AvailabilityViewer.renderAvailabilityViewer,
   };
 
   CONFIG.ui[MAIN_HUD_KEY] = module.api.apps.MainHud;
   CONFIG.ui[LOGIN_TRACKER_KEY] = module.api.settings.LoginTracker;
+  CONFIG.ui[AVAILABILITY_TRACKER_KEY] = apps.AvailabilityTracker;
+  CONFIG.ui[AVAILABILITY_VIEWER_KEY] = apps.AvailabilityViewer;
 
   settings.HUDConfig.registerSetting();
   settings.SourcesConfig.registerSetting();
@@ -39,14 +46,17 @@ Hooks.on("init", () => {
     apps.elements.HTMLDocumentTagsElementV2,
   );
 
+  window.customElements.define(
+    apps.elements.HTMLSearchableMultiCheckboxElement.tagName,
+    apps.elements.HTMLSearchableMultiCheckboxElement,
+  );
 });
 
 Hooks.once("setup", () => {
-
   JiraIssueManager.instance
     .initialize()
     .then(() => console.log(`${MODULE_ID} | Jira Issues Loaded!`));
-    
+
   const SpellModel = CONFIG.Item.dataModels.spell;
   const descriptor = Object.getOwnPropertyDescriptor(
     SpellModel,
@@ -112,7 +122,8 @@ Hooks.once("setup", () => {
 
   document.addEventListener("paste", (event) => {
     const app = ui.activeWindow;
-    if (app instanceof apps.IssueSheet) apps.IssueSheet.onPasteFile?.call(app, event);
+    if (app instanceof apps.IssueSheet)
+      apps.IssueSheet.onPasteFile?.call(app, event);
   });
 });
 
@@ -120,9 +131,11 @@ Hooks.on("ready", () => {
   settings.LoginTracker.initialize();
   Hooks.on("renderApplicationV2", (_, element) => {
     /**@type {HTMLButtonElement} */
-    const btn = element.querySelector('button.header-control.fa-window-minimize[data-action="minimize"]');
-    if(btn && btn.type === "submit") btn.type = "button";
-  })
+    const btn = element.querySelector(
+      'button.header-control.fa-window-minimize[data-action="minimize"]',
+    );
+    if (btn && btn.type === "submit") btn.type = "button";
+  });
 });
 
 Hooks.on("renderItemSheet", hooks.onRenderItemSheet);

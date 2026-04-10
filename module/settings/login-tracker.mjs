@@ -126,8 +126,8 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
       rawData,
       {
         inplace: false,
-        insertKeys: true,
-        overwrite: false,
+        insertKeys: false,
+        overwrite: true,
       },
     );
 
@@ -140,6 +140,8 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
       data.history = cleanedHistory;
       user.setFlag(MODULE_ID, USER_FLAGS.LOGIN_DATA, data);
     }
+
+    return data;
   }
 
   /**
@@ -203,7 +205,6 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
     if (!game.user) return;
 
     const current = LoginTracker.getLoginData(game.user);
-
     return LoginTracker.updateLoginData(game.user, {
       lastLogin: Date.now(),
       timeConnected: current.timeConnected,

@@ -111,3 +111,19 @@ export function formatIdentifier(identifier) {
   if (!identifier) return "";
   return identifier.replace(/[-_]/g, " ").titleCase();
 }
+
+/**
+ * Wait for a CSS transition to complete on an element.
+ * @param {HTMLElement} element 
+ * @returns {Promise<void>}
+ */
+export function waitForTransition(element){
+  return new Promise(resolve => {
+    const onEnd = () => {
+      element.removeEventListener("transitionend", onEnd);
+      resolve();
+    };
+    element.addEventListener("transitionend", onEnd);
+        setTimeout(resolve, 500); 
+  });
+}
