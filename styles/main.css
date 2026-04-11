@@ -1956,6 +1956,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
           }
         }
 
@@ -1999,16 +2000,12 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: all 0.2s ease;
 
         .cell-icon {
           font-size: 24px;
           opacity: 0.5;
         }
 
-        &:hover {
-          filter: brightness(1.2);
-        }
 
         &[data-state="1"] {
           background: #053d95;
