@@ -42,6 +42,7 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       toggleUsersPool: AvailabilityViewer.#onToggleUsersPool,
       toggleGranularity: AvailabilityViewer.#onToggleGranularity,
       openFilterMenu: AvailabilityViewer.#onOpenFilterMenu,
+      openLoginTracker: AvailabilityViewer.#onOpenLoginTracker,
     },
   };
 
@@ -193,6 +194,22 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
 
   #currentIndex = -1;
 
+    /** @inheritDoc */
+  async _renderFrame(options) {
+    const frame = await super._renderFrame(options);
+
+    if (game.user.isGM) {
+      const loginLabel = "Open Login Tracker";
+      const loginBtn = `<button type="button" class="header-control fa-solid fa-calendar-clock" data-action="openLoginTracker"
+                              data-tooltip="${loginLabel}" aria-label="${loginLabel}"></button>`;
+
+      this.window.close.insertAdjacentHTML("beforebegin", loginBtn);
+    }
+
+    return frame;
+  }
+  
+
   /** @inheritdoc */
   setPosition(position) {
     super.setPosition(position);
@@ -223,7 +240,31 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       state: this.#filterStates,
       isGM: game.user.isGM,
       drillDown: this.#drillDownData,
+      timeZoneDistribution: this._getTimeZoneDistribution(),
     };
+  }
+
+  _getTimeZoneDistribution() {
+    const { onlyActive, selections } = this.#filterStates;
+    const filteredUsers = this._getUsers({
+      onlyActive,
+      showGM: true,
+      showPlayers: true,
+    }).filter((u) => {
+      const ids = selections.users;
+      return !ids || !ids.length || ids.includes(u.id);
+    });
+
+    const count = filteredUsers.reduce((acc, user) => {
+      const flag = user.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE);
+      const k = flag ? `UTC${flag}` : "Unknown";
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(count)
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count);
   }
 
   /** @inheritdoc*/
@@ -274,7 +315,7 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
             y: {
               beginAtZero: true,
               grid: { color: "rgba(56, 139, 253, 0.5)" },
-              ticks: { color: "#ffffff", font: { size: 11 } },
+              ticks: { color: "#ffffff", font: { size: 11 }, stepSize: 1 },
             },
             x: {
               grid: {
@@ -455,6 +496,7 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
               color: user.color,
               role: user.isGM ? "GM" : "Player",
               categories: {},
+              timeZone: user.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE),
             });
           }
 
@@ -489,7 +531,6 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
 
     this.#drillDownData = {
       title: label,
-      // Convert Map values back into an array for the renderer
       users: Array.from(userResultsMap.values()),
     };
 
@@ -671,8 +712,6 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     return targetArray;
   }
 
-  #trackUserInMap() {}
-
   /**
    * Retrieves and shifts a user's availability array based on the configured time zone.
    * @param {foundry.documents.BaseUser} user
@@ -765,5 +804,15 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       locked: true,
       cssClass: `${MODULE_ID} filter-menu`,
     });
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this AvailabilityTracker
+   */
+  static #onOpenLoginTracker() {
+    const app = ui["tcr-main-module.LoginTracker"];
+    if (app.rendered) app.bringToFront();
+    else app.render({ force: true });
   }
 }

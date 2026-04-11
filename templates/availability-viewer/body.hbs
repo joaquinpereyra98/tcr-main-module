@@ -107,6 +107,16 @@
             <div class="chart-wrapper">
                 <canvas class="analytics-canvas"></canvas>
             </div>
+            <div class="timezone-summary">
+                {{#if timeZoneDistribution.length}}
+                {{#each timeZoneDistribution}}
+                <span class="tz-badge">
+                    <span class="tz-label">{{label}}</span>
+                    <span class="tz-count">{{count}}</span>
+                </span>
+                {{/each}}
+                {{/if}}
+            </div>
         </div>
         <aside class="chart-sidebar flexcols">    
             {{#if drillDown}}
@@ -121,7 +131,11 @@
                 {{#each drillDown.users}}
                 <li class="user-entry" style="--user-color: {{color}}">
                     <div class="user-info">
-                        <span class="name">{{name}}</span>
+                        <div class="name">{{name}}
+                            {{#if timeZone}}
+                            <span class="muted">[UTC{{timeZone}}]</span>
+                            {{/if}}
+                        </div>
                         <span class="role-tag">{{role}}</span>
                     </div>
                     <div class="status-tags">
