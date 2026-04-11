@@ -39,7 +39,15 @@
             <i class="fa-solid {{ifThen isNew 'fa-plus' 'fa-floppy-disk'}}"></i>
         </button>
         {{/if}}
-        
+        {{#unless isNew}}
+        <a
+            class="icon-anchor copy-link-anchor"
+            data-tooltip="Copy Link"
+            data-action="copyJiraLink"
+        >
+            <i class="fa-solid fa-chain"></i>
+        </a>
+        {{/unless}}
     </aside>
     <div class="issue-details">
         <div class="detail-card subject-card">

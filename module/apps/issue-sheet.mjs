@@ -46,6 +46,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
       addComment: IssueSheet.#onAddComment,
       deleteComment: IssueSheet.#onDeleteComment,
       addScoreIssue: IssueSheet.#onAddScoreIssue,
+      copyJiraLink: IssueSheet.#onCopyJiraLink,
     },
     position: {
       height: 650,
@@ -657,5 +658,15 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     span.style.opacity = 0.5;
     await this.issue.update({ voters: newVoters });
     this.render()
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this IssueSheet
+   */
+  static #onCopyJiraLink() {
+    const link = `https://tcrvtt.atlassian.net/browse/${this.issue.key}`
+    game.clipboard.copyPlainText(link);
+    ui.notifications.info(`Issue ${this.issue.key} link copied to clipboard.`);
   }
 }
