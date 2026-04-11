@@ -30,7 +30,7 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
       title: "Login Tracker",
       minimizable: true,
       resizable: true,
-      icon: "fa-solid fa-calendar",
+      icon: "fa-solid fa-calendar-clock",
     },
     position: {
       height: 600,

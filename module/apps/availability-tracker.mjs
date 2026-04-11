@@ -24,7 +24,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
     classes: [MODULE_ID, "availability-tracker"],
     window: {
       title: "Availability Tracker",
-      icon: "fa-solid fa-calendar",
+      icon: "fa-solid fa-calendar-circle-user",
     },
     form: {
       submitOnChange: true,
@@ -32,6 +32,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
     actions: {
       toggleRow: AvailabilityTracker.#onToggleRow,
       clearAll: AvailabilityTracker.#onClearAll,
+      openLoginTracker: AvailabilityTracker.#onOpenLoginTracker,
     },
     sheetConfig: false,
   };
@@ -135,6 +136,15 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
     const frame = await super._renderFrame(options);
     const copyId = frame.querySelector('[data-action="copyUuid"]');
     if (copyId) copyId.remove();
+
+    if (game.user.isGM) {
+      const loginLabel = "Open Login Tracker";
+      const loginBtn = `<button type="button" class="header-control fa-solid fa-calendar-clock" data-action="openLoginTracker"
+                              data-tooltip="${loginLabel}" aria-label="${loginLabel}"></button>`;
+
+      this.window.close.insertAdjacentHTML("beforebegin", loginBtn);
+    }
+
     return frame;
   }
 
@@ -202,7 +212,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
    * Calculates the line and updates the local UI and internal working array
    */
   #updateAvailabilityRange(startIdx, endIdx) {
-    if ( !this._baselineAvailability ) return;
+    if (!this._baselineAvailability) return;
 
     const utcArray = [...this._baselineAvailability];
     const offset = AvailabilityTracker.timeZone;
@@ -230,10 +240,10 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
     if (affectedLocalIndices.length === 0) affectedLocalIndices.push(startIdx);
 
     // Revert cells that are no longer in the drag range
-    this._lastAffectedIndices.forEach(idx => {
-      if ( affectedLocalIndices.includes(idx) ) return;
+    this._lastAffectedIndices.forEach((idx) => {
+      if (affectedLocalIndices.includes(idx)) return;
       const el = this.element.querySelector(`.day-cell[data-index="${idx}"]`);
-      if ( el ) {
+      if (el) {
         const utcIdx = (idx - offset + 168) % 168;
         const baselineState = this._baselineAvailability[utcIdx];
         el.dataset.state = baselineState;
@@ -246,7 +256,9 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
       const utcIdx = (localIdx - offset + 168) % 168;
       utcArray[utcIdx] = state;
 
-      const el = this.element.querySelector(`.day-cell[data-index="${localIdx}"]`);
+      const el = this.element.querySelector(
+        `.day-cell[data-index="${localIdx}"]`,
+      );
       if (el) {
         el.dataset.state = state;
         el.innerHTML = this.#getCellIcon(state);
@@ -258,8 +270,8 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
   }
 
   #getCellIcon(state) {
-    if ( state === 1 ) return '<i class="cell-icon fa-regular fa-circle"></i>';
-    if ( state === 2 ) return '<i class="cell-icon fa-solid fa-xmark"></i>';
+    if (state === 1) return '<i class="cell-icon fa-regular fa-circle"></i>';
+    if (state === 2) return '<i class="cell-icon fa-solid fa-xmark"></i>';
     return "";
   }
 
@@ -271,7 +283,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
    * @param {MouseEvent} event
    */
   #onPointerDown(event) {
-    if ( event.button !== 0 && event.button !== 2 ) return;
+    if (event.button !== 0 && event.button !== 2) return;
     const target = event.target;
     const cell = target.closest(".day-cell");
     if (!cell) return;
@@ -294,7 +306,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
       startIdx: localIndex,
       orientation: null,
       lastTargetIdx: localIndex,
-      paintState: paintState
+      paintState: paintState,
     };
 
     this.#updateAvailabilityRange(localIndex, localIndex);
@@ -354,7 +366,7 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
    *
    */
   #onPointerUp() {
-    if ( !this._dragState.active ) return;
+    if (!this._dragState.active) return;
     this._dragState.active = false;
     this._baselineAvailability = null;
     game.user.setFlag(MODULE_ID, USER_FLAGS.AVAILABILITY, this._workingArray);
@@ -411,5 +423,15 @@ export default class AvailabilityTracker extends HandlebarsApplicationMixin(
       USER_FLAGS.AVAILABILITY,
       Array(168).fill(0),
     );
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this AvailabilityTracker
+   */
+  static #onOpenLoginTracker() {
+    const app = ui['tcr-main-module.LoginTracker'];
+    if(app.rendered) app.bringToFront();
+    else app.render({force: true});
   }
 }
