@@ -242,9 +242,6 @@
     }
 
     .visibility-container {
-      border: 1px solid var(--hud-white-01);
-      border-radius: 4px;
-      padding: 5px 10px;
 
       .visibility-header {
         padding: 0 2px;
@@ -258,6 +255,10 @@
 
       .bottom-border {
         border-bottom: 1px solid var(--hud-white-01);
+      }
+
+      .user-visibility-container {
+        margin-top: 10px;
       }
     }
 
@@ -2265,7 +2266,7 @@
 
         .tz-count {
           padding: 0 8px;
-          background:rgba(0, 0, 0, 0.7);
+          background: rgba(0, 0, 0, 0.7);
           color: white;
           height: 100%;
           display: flex;

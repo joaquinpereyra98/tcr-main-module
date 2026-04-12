@@ -192,8 +192,6 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     },
   };
 
-  #currentIndex = -1;
-
     /** @inheritDoc */
   async _renderFrame(options) {
     const frame = await super._renderFrame(options);

@@ -30,6 +30,12 @@
                     <div class="bottom-border"></div>
                     {{/if}}
                     {{/each}}
+                    <div class="bottom-border"></div>
+                    <div class="user-visibility-container">
+                        <multi-select name="{{tab.id}}.userVisibility">
+                            {{selectOptions @root.userChoices selected=tab.userVisibility}}
+                        </multi-select>
+                    </div>
                 </div>
                 <div class="segments-container">
                     <div class="segments-header flexrow">

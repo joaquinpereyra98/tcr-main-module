@@ -111,9 +111,14 @@ export default class HUDConfig extends InteractiveMixin(ApplicationV2) {
   /** @override */
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
+
     return {
       ...context,
       setting: this.setting,
+      userChoices: game.users.reduce((acc, u) => {
+        acc[u.id] = u.name;
+        return acc;
+      }, {}),
       buttons: [
         {
           type: "button",

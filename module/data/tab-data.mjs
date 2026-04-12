@@ -62,6 +62,7 @@ export default class TabData extends foundry.abstract.DataModel {
           ]),
         ),
       }),
+      userVisibility: new f.ArrayField(new f.StringField())
     };
   }
 
