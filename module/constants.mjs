@@ -6,6 +6,7 @@ export const AVAILABILITY_VIEWER_KEY = `${MODULE_ID}.AvailabilityViewer`;
 export const USER_FLAGS = {
   LOGIN_DATA: "loginData",
   AVAILABILITY: "availabilityGrid",
+  LAST_AVAIL_UPDATE: "lastAvailabilityUpdate",
   TIME_ZONE: "timeZone",
   TIME_MODE: "timeMode",
 };

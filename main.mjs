@@ -139,3 +139,4 @@ Hooks.on("ready", () => {
 });
 
 Hooks.on("renderItemSheet", hooks.onRenderItemSheet);
+Hooks.on("preUpdateUser", hooks.preUpdateUser);
