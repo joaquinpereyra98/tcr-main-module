@@ -36,7 +36,6 @@ jobs:
       - name: Build JS
         run: |
           npm run build --if-present
-          # Check if dist/main.mjs exists before trying to move it to avoid errors
           if [ -f ./dist/main.mjs ]; then mv --force ./dist/main.mjs ./main.mjs; fi
 
       - name: Create System Archive
@@ -47,7 +46,8 @@ jobs:
             README.md \
             LICENSE \
             styles/ \
-            templates/
+            templates/ \
+            lib/
 
       - name: Update Release With Files
         id: create_version_release

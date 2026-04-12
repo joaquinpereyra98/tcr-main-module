@@ -1,4 +1,3 @@
-import { USER_ROLE_NAMES } from "../../foundry/resources/app/common/constants.mjs";
 import {
   AVAILABILITY_VIEWER_KEY,
   MODULE_ID,
