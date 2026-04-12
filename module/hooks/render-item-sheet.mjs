@@ -8,15 +8,26 @@ import HTMLDocumentTagsElementV2 from "../apps/elements/document-tags-v2.mjs";
  * @param {import("../../foundry/resources/app/client-esm/applications/_types.mjs").ApplicationRenderContext} _context - The application rendering context data
  * @param {import("../../foundry/resources/app/client-esm/applications/_types.mjs").ApplicationRenderOptions} _options - The application rendering options
  */
-export default function onRenderItemSheet5e(app, [element], _context, _options) {
+export default function onRenderItemSheet5e(
+  app,
+  [element],
+  _context,
+  _options,
+) {
   const item = app.document;
 
   if (item.type !== "spell") return;
 
-  /**@type {HTMLElement} */
-  const sourceClass = element.querySelector(
-    '.tidy-tab.details .form-group[data-form-group-for="system.sourceClass"]',
-  );
+  const selectors = [
+    '[data-tidy-field="system.sourceClass"]',
+    'select[name="system.sourceClass"]',
+    'select[name="system.preparation.mode"]',
+  ];
+
+  const previousGroup = element
+    .querySelector(selectors.join(", "))
+    ?.closest(".form-group");
+  if (!previousGroup) return;
 
   const input = HTMLDocumentTagsElementV2.create({
     name: `flags.${MODULE_ID}.${ITEM_FLAGS.SPELL_CLASSES}`,
@@ -37,5 +48,5 @@ export default function onRenderItemSheet5e(app, [element], _context, _options) 
     input,
   });
 
-  sourceClass.insertAdjacentElement("afterend", formGroup);
+  previousGroup.insertAdjacentElement("afterend", formGroup);
 }
