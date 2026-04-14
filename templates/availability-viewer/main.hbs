@@ -1,0 +1,93 @@
+<section class="main-part">
+    <header class="chart-header">
+        <nav class="control-row primary">
+            <a
+                class="filter-group {{ifThen state.selections.users.length 'active' ''}}"
+                data-action="openFilterMenu"
+                data-filter="players"
+                data-tooltip="Filter by Players"
+            >
+                <i class="fa-solid fa-users"></i>
+                <label>Players</label>
+            </a>
+            <a
+                class="filter-group {{ifThen state.selections.days.length 'active' ''}}"
+                data-action="openFilterMenu"
+                data-filter="days"
+                data-tooltip="Filter by Days"
+            >
+                <i class="fa-solid fa-calendar-day"></i>
+                <label>Days</label>
+            </a>
+            <a
+                class="filter-group"
+                data-action="openFilterMenu"
+                data-filter="timeLapse"
+                data-tooltip="Filter Time Range"
+            >
+                <i class="fa-solid fa-clock"></i>
+                <label>Time Lapse</label>
+            </a>
+            <a
+                class="filter-group {{ifThen state.recency 'active' ''}}"
+                data-action="openFilterMenu"
+                data-filter="recency"
+                data-tooltip="Filter by Last Seen"
+            >
+                <i class="fa-solid fa-user-clock"></i>
+                <label>Seen Within</label>
+            </a>
+        </nav>
+
+        <div class="control-row secondary">
+            <div class="toggler" data-action="toggleGraphType">
+                <div class="option {{ifThen (eq state.type 'bar') 'active' '' }}" data-tooltip="Bar Chart">
+                    <i class="fa-solid fa-chart-column"></i>
+                </div>
+                <div class="option {{ifThen (eq state.type 'bar') '' 'active' }}" data-tooltip="Line Chart">
+                    <i class="fa-solid fa-chart-line"></i>
+                </div>
+            </div>
+
+            <div class="toggler" data-action="toggleGranularity">
+                <div class="option {{ifThen (eq state.granularity 'daily') 'active' '' }}" data-tooltip="Daily View">
+                    <i class="fa-solid fa-calendar-days"></i>
+                </div>
+                <div class="option {{ifThen (eq state.granularity 'daily') '' 'active' }}" data-tooltip="Hourly View">
+                    <i class="fa-solid fa-clock"></i>
+                </div>
+            </div>
+
+            <div class="comparison-grid">
+                {{#each state.comparison as |state key|}}
+                <label class="checkbox-option">
+                    <input
+                        type="checkbox"
+                        data-type="{{key}}"
+                        {{checked  state}}
+                    > 
+                    <span>{{lookup @root.comparisonLabels key}}</span>
+                </label>
+                {{/each}}
+            </div>
+
+            <div class="toggler" data-action="toggleUsersPool">
+                <div class="option {{ifThen state.onlyActive '' 'active' }}" data-tooltip="Include All Users"><span>All Users</span></div>
+                <div class="option {{ifThen state.onlyActive 'active' '' }}" data-tooltip="Include Active Users Only"><span>Active Only</span></div>
+            </div>
+        </div>
+    </header>
+
+    <div class="chart-wrapper">
+        <canvas class="analytics-canvas"></canvas>
+    </div>
+
+    <footer class="timezone-summary">
+        {{#each timeZoneDistribution}}
+        <span class="tz-badge">
+            <span class="tz-label">{{label}}</span>
+            <span class="tz-count">{{count}}</span>
+        </span>
+        {{/each}}
+    </footer>
+</section>

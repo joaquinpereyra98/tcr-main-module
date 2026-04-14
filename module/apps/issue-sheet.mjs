@@ -10,7 +10,6 @@ import JiraIssueManager from "../jira/jira-manager.mjs";
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 
 /**
- * @import HTMLProseMirrorElement from "../../foundry/resources/app/client-esm/applications/elements/prosemirror-editor.mjs";
  * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationFormSubmission} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  * @import ApplicationV2 from "../../foundry/resources/app/client-esm/applications/api/application.mjs";
  * @import {HandlebarsTemplatePart} from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"

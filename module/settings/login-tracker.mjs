@@ -202,15 +202,27 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
    * @returns {Promise<User>}
    */
   static async updateLoginSession() {
-    if (!game.user) return;
+    const user = game.user;
+    if (!user) return;
 
-    const current = LoginTracker.getLoginData(game.user);
-    return LoginTracker.updateLoginData(game.user, {
+    const { history } = LoginTracker.getLoginData(user);
+    const now = new Date();
+    const today = now.toISOString().split("T")[0];
+    const currentHour = now.getUTCHours();
+
+    const hours = new Set(history[today] || []);
+
+    if (!hours.has(currentHour)) {
+      hours.add(currentHour);
+      history[today] = Array.from(hours).sort((a, b) => a - b);
+    }
+
+    return LoginTracker.updateLoginData(user, {
       lastLogin: Date.now(),
-      timeConnected: current.timeConnected,
+      timeConnected: 0,
+      history,
     });
   }
-
   /**
    * Increment the total connection time for the current user.
    * @returns {Promise<foundry.documents.BaseUser>}

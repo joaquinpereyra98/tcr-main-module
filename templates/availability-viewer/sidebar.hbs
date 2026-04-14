@@ -1,0 +1,36 @@
+<aside class="sidebar-part {{ifThen drillDown 'active' ''}}">    
+    <div class="sidebar-header">
+        <div class="anchor-container">
+            <a class="anchor-icon fa-solid fa-chevron-right" data-action="toggleSidebar"></a>
+        </div>
+        <h3>{{drillDown.title}}</h3>
+    </div>
+
+    <ul class="user-list unlist">
+        {{#each drillDown.users}}
+        <li class="user-entry" style="--user-color: {{color}}">
+            <div class="user-info">
+                <div class="name">{{name}}
+                    {{#if timeZone}}
+                    <span class="muted">[UTC{{timeZone}}]</span>
+                    {{/if}}
+                </div>
+                <span class="role-tag">{{role}}</span>
+            </div>
+            <div class="status-tags">
+                {{#each categories}}
+                {{#if (eq label 'Availability')}}
+                <i
+                    class="fa-solid fa-calendar-check"
+                    data-tooltip-direction="RIGHT"
+                    data-tooltip="<div class='tooltip-hours tcr-main-module'><h2>Available</h2><ul class='hours-list'>{{#each hours}}<li>{{this}}</li>{{/each}}</ul></div>"
+                ></i>
+                {{else}}
+                <i class="fa-solid fa-clock-rotate-left" data-tooltip="<div class='tooltip-hours tcr-main-module'><h2>Recent Login</h2><ul class='hours-list'>{{#each hours}}<li>{{this}}</li>{{/each}}</ul></div>"></i>
+                {{/if}}
+                {{/each}}
+            </div>
+        </li>
+        {{/each}}
+    </ul>
+</aside>

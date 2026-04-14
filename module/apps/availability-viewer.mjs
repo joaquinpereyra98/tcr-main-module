@@ -15,6 +15,8 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @import { User } from "../../foundry/resources/app/dist/database/database.mjs"
  */
 
+const VIEWER_TEMPLATE_PATH = `modules/${MODULE_ID}/templates/availability-viewer`;
+
 /**
  * An application that displays a the player availability schedules.
  * @extends {ApplicationV2}
@@ -35,20 +37,24 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       title: "Availability Viewer",
       resizable: true,
     },
-    position: { width: 1000, height: 600 },
+    position: { width: 920, height: 600 },
     actions: {
       toggleGraphType: AvailabilityViewer.#onToggleGraphType,
       toggleUsersPool: AvailabilityViewer.#onToggleUsersPool,
       toggleGranularity: AvailabilityViewer.#onToggleGranularity,
       openFilterMenu: AvailabilityViewer.#onOpenFilterMenu,
       openLoginTracker: AvailabilityViewer.#onOpenLoginTracker,
+      toggleSidebar: AvailabilityViewer.#onToggleSidebar,
     },
   };
 
   /** @override */
   static PARTS = {
-    body: {
-      template: `modules/${MODULE_ID}/templates/availability-viewer/body.hbs`,
+    main: {
+      template: `${VIEWER_TEMPLATE_PATH}/main.hbs`,
+    },
+    sidebar: {
+      template: `${VIEWER_TEMPLATE_PATH}/sidebar.hbs`,
       scrollable: [""],
     },
   };
@@ -191,7 +197,7 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     },
   };
 
-    /** @inheritDoc */
+  /** @inheritDoc */
   async _renderFrame(options) {
     const frame = await super._renderFrame(options);
 
@@ -205,23 +211,26 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
 
     return frame;
   }
-  
 
   /** @inheritdoc */
   setPosition(position) {
     super.setPosition(position);
-    if (this.chart) this.chart.resize();
+    if (this.#chart) {
+      window.requestAnimationFrame(() => {
+        this.#chart.resize();
+      });
+    }
   }
 
   /**@inheritdoc */
   _preSyncPartState(partId, newElement, priorElement, state) {
     super._preSyncPartState(partId, newElement, priorElement, state);
     /** @type {HTMLElement} */
-    const oldLayout = priorElement.querySelector(".content-layout");
-    const newLayout = newElement.querySelector(".content-layout");
-    if (oldLayout && newLayout) {
-      const sidebarOpen = oldLayout.classList.contains("active");
-      newLayout.classList.toggle("active", sidebarOpen);
+    const oldSidebar = priorElement.querySelector(".sidebar-part");
+    const newSidebar = newElement.querySelector(".sidebar-part");
+    if (oldSidebar && newSidebar) {
+      const sidebarOpen = oldSidebar.classList.contains("active");
+      newSidebar.classList.toggle("active", sidebarOpen);
     }
   }
 
@@ -235,6 +244,12 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     return {
       ...context,
       state: this.#filterStates,
+      comparisonLabels: {
+        playerAvail: "Players Availability",
+        gmAvail: "GM Availability",
+        playerRec: "Login Players Record",
+        gmRec: "Login GM Record",
+      },
       isGM: game.user.isGM,
       drillDown: this.#drillDownData,
       timeZoneDistribution: this._getTimeZoneDistribution(),
@@ -267,9 +282,8 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
   /** @inheritdoc*/
   _onRender(context, options) {
     super._onRender(context, options);
-    const element = this.element;
 
-    element
+    this.element
       .querySelectorAll('.comparison-grid input[type="checkbox"]')
       .forEach((checkbox) => {
         checkbox.addEventListener("change", (event) => {
@@ -279,52 +293,53 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
         });
       });
 
+    this.#createGraph();
+  }
+
+  #createGraph() {
     /**@type {HTMLCanvasElement } */
-    const canvas = element.querySelector(".analytics-canvas");
-    if (canvas) {
-      const ctx = canvas.getContext("2d");
+    const canvas = this.element.querySelector(".analytics-canvas");
+    const ctx = canvas.getContext("2d");
 
-      if (this.#chart) this.#chart.destroy();
-
-      this.#chart = new Chart(ctx, {
-        type: this.#filterStates.type,
-        data: this._getChartData(),
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          elements: {
-            line: {
-              tension: 0.33,
-            },
-          },
-          onClick: (event, elements) => this._handleDrillDown(elements),
-          plugins: {
-            tooltip: {
-              backgroundColor: "#161b22",
-              titleColor: "#d0d7de",
-              bodyColor: "#8b949e",
-              borderColor: "rgba(56, 139, 253, 0.4)",
-              borderWidth: 1,
-              cornerRadius: 4,
-            },
-          },
-          scales: {
-            y: {
-              beginAtZero: true,
-              grid: { color: "rgba(56, 139, 253, 0.5)" },
-              ticks: { color: "#ffffff", font: { size: 11 }, stepSize: 1 },
-            },
-            x: {
-              grid: {
-                color: "rgba(56, 139, 253, 0.5)",
-                drawOnChartArea: false,
-              },
-              ticks: { color: "#ffffff", font: { size: 11 } },
-            },
+    if (this.#chart) this.#chart.destroy();
+    this.#chart = new Chart(ctx, {
+      type: this.#filterStates.type,
+      data: this._getChartData(),
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        elements: {
+          line: {
+            tension: 0.33,
           },
         },
-      });
-    }
+        onClick: (event, elements) => this._handleDrillDown(elements),
+        plugins: {
+          tooltip: {
+            backgroundColor: "#161b22",
+            titleColor: "#d0d7de",
+            bodyColor: "#8b949e",
+            borderColor: "rgba(56, 139, 253, 0.4)",
+            borderWidth: 1,
+            cornerRadius: 4,
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: "rgba(56, 139, 253, 0.5)" },
+            ticks: { color: "#ffffff", font: { size: 11 }, stepSize: 1 },
+          },
+          x: {
+            grid: {
+              color: "rgba(56, 139, 253, 0.5)",
+              drawOnChartArea: false,
+            },
+            ticks: { color: "#ffffff", font: { size: 11 } },
+          },
+        },
+      },
+    });
   }
 
   /**
@@ -451,11 +466,11 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
    */
   async _handleDrillDown(elements) {
     if (elements.length === 0) {
-      const contentLayout = this.element.querySelector(".content-layout");
-      contentLayout?.classList.remove("active");
-      await waitForTransition(contentLayout);
+      const sidebar = this.element.querySelector(".sidebar-part");
+      sidebar?.classList.remove("active");
+      await waitForTransition(sidebar);
       this.#drillDownData = null;
-      this.render();
+      this.render({ parts: ["sidebar"] });
       return;
     }
 
@@ -497,7 +512,6 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
             });
           }
 
-          // Add the category data to the existing user entry
           const entry = userResultsMap.get(userId);
           const user = game.users.get(userId);
 
@@ -506,12 +520,32 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
             : this._getAvailabilityBitArray(user);
 
           const matchedHours = [];
+
           if (this.isDaily) {
             const dayOffset = targetDayIdx * 24;
-            for (const h of activeHours) {
-              if (rawBits[dayOffset + h] === 1) {
-                matchedHours.push(`${h.toString().padStart(2, "0")}:00`);
+            const activeBits = activeHours.filter(
+              (h) => rawBits[dayOffset + h] === 1,
+            );
+
+            const fmt = (h) => `${h.toString().padStart(2, "0")}:00`;
+
+            let i = 0;
+            while (i < activeBits.length) {
+              let start = activeBits[i];
+              let end = start;
+
+              while (
+                i + 1 < activeBits.length &&
+                activeBits[i + 1] === end + 1
+              ) {
+                end = activeBits[i + 1];
+                i++;
               }
+
+              if (start === end) matchedHours.push(fmt(start));
+              else matchedHours.push(`${fmt(start)} - ${fmt(end + 1)}`);
+
+              i++;
             }
           } else {
             matchedHours.push(`${targetHour.toString().padStart(2, "0")}:00`);
@@ -531,8 +565,8 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       users: Array.from(userResultsMap.values()),
     };
 
-    await this.render();
-    this.element.querySelector(".content-layout")?.classList.add("active");
+    await this.render({ parts: ["sidebar"] });
+    this.element.querySelector(".sidebar-part")?.classList.add("active");
   }
 
   /**
@@ -811,5 +845,13 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     const app = ui["tcr-main-module.LoginTracker"];
     if (app.rendered) app.bringToFront();
     else app.render({ force: true });
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this AvailabilityTracker
+   */
+  static #onToggleSidebar() {
+    this.element.querySelector(".sidebar-part")?.classList.remove("active");
   }
 }
