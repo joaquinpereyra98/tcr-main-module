@@ -84,10 +84,15 @@
 
     <footer class="timezone-summary">
         {{#each timeZoneDistribution}}
-        <span class="tz-badge">
+        <a
+            class="tz-badge"
+            data-label="{{label}}"
+            data-action="showTimezoneUsers"
+            data-tooltip="<div class='tooltip-hours tcr-main-module'><ul class='hours-list'>{{#each users}}<li>{{name}}</li>{{/each}}</ul></div>"
+        >
             <span class="tz-label">{{label}}</span>
             <span class="tz-count">{{count}}</span>
-        </span>
+        </a>
         {{/each}}
     </footer>
 </section>

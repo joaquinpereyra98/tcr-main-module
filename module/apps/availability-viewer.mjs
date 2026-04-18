@@ -13,6 +13,33 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
 /**
  * @import { ApplicationClickAction, ApplicationConfiguration, ApplicationRenderOptions } from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  * @import { User } from "../../foundry/resources/app/dist/database/database.mjs"
+ *
+ * @typedef {Object} TimeZoneDistribution
+ * @property {string} label - The time zone label (e.g., "UTC+5", "UTC-3", "Unknown")
+ * @property {number} count - The number of users in this time zone
+ * @property {Array<User>} users - Array of user objects in this time zone
+ */
+
+/**
+ * @typedef {Object} DrillDownCategory
+ * @property {boolean} active - Whether the category is active for this user.
+ * @property {string} label - The display label (e.g., "History" or "Availability").
+ * @property {string[]} hours - Formatted hour strings or ranges.
+ */
+
+/**
+ * @typedef {Object} DrillDownUser
+ * @property {string} name - The user's display name.
+ * @property {string} color - The hex color code associated with the user.
+ * @property {("GM"|"Player")} role - The user's role in the session.
+ * @property {string|null} timeZone - The formatted time zone string (e.g., "+2").
+ * @property {Object.<string, DrillDownCategory>} categories - Data keyed by category ID.
+ */
+
+/**
+ * @typedef {Object} DrillDownData
+ * @property {string} title - The name of the day or time slot.
+ * @property {DrillDownUser[]} users - List of users matching the drill-down criteria.
  */
 
 const VIEWER_TEMPLATE_PATH = `modules/${MODULE_ID}/templates/availability-viewer`;
@@ -45,6 +72,7 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       openFilterMenu: AvailabilityViewer.#onOpenFilterMenu,
       openLoginTracker: AvailabilityViewer.#onOpenLoginTracker,
       toggleSidebar: AvailabilityViewer.#onToggleSidebar,
+      showTimezoneUsers: AvailabilityViewer.#onShowTimezoneUsers,
     },
   };
 
@@ -140,6 +168,12 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
   #drillDownData = null;
 
   /**
+   * Tracks what the sidebar is currently showing so it can be refreshed.
+   * @type {{type: "chart"|"timezone", value: any}|null}
+   */
+  #drillDownIndex = null;
+
+  /**
    * The Chart.js instance.
    * @type {Chart|null}
    */
@@ -176,6 +210,11 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       days: [],
       hours: [],
     },
+
+    selectionRange: {
+      xMin: null,
+      xMax: null,
+    },
   };
 
   /**
@@ -197,6 +236,9 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     },
   };
 
+  #dragStartX = null;
+  #isDragging = false;
+
   /** @inheritDoc */
   async _renderFrame(options) {
     const frame = await super._renderFrame(options);
@@ -210,16 +252,6 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     }
 
     return frame;
-  }
-
-  /** @inheritdoc */
-  setPosition(position) {
-    super.setPosition(position);
-    if (this.#chart) {
-      window.requestAnimationFrame(() => {
-        this.#chart.resize();
-      });
-    }
   }
 
   /**@inheritdoc */
@@ -241,6 +273,8 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
    */
   async _prepareContext(options) {
     const context = await super._prepareContext(options);
+    this.#refreshDrillDownData();
+
     return {
       ...context,
       state: this.#filterStates,
@@ -256,8 +290,51 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     };
   }
 
+  /**
+   * Re-calculates the drillDownData based on the current sidebarContext.
+   */
+  #refreshDrillDownData() {
+    if (!this.#drillDownIndex) {
+      this.#drillDownData = null;
+      return;
+    }
+
+    const { type, value } = this.#drillDownIndex;
+
+    if (type === "timezone") {
+      const distribution = this._getTimeZoneDistribution();
+      const entry = distribution.find((d) => d.label === value);
+      if (!entry) return;
+
+      this.#drillDownData = {
+        title: value,
+        users: entry.users.map((u) => this._formatUserForDrilldown(u)),
+      };
+    } else if (type === "chart") {
+      this.#drillDownData = this.#calculateBarDrillDown(value);
+    }
+  }
+
+  /**
+   * Helper to ensure user objects are always formatted the same way
+   */
+  _formatUserForDrilldown(user) {
+    const flag = Number(user.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE));
+    return {
+      name: user.name,
+      color: user.color,
+      role: user.isGM ? "GM" : "Player",
+      timeZone: !Number.isNaN(flag) ? flag.signedString() : null,
+    };
+  }
+
+  /**
+   * Calculates the distribution of users by their time zone offsets.
+   * @returns {Array<TimeZoneDistribution>}
+   */
   _getTimeZoneDistribution() {
     const { onlyActive, selections } = this.#filterStates;
+
     const filteredUsers = this._getUsers({
       onlyActive,
       showGM: true,
@@ -268,14 +345,19 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     });
 
     const count = filteredUsers.reduce((acc, user) => {
-      const flag = user.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE);
-      const k = flag ? `UTC${flag}` : "Unknown";
-      acc[k] = (acc[k] || 0) + 1;
+      const flag = Number(user.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE));
+      const k = !Number.isNaN(flag) ? `UTC${flag.signedString()}` : "Unknown";
+      if (!acc[k]) acc[k] = [];
+      acc[k].push(user);
       return acc;
     }, {});
 
     return Object.entries(count)
-      .map(([label, count]) => ({ label, count }))
+      .map(([label, users]) => ({
+        label,
+        count: users.length,
+        users: users,
+      }))
       .sort((a, b) => b.count - a.count);
   }
 
@@ -302,18 +384,34 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     const ctx = canvas.getContext("2d");
 
     if (this.#chart) this.#chart.destroy();
+
+    const { xMin, xMax } = this.#filterStates.selectionRange;
+
     this.#chart = new Chart(ctx, {
       type: this.#filterStates.type,
       data: this._getChartData(),
+      plugins: [
+        {
+          id: "eventCatcher",
+          beforeEvent: (chart, { event }) => {
+            ({
+              mousedown: this.#onMouseDownChart.bind(this),
+              mousemove: this.#onMouseMoveChart.bind(this),
+              mouseup: this.#onMouseUpChart.bind(this),
+              click: this.#onClickChart.bind(this),
+            })[event.type]?.(event, chart);
+          },
+        },
+      ],
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        events: ["click", "mousedown", "mouseup", "mousemove"],
         elements: {
           line: {
             tension: 0.33,
           },
         },
-        onClick: (event, elements) => this._handleDrillDown(elements),
         plugins: {
           tooltip: {
             backgroundColor: "#161b22",
@@ -322,6 +420,21 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
             borderColor: "rgba(56, 139, 253, 0.4)",
             borderWidth: 1,
             cornerRadius: 4,
+          },
+          annotation: {
+            annotations: {
+              box1: {
+                type: "box",
+                drawTime: "beforeDatasetsDraw",
+                xMin: xMin !== null ? xMin - 0.5 : 0,
+                xMax: xMax !== null ? xMax + 0.5 : 0,
+                z: -5,
+                display: xMin !== null,
+                backgroundColor: "rgba(255, 0, 0, 0.2)",
+                borderColor: "red",
+                borderWidth: 1,
+              },
+            },
           },
         },
         scales: {
@@ -335,6 +448,7 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
               color: "rgba(56, 139, 253, 0.5)",
               drawOnChartArea: false,
             },
+            offset: true,
             ticks: { color: "#ffffff", font: { size: 11 } },
           },
         },
@@ -459,114 +573,238 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     return input;
   }
 
+  async _clearDrillDown() {
+    const sidebar = this.element.querySelector(".sidebar-part");
+    sidebar?.classList.remove("active");
+    await waitForTransition(sidebar);
+    this.#drillDownData = null;
+    this.#drillDownIndex = null;
+  }
+
   /**
    * Logic for Drill-Down (Clicking a bar)
-   * Consolidates categories into a single entry per user.
    * @param {object[]} elements The active chart elements clicked.
    */
   async _handleDrillDown(elements) {
     if (elements.length === 0) {
-      const sidebar = this.element.querySelector(".sidebar-part");
-      sidebar?.classList.remove("active");
-      await waitForTransition(sidebar);
-      this.#drillDownData = null;
-      this.render({ parts: ["sidebar"] });
-      return;
+      await this._clearDrillDown();
+      return await this.render({ parts: ["sidebar"] });
     }
 
     const targetIndex = elements[0].index;
+
+    this.#drillDownIndex = { type: "chart", value: targetIndex };
+
+    this.#drillDownData = this.#calculateBarDrillDown(targetIndex);
+
+    await this.render({ parts: ["sidebar"] });
+    this.element.querySelector(".sidebar-part")?.classList.add("active");
+  }
+
+  /**
+   * Clears the visual selection and state.
+   */
+  _clearSelection() {
+    if (!this.chart) return;
+
+    this.#filterStates.selectionRange.xMin = null;
+    this.#filterStates.selectionRange.xMax = null;
+    const annotation = this.chart.options.plugins.annotation.annotations.box1;
+    annotation.xMin = null;
+    annotation.xMax = null;
+    annotation.display = false;
+
+    this.chart.update("none");
+  }
+
+  /**
+   * Filters players available during the selected range and updates the sidebar.
+   * @param {number} startIndex
+   * @param {number} endIndex
+   * @protected
+   */
+  async _filterAvailablePlayers(startIndex, endIndex) {
+    this.#filterStates.selectionRange.xMin = startIndex;
+    this.#filterStates.selectionRange.xMax = endIndex;
+
+    /**@type {Map<string, DrillDownUser & {rawCategoryData: {}}} */
+    const mergedUsersMap = new Map();
+    for (let i = startIndex; i <= endIndex; i++) {
+      const { users } = this.#calculateBarDrillDown(i);
+
+      for (const user of users) {
+        if (!mergedUsersMap.has(user.name)) {
+          mergedUsersMap.set(user.name, { ...user, rawCategoryData: {} });
+        }
+
+        const entry = mergedUsersMap.get(user.name);
+        for (const [catKey, catData] of Object.entries(user.categories)) {
+          if (!entry.rawCategoryData[catKey])
+            entry.rawCategoryData[catKey] = new Set();
+
+          catData.rawHours.forEach((h) => entry.rawCategoryData[catKey].add(h));
+        }
+      }
+    }
+
+    const availableUsers = Array.from(mergedUsersMap.values()).map((user) => {
+      const finalCategories = {};
+
+      for (const [catKey, hourSet] of Object.entries(user.rawCategoryData)) {
+        const sortedHours = Array.from(hourSet).sort((a, b) => a - b);
+        finalCategories[catKey] = {
+          active: true,
+          label: catKey.includes("Rec") ? "History" : "Availability",
+          hours: this._formatHourRanges(sortedHours),
+        };
+      }
+
+      delete user.rawCategoryData;
+      user.categories = finalCategories;
+      return user;
+    });
+
+    const labels = this.#getLabels();
+    const startLabel = labels[startIndex] ?? "";
+    const endLabel = labels[endIndex] ?? "";
+
+    this.#drillDownIndex = {
+      type: "selection",
+      value: { startIndex, endIndex },
+    };
+
+    this.#drillDownData = {
+      title: "Range Selection",
+      subtitle:
+        startIndex === endIndex ? startLabel : `${startLabel} to ${endLabel}`,
+      users: availableUsers,
+    };
+
+    await this.render({ parts: ["main", "sidebar"] });
+    this.element.querySelector(".sidebar-part")?.classList.add("active");
+  }
+
+  /**
+   * Calculates drill-down data for a clicked chart bar
+   * @param {Number} targetIndex
+   * @returns {DrillDownData}
+   */
+  #calculateBarDrillDown(targetIndex) {
+    const isDailyView = this.isDaily;
+
     const abrr = this.chart.data.labels[targetIndex];
     const label =
       AvailabilityViewer.DAYS_LABELS.find((d) => d.abrr === abrr)?.name ?? abrr;
 
     const { days, hours } = this.#filterStates.selections;
-    const activeDays = days.length > 0 ? days : [0, 1, 2, 3, 4, 5, 6];
-    const activeHours =
-      hours?.length > 0 ? hours : Array.from({ length: 24 }, (_, i) => i);
+    const activeDays = days.length ? days : [0, 1, 2, 3, 4, 5, 6];
+    const activeHours = hours?.length
+      ? hours
+      : Array.from({ length: 24 }, (_, i) => i);
 
-    let targetDayIdx;
-    let targetHour;
+    let targetDayIdx, targetHour;
 
-    if (this.isDaily) {
+    if (isDailyView) {
       targetDayIdx = activeDays[targetIndex];
     } else {
-      targetDayIdx = activeDays[Math.floor(targetIndex / activeHours.length)];
-      targetHour = activeHours[targetIndex % activeHours.length];
+      const hoursPerDay = activeHours.length;
+      targetDayIdx = activeDays[Math.floor(targetIndex / hoursPerDay)];
+      targetHour = activeHours[targetIndex % hoursPerDay];
     }
 
     const userResultsMap = new Map();
 
+    const dayOffset = isDailyView ? targetDayIdx * 24 : null;
+    const userCache = new Map();
+
+    const formattedTargetHour = !isDailyView
+      ? `${targetHour.toString().padStart(2, "0")}:00`
+      : null;
+
     for (const [category, userMap] of Object.entries(this.#indexMap)) {
       if (!(userMap instanceof Map)) continue;
 
+      const isRecCategory = category.includes("Rec");
+      const categoryLabel = isRecCategory ? "History" : "Availability";
+
       for (const [userId, bitArray] of userMap.entries()) {
-        if (bitArray[targetIndex] === 1) {
-          if (!userResultsMap.has(userId)) {
-            const user = game.users.get(userId);
-            userResultsMap.set(userId, {
-              name: user.name,
-              color: user.color,
-              role: user.isGM ? "GM" : "Player",
-              categories: {},
-              timeZone: user.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE),
-            });
+        if (bitArray[targetIndex] !== 1) continue;
+
+        let entry = userResultsMap.get(userId);
+
+        if (!entry) {
+          let user = userCache.get(userId);
+          if (!user) {
+            user = game.users.get(userId);
+            userCache.set(userId, user);
           }
 
-          const entry = userResultsMap.get(userId);
-          const user = game.users.get(userId);
-
-          const rawBits = category.includes("Rec")
-            ? this._getLoginRecordBitArray(user)
-            : this._getAvailabilityBitArray(user);
-
-          const matchedHours = [];
-
-          if (this.isDaily) {
-            const dayOffset = targetDayIdx * 24;
-            const activeBits = activeHours.filter(
-              (h) => rawBits[dayOffset + h] === 1,
-            );
-
-            const fmt = (h) => `${h.toString().padStart(2, "0")}:00`;
-
-            let i = 0;
-            while (i < activeBits.length) {
-              let start = activeBits[i];
-              let end = start;
-
-              while (
-                i + 1 < activeBits.length &&
-                activeBits[i + 1] === end + 1
-              ) {
-                end = activeBits[i + 1];
-                i++;
-              }
-
-              if (start === end) matchedHours.push(fmt(start));
-              else matchedHours.push(`${fmt(start)} - ${fmt(end + 1)}`);
-
-              i++;
-            }
-          } else {
-            matchedHours.push(`${targetHour.toString().padStart(2, "0")}:00`);
-          }
-
-          entry.categories[category] = {
-            active: true,
-            label: category.includes("Rec") ? "History" : "Availability",
-            hours: matchedHours,
+          const flag = Number(user.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE));
+          entry = {
+            name: user.name,
+            color: user.color,
+            role: user.isGM ? "GM" : "Player",
+            categories: {},
+            timeZone: !Number.isNaN(flag) ? flag.signedString() : null,
           };
+          userResultsMap.set(userId, entry);
         }
+
+        let matchedHours,
+          rawHoursIndices = [];
+
+        if (isDailyView) {
+          const rawBits = isRecCategory
+            ? this._getLoginRecordBitArray(userCache.get(userId))
+            : this._getAvailabilityBitArray(userCache.get(userId));
+
+          for (let i = 0; i < activeHours.length; i++) {
+            const hour = activeHours[i];
+            if (rawBits[dayOffset + hour] === 1) {
+              rawHoursIndices.push(hour);
+            }
+          }
+          matchedHours = this._formatHourRanges(rawHoursIndices);
+        } else {
+          matchedHours = [formattedTargetHour];
+          rawHoursIndices = [targetHour];
+        }
+
+        entry.categories[category] = {
+          active: true,
+          label: categoryLabel,
+          hours: matchedHours,
+          rawHours: rawHoursIndices,
+        };
       }
     }
 
-    this.#drillDownData = {
+    return {
       title: label,
       users: Array.from(userResultsMap.values()),
     };
+  }
 
-    await this.render({ parts: ["sidebar"] });
-    this.element.querySelector(".sidebar-part")?.classList.add("active");
+  /**
+   * Converts a list of hours into readable ranges.
+   */
+  _formatHourRanges(activeBits) {
+    const ranges = [];
+    const fmt = (h) => `${h.toString().padStart(2, "0")}:00`;
+    let i = 0;
+    while (i < activeBits.length) {
+      let start = activeBits[i];
+      let end = start;
+      while (i + 1 < activeBits.length && activeBits[i + 1] === end + 1) {
+        end = activeBits[i + 1];
+        i++;
+      }
+      ranges.push(
+        start === end ? fmt(start) : `${fmt(start)} - ${fmt(end + 1)}`,
+      );
+      i++;
+    }
+    return ranges;
   }
 
   /**
@@ -605,8 +843,8 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     this.#indexMap.clear();
 
     const labels = this.#getLabels();
-
     const { onlyActive, comparison, selections } = this.#filterStates;
+
     const users = this._getUsers({
       onlyActive,
       showGM: true,
@@ -665,22 +903,18 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       playerAvail: {
         label: "Player Avail.",
         color: "rgb(63, 107, 185)",
-        stack: "Stack 0",
       },
       gmAvail: {
         label: "GM Avail.",
         color: "rgb(63, 185, 80)",
-        stack: "Stack 0",
       },
       playerRec: {
         label: "Player Record",
         color: "rgb(34, 58, 100)",
-        stack: "Stack 1",
       },
       gmRec: {
         label: "GM Record",
         color: "rgb(34, 100, 43)",
-        stack: "Stack 1",
       },
     };
 
@@ -690,13 +924,12 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     return Object.entries(configs)
       .map(([key, cfg]) => ({
         label: cfg.label,
-        data: series[key],
+        data: foundry.utils.duplicate(series[key]),
         backgroundColor: cfg.color,
         borderColor: cfg.color,
         borderWidth: 2,
         fill: false,
         pointRadius: isLine ? 3 : 0,
-        stack: isLine ? undefined : cfg.stack,
         hidden: !this.#filterStates.comparison[key],
       }))
       .filter((d) => !d.hidden);
@@ -790,13 +1023,107 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     );
   }
 
+  #lastMouseIndex = null;
+
+  /**
+   * Updates the visual selection box on the chart.
+   * @param {number} current - The current index under the cursor.
+   * @private
+   */
+  #updateSelectionBox(current) {
+    if (!this.chart) return;
+
+    if (current === this.#lastMouseIndex) return;
+    this.#lastMouseIndex = current;
+
+    const xMin = Math.min(this.#dragStartX, current);
+    const xMax = Math.max(this.#dragStartX, current);
+
+    const annotation = this.chart.options.plugins.annotation.annotations.box1;
+
+    annotation.xMin = xMin - 0.5;
+    annotation.xMax = xMax + 0.5;
+    annotation.display = true;
+
+    this.chart.update("none");
+  }
+
+  /**
+   * @param {MouseEvent} event
+   * @param {Chart} chart
+   */
+  #onMouseDownChart(event, chart) {
+    if (!event.native.shiftKey) return;
+    const elements = chart.getElementsAtEventForMode(
+      event,
+      "index",
+      { intersect: false },
+      false,
+    );
+    if (!elements.length) return;
+
+    this.#dragStartX = elements[0].index;
+    this.#isDragging = true;
+  }
+
+  /**
+   * @param {MouseEvent} event
+   * @param {Chart} chart
+   */
+  #onMouseMoveChart(event, chart) {
+    if (!this.#isDragging) return;
+
+    const elements = chart.getElementsAtEventForMode(
+      event,
+      "index",
+      { intersect: false },
+      false,
+    );
+    if (elements.length) {
+      this.#updateSelectionBox(elements[0].index);
+    }
+  }
+
+  /**
+   * @param {MouseEvent} event
+   * @param {Chart} chart
+   */
+  #onMouseUpChart(event, chart) {
+    if (!this.#isDragging) return;
+    const annotation = chart.options.plugins.annotation.annotations.box1;
+
+    this._filterAvailablePlayers(
+      Math.ceil(annotation.xMin),
+      Math.floor(annotation.xMax),
+    );
+
+    this.#isDragging = false;
+    this.#dragStartX = null;
+    this.#lastMouseIndex = null;
+  }
+
+  #onClickChart(event, chart) {
+    if (event.native.shiftKey) return;
+    const elements = chart.getElementsAtEventForMode(
+      event,
+      "index",
+      { intersect: false },
+      false,
+    );
+
+    this._clearSelection();
+    return this._handleDrillDown(elements);
+  }
+
   /**
    * @type {ApplicationClickAction}
    * @this AvailabilityViewer
    */
-  static #onToggleGraphType(_event) {
+  static async #onToggleGraphType(_event) {
     const { BAR, LINE } = AvailabilityViewer.GRAPH_TYPES;
     this.#filterStates.type = this.#filterStates.type === BAR ? LINE : BAR;
+    await this._clearDrillDown();
+    this._clearSelection();
     this.render();
   }
 
@@ -804,9 +1131,11 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this AvailabilityViewer
    */
-  static #onToggleGranularity(_event) {
+  static async #onToggleGranularity(_event) {
     const { DAILY, HOURLY } = AvailabilityViewer.GRANULARITY;
     this.#filterStates.granularity = this.isDaily ? HOURLY : DAILY;
+    await this._clearDrillDown();
+    this._clearSelection();
     this.render();
   }
 
@@ -814,8 +1143,10 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
    * @type {ApplicationClickAction}
    * @this AvailabilityViewer
    */
-  static #onToggleUsersPool() {
+  static async #onToggleUsersPool() {
     this.#filterStates.onlyActive = !this.#filterStates.onlyActive;
+    await this._clearDrillDown();
+    this._clearSelection();
     this.render();
   }
 
@@ -839,7 +1170,7 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
 
   /**
    * @type {ApplicationClickAction}
-   * @this AvailabilityTracker
+   * @this AvailabilityViewer
    */
   static #onOpenLoginTracker() {
     const app = ui["tcr-main-module.LoginTracker"];
@@ -849,9 +1180,39 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
 
   /**
    * @type {ApplicationClickAction}
-   * @this AvailabilityTracker
+   * @this AvailabilityViewer
    */
   static #onToggleSidebar() {
     this.element.querySelector(".sidebar-part")?.classList.remove("active");
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this AvailabilityViewer
+   */
+  static #onShowTimezoneUsers(_event, target) {
+    const label = target.dataset.label;
+    const distribution = this._getTimeZoneDistribution();
+    const entry = distribution.find((d) => d.label === label);
+    if (!entry) return;
+
+    this.#drillDownIndex = { type: "timezone", value: label };
+
+    this.#drillDownData = {
+      title: label,
+      users: entry.users.map((u) => {
+        const flag = Number(u.getFlag(MODULE_ID, USER_FLAGS.TIME_ZONE));
+        return {
+          name: u.name,
+          color: u.color,
+          role: u.isGM ? "GM" : "Player",
+          timeZone: !Number.isNaN(flag) ? flag.signedString() : null,
+        };
+      }),
+    };
+
+    this.render({ parts: ["sidebar"] }).then(() => {
+      this.element.querySelector(".sidebar-part")?.classList.add("active");
+    });
   }
 }

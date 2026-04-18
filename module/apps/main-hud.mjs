@@ -69,9 +69,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   static get TABS() {
     const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
       const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
-      const isGM = game.user.isGM;
       const includeUser = (tab.userVisibility?? []).includes(game.user.id);
-      return isGM || includeUser || Object.values(tab.visibility)[rankIdx];
+      return includeUser || Object.values(tab.visibility)[rankIdx];
     });
 
     /**@type {ApplicationTabsConfiguration} */
@@ -97,9 +96,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   static get PARTS() {
     const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
       const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
-      const isGM = game.user.isGM;
       const includeUser = (tab.userVisibility?? []).includes(game.user.id);  
-      return isGM || includeUser || Object.values(tab.visibility)[rankIdx];
+      return includeUser || Object.values(tab.visibility)[rankIdx];
     });
 
     return tabsSetting.reduce((acc, tab) => {

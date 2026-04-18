@@ -24,7 +24,7 @@
     "requires": [],
     "recommends": []
   },
-  "scripts": ["lib/chart.umd.min.js"],
+  "scripts": ["lib/chart.umd.min.js", "lib/chartjs-plugin-annotation.min.js"],
   "esmodules": ["main.mjs"],
   "styles": ["styles/main.css"],
   "flags": {

@@ -14,7 +14,11 @@
             </a>
         </div>
         <div class="time-zone-container">
-            <select name="flags.tcr-main-module.timeZone" class="time-zone-select">
+            <select
+                name="flags.tcr-main-module.timeZone"
+                data-dtype="Number"
+                class="time-zone-select"
+            >
                 {{selectOptions timeZonesOptions selected=timeZone}}
             </select>
         </div>

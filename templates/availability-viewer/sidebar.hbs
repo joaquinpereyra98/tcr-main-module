@@ -3,7 +3,12 @@
         <div class="anchor-container">
             <a class="anchor-icon fa-solid fa-chevron-right" data-action="toggleSidebar"></a>
         </div>
-        <h3>{{drillDown.title}}</h3>
+        <div class="flexcol">   
+            <h3 class="title">{{drillDown.title}}</h3>
+            {{#if drillDown.subtitle}}
+            <h4 class="subtitle">{{drillDown.subtitle}}</h4>
+            {{/if}}
+        </div>
     </div>
 
     <ul class="user-list unlist">
