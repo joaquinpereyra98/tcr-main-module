@@ -15,7 +15,8 @@
         {{#each drillDown.users}}
         <li class="user-entry" style="--user-color: {{color}}">
             <div class="user-info">
-                <div class="name">{{name}}
+                <div class="name-container" data-tooltip="{{name}} {{#if timeZone}}[UTC{{timeZone}}]{{/if}}">
+                    <span class="name">{{name}}</span>
                     {{#if timeZone}}
                     <span class="muted">[UTC{{timeZone}}]</span>
                     {{/if}}

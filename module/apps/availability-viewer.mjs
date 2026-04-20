@@ -169,7 +169,7 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
 
   /**
    * Tracks what the sidebar is currently showing so it can be refreshed.
-   * @type {{type: "chart"|"timezone", value: any}|null}
+   * @type {{type: "chart"|"timezone"|"selection", value: any}|null}
    */
   #drillDownIndex = null;
 
@@ -368,10 +368,14 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
     this.element
       .querySelectorAll('.comparison-grid input[type="checkbox"]')
       .forEach((checkbox) => {
-        checkbox.addEventListener("change", (event) => {
+        checkbox.addEventListener("change", async (event) => {
           const type = event.target.dataset.type;
           this.#filterStates.comparison[type] = event.target.checked;
-          this.render();
+          if (this.#drillDownIndex?.type === "selection") {
+            const { startIndex, endIndex } = this.#drillDownIndex.value;
+            this._getChartData();
+            await this._filterAvailablePlayers(startIndex, endIndex);
+          } else this.render();
         });
       });
 
@@ -673,6 +677,11 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       value: { startIndex, endIndex },
     };
 
+    availableUsers.sort((a, b) => {
+      if (a.isGM === b.isGM) return a.name.localeCompare(b.name);
+      return a.isGM ? -1 : 1;
+    });
+
     this.#drillDownData = {
       title: "Range Selection",
       subtitle:
@@ -779,9 +788,15 @@ export default class AvailabilityViewer extends HandlebarsApplicationMixin(
       }
     }
 
+    const usersArray = Array.from(userResultsMap.values());
+    usersArray.sort((a, b) => {
+      if (a.isGM === b.isGM) return a.name.localeCompare(b.name);
+      return a.isGM ? -1 : 1;
+    });
+
     return {
       title: label,
-      users: Array.from(userResultsMap.values()),
+      users: usersArray,
     };
   }
 

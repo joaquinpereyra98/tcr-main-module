@@ -62,7 +62,8 @@ export default class TabData extends foundry.abstract.DataModel {
           ]),
         ),
       }),
-      userVisibility: new f.ArrayField(new f.StringField())
+      gmVisibility: new f.BooleanField({ label: "Gamemasters", initial: true }),
+      userVisibility: new f.ArrayField(new f.StringField()),
     };
   }
 

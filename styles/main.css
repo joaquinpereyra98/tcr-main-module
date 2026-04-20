@@ -258,7 +258,9 @@
       }
 
       .user-visibility-container {
-        margin: 10px 5px 0 5px;
+        multi-select {
+          margin: 10px 5px 0 5px;
+        }
       }
     }
 
@@ -2168,12 +2170,13 @@
             flex: 0 0 10px
           }
 
-          .title, .subtitle {
+          .title,
+          .subtitle {
             font-family: var(--font-primary);
             margin: 0;
             border: 0
           }
-          
+
           .title {
             color: var(--color-text-main);
           }
@@ -2190,14 +2193,16 @@
           padding: 0;
 
           .user-entry {
-            --user-color: var(var(--color-action));
+            --user-color: var(--color-action);
             display: flex;
             align-items: center;
             padding: 8px;
             margin: 4px 0;
             background: rgba(0, 0, 0, 0.2);
-            gap: 5px;
+            gap: 10px;
             border-left: 4px solid var(--user-color);
+            width: 100%;
+            box-sizing: border-box;
 
             .user-info {
               flex: 1;
@@ -2205,12 +2210,27 @@
               flex-direction: column;
               color: var(--color-text-main);
               align-items: flex-start;
+              min-width: 0;
             }
 
-            .name {
-              text-wrap: nowrap;
+            .name-container {
+              display: flex;
+              width: 100%;
+              align-items: baseline;
+              gap: 4px;
+
+              .name {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                flex: 0 1 auto;
+              }
+
               .muted {
                 color: var(--color-text-muted);
+                font-size: 0.85em;
+                flex-shrink: 0;
+                white-space: nowrap;
               }
             }
           }
@@ -2221,11 +2241,14 @@
             background: rgba(255, 255, 255, 0.1);
             padding: 1px 4px;
             border-radius: 3px;
+            flex-shrink: 0;
+            white-space: nowrap;
           }
 
           .status-tags {
             display: flex;
             gap: 5px;
+            flex-shrink: 0;
 
             i {
               font-size: 0.9rem;
@@ -2506,11 +2529,13 @@ searchable-multi-checkbox {
     border-color: #053d95;
     text-align: center;
   }
+
   ul.hours-list {
     margin: 0;
     padding: 0;
     list-style: none;
     text-align: center;
+
     li {
       margin-top: 2px;
       margin-bottom: 2px;

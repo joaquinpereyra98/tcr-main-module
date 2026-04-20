@@ -32,6 +32,10 @@
                     {{/each}}
                     <div class="bottom-border"></div>
                     <div class="user-visibility-container">
+                        {{formGroup tab.schema.fields.gmVisibility name=(concat id ".gmVisibility") value=tab.gmVisibility}}
+                    </div>
+                    <div class="bottom-border"></div>
+                    <div class="user-visibility-container">
                         <multi-select name="{{tab.id}}.userVisibility">
                             {{selectOptions @root.userChoices selected=tab.userVisibility}}
                         </multi-select>
