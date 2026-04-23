@@ -71,7 +71,9 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
       const includeGMs = (tab.gmVisibility ?? true) && game.user.isGM;
       const includeUser = (tab.userVisibility ?? []).includes(game.user.id);
-      return includeUser || includeGMs || Object.values(tab.visibility)[rankIdx];
+      return (
+        includeUser || includeGMs || Object.values(tab.visibility)[rankIdx]
+      );
     });
 
     /**@type {ApplicationTabsConfiguration} */
@@ -99,7 +101,9 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
       const includeGMs = (tab.gmVisibility ?? true) && game.user.isGM;
       const includeUser = (tab.userVisibility ?? []).includes(game.user.id);
-      return includeUser || includeGMs || Object.values(tab.visibility)[rankIdx];
+      return (
+        includeUser || includeGMs || Object.values(tab.visibility)[rankIdx]
+      );
     });
 
     return tabsSetting.reduce((acc, tab) => {
@@ -233,10 +237,23 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
 
   /**@inheritdoc */
   _configureRenderOptions(options) {
-    const tabId = this.tabGroups.primary ?? MainHud.TABS.primary.initial;
-    options.background = MainHud.TABS.primary.tabs.find(
-      (t) => t.id === tabId,
-    ).background;
+    const tabs = MainHud.TABS.primary;
+    let tabId = this.tabGroups.primary ?? tabs.initial;
+
+    const activeTabExists = tabs.tabs.some((t) => t.id === tabId);
+
+    if (!activeTabExists) {
+      tabId = tabs.initial;
+      this.tabGroups.primary = tabId;
+    }
+
+    const activeTab = tabs.tabs.find((t) => t.id === tabId);
+
+    options.background = activeTab?.background ?? {
+      color: "#121416",
+      src: undefined,
+    };
+
     super._configureRenderOptions(options);
   }
 
@@ -285,11 +302,16 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   /** @inheritdoc */
   _onRender(context, options) {
     super._onRender(context, options);
-    const tabs = this.element.querySelectorAll('.tab[data-group="primary"]');
+    const tabs = Array.from(
+      this.element.querySelectorAll('.tab[data-group="primary"]'),
+    ).filter((t) => options.parts.includes(t.dataset.tab));
+    
     let tabContainer = this.element.querySelector(".tab-container");
     if (!tabContainer) {
       tabContainer = document.createElement("div");
       tabContainer.classList.add("tab-container");
+    } else {
+      tabContainer.innerHTML = "";
     }
     tabContainer.classList.toggle("show-grid", this._showGrid);
 
@@ -307,6 +329,8 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
 
     if (options.force) this.bringToFront();
   }
+
+  _checkParts() {}
 
   /* -------------------------------------------- */
   /*  Context                                     */
