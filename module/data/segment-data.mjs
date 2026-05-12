@@ -25,19 +25,16 @@ export default class SegmentData extends foundry.abstract.DataModel {
 
       display: new f.SchemaField({
         textColor: new f.ColorField({
-          placeholder: "#ffffff",
           label: "Text Color",
         }),
         textSize: new f.StringField({
-          placeholder: "1.2em",
           label: "Text Size",
         }),
-        border: new f.NumberField({
-          placeholder: 0,
-          min: 0,
+        zIndex: new f.NumberField({
           integer: true,
-          label: "Border Width"
-        }),
+          label: "Z-Index",
+          initial: 0,
+        })
       }),
 
       geometry: new f.SchemaField({
@@ -142,7 +139,7 @@ export default class SegmentData extends foundry.abstract.DataModel {
     // --- Visual Display ---
     if (display.textColor) styles.push(`color: ${display.textColor}`);
     if (display.textSize) styles.push(`--font-size: ${display.textSize}`);
-    if(display.border) styles.push(`--border-width: ${display.textSize}px`);
+    if(display.zIndex) styles.push(`--zIndex: ${display.zIndex}`)
 
     // --- Content Background ---
     if (content.src) {
