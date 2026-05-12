@@ -1,3 +1,109 @@
+.theme-light .tcr-main-module {
+  --color-text-selection: #f7f3e8;
+  --color-text-selection-bg: #584a75;
+
+  &.application {
+    --header-height: 36px;
+    --minimized-width: 200px;
+    --background: var(--color-cool-5-90);
+
+    --color-text-primary: var(--color-light-2);
+    --color-header-background: rgb(0 0 0 / 50%);
+    --color-form-hint: var(--color-light-5);
+    --color-form-hint-hover: var(--color-light-4);
+    --color-form-label: var(--color-light-4);
+    --color-form-label-hover: var(--color-light-2);
+    --color-select-option-bg: transparent;
+
+    input,
+    select {
+      --input-background-color: var(--color-cool-4);
+      --input-border-color: transparent;
+      --input-text-color: var(--color-light-3);
+      --input-placeholder-color: var(--color-light-4);
+      --input-focus-outline-color: var(--color-cool-3);
+
+      &:focus {
+        --input-text-color: var(--color-light-1);
+      }
+
+      &:disabled {
+        --input-background-color: var(--color-cool-5);
+        --input-border-color: var(--color-cool-4);
+        --input-text-color: var(--color-light-4);
+      }
+    }
+
+    label.icon {
+      --input-background-color: var(--color-cool-4);
+      --input-border-color: transparent;
+      --input-text-color: var(--color-light-3);
+      --input-focus-outline-color: var(--color-cool-3);
+
+      &:focus-within {
+        --input-text-color: var(--color-light-1);
+      }
+
+      &:has(> input:disabled) {
+        --input-background-color: var(--color-cool-5);
+        --input-border-color: var(--color-cool-4);
+        --input-text-color: var(--color-light-4);
+      }
+    }
+
+    input[readonly] {
+      --input-background-color: var(--color-cool-5);
+      --input-border-color: var(--color-cool-4);
+      --input-text-color: var(--color-light-4);
+    }
+
+    input[type="checkbox"] {
+      --checkbox-checked-color: var(--color-warm-1);
+      --checkbox-disabled-color: var(--color-cool-4);
+      --checkbox-background-color: var(--color-cool-4);
+      --checkbox-checkmark-color: transparent;
+      --checkbox-font-weight: bold;
+    }
+
+    input[type=range] {
+      --range-track-color: var(--input-background-color);
+      --range-thumb-background-color: rgb(11 10 19 / 90%);
+      --range-thumb-border-color: var(--color-warm-1);
+    }
+
+    a.button,
+    button {
+      --button-background-color: var(--color-cool-5-50);
+      --button-border-color: var(--color-light-5);
+      --button-text-color: var(--color-light-3);
+      --button-focus-outline-color: var(--color-warm-2);
+      --button-hover-background-color: var(--color-warm-2);
+      --button-hover-border-color: var(--color-light-3);
+      --button-hover-text-color: var(--color-light-1);
+
+      &:disabled {
+        --button-background-color: var(--color-cool-5);
+        --button-border-color: transparent;
+        --button-text-color: var(--color-light-5);
+      }
+    }
+
+    a.button.bright,
+    button.bright {
+      --button-background-color: var(--color-warm-1);
+      --button-border-color: var(--color-cool-5);
+      --button-text-color: var(--color-cool-5);
+      --button-hover-background-color: #fda948;
+      --button-hover-border-color: var(--color-warm-3);
+      --button-hover-text-color: #000000;
+
+      &:disabled {
+        --button-background-color: var(--color-cool-4);
+      }
+    }
+  }
+}
+
 .tcr-main-module {
   --hud-black-01: rgba(0, 0, 0, 0.1);
   --hud-black-03: rgba(0, 0, 0, 0.3);
@@ -23,12 +129,6 @@
   --accent-gold: #c2a373;
   --text-main: #e0e0e0;
   --text-dim: #888;
-
-  &.application {
-    --color-text-primary: var(--dnd5e-color-blue-white);
-    --background: var(--color-cool-5-90);
-  }
-
 
   .flex1 {
     flex: 1;
@@ -202,9 +302,9 @@
       }
 
       input {
-        background-color: var(--hud-black-01);
         transition: all 300ms;
         font-size: var(--font-size-16);
+        border: 1px solid transparent;
 
         &:hover {
           background-color: var(--hud-black-05);
@@ -576,9 +676,9 @@
         display: flex;
         flex-direction: column;
         position: relative;
-        z-index: 1;
         overflow: hidden;
         border: var(--border-width, 0px) solid var(--wow-panel-border);
+        z-index: var(--zIndex);
         border-radius: 4px;
         box-shadow: 0 0 20px var(--hud-black-05), var(--wow-glow);
         transition: transform 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
@@ -633,6 +733,7 @@
       position: fixed;
       bottom: 0;
       right: 0;
+      z-index: 1;
 
       a.fixed-anchor {
         width: 1.5em;
