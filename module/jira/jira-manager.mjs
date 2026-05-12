@@ -310,7 +310,7 @@ export default class JiraIssueManager {
    */
   static _refreshApps() {
     for (const app of foundry.applications.instances.values()) {
-      if (app instanceof MainHud) app.render({ parts: ["bugTracker"] });
+      if (app instanceof MainHud) app.render();
     }
   }
 
