@@ -102,6 +102,12 @@
       }
     }
   }
+
+  prose-mirror {
+    --menu-background: var(--color-cool-4);
+    --color-form-label-hover: black;
+    --color-control-bg: transparent;
+  }
 }
 
 .tcr-main-module {
