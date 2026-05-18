@@ -2,6 +2,7 @@ import * as apps from "./module/apps/_module.mjs";
 import * as settings from "./module/settings/_module.mjs";
 import * as data from "./module/data/_module.mjs";
 import * as hooks from "./module/hooks/_module.mjs";
+import * as canvas from "./module/canvas/_module.mjs";
 
 import JiraIssueManager from "./module/jira/jira-manager.mjs";
 
@@ -40,6 +41,7 @@ Hooks.on("init", () => {
   settings.LoginTracker.registerSetting();
   settings.registerMetricsSetting();
   JiraIssueManager.registerTokenSetting();
+  canvas.CanvasDropManager.initialize();
 
   window.customElements.define(
     apps.elements.HTMLDocumentTagsElementV2.tagName,
@@ -50,6 +52,10 @@ Hooks.on("init", () => {
     apps.elements.HTMLSearchableMultiCheckboxElement.tagName,
     apps.elements.HTMLSearchableMultiCheckboxElement,
   );
+});
+
+Hooks.once("socketlib.ready", () => {
+  canvas.CanvasDropManager._registerSocketListeners();
 });
 
 Hooks.once("setup", () => {
@@ -141,3 +147,4 @@ Hooks.on("ready", () => {
 Hooks.on("renderItemSheet", hooks.onRenderItemSheet);
 Hooks.on("preUpdateUser", hooks.preUpdateUser);
 Hooks.on("updateUser", hooks.onUpdateUser);
+Hooks.on("dropCanvasData", hooks.onDropCanvasData);

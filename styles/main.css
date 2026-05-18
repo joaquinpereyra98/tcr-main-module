@@ -1196,6 +1196,10 @@
       .search-part {
         search {
           background-color: var(--dnd5e-color-blue-gray-2);
+          color: var(--dnd5e-color-blue-white);
+          input[type="text"] {
+          color: var(--dnd5e-color-blue-white); 
+          }
         }
       }
 

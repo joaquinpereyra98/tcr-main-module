@@ -79,6 +79,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       initial: {
         documentClass: "Item",
         operators: {},
+        additional: {
+          folderId: {},
+        },
       },
     },
     sources: {
@@ -401,13 +404,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const rankNames = getRankFolderNames();
     context.filters = this.currentFilters;
 
-    const dataModels = await this._getActiveDataModels(context, rankNames);
+    const dataModels = await this._getActiveDataModels(context);
 
     context.filterDefinitions = this._getMergedFilterDefinitions(dataModels);
 
     await this._prepareSpecialFilters(context, dataModels);
 
     this._prepareRankFilters(context, rankNames);
+    this._prepareFolderIdFilters(context);
 
     context.sources = this._getSourcesOptions();
 
@@ -418,11 +422,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * Retrieves the data models that are currently active based on document filters
    * or visibility within specific source packs.
    * @param {ApplicationRenderContext} context - The current application context.
-   * @param {string[]} rankNames - A list of folder names/ranks used to determine visibility
-   * for non-GM users.
    * @returns {Promise<Array<[string, foundry.abstract.TypeDataModel]>>}
    */
-  async _getActiveDataModels(context, rankNames) {
+  async _getActiveDataModels(context) {
     let dataModels = Object.entries(
       CONFIG[context.filters.documentClass].dataModels,
     );
@@ -432,7 +434,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       return dataModels.filter(([type]) => context.filters.types.has(type));
     }
 
-    const allRankNames = getAllRankFolderNames() ?? [];
     const availableTypeKeys = new Set();
 
     for (const sourceId of this.currentSources) {
@@ -732,6 +733,39 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     }
   }
 
+  _prepareFolderIdFilters(context) {
+    const configuredFilters = context.filters.additional?.folderId ?? {};
+    const folderChoices = {};
+
+    for (const folderId of Object.keys(configuredFilters)) {
+      if (foundry.data.validators.isValidId(folderId)) {
+        folderChoices[folderId] = folderId;
+      }
+    }
+
+    if (Object.keys(folderChoices).length > 0) {
+      context.filterDefinitions.set("folderId", {
+        type: "set",
+        label: "Specific Folder Filter",
+        config: {
+          keyPath: "folder",
+          choices: folderChoices,
+          multiple: true,
+        },
+        createFilter: (filters, value, def) => {
+          const targetIds = Array.isArray(value)
+            ? value
+            : Object.entries(value)
+                .filter(([_, mode]) => mode === 1)
+                .map(([id]) => id);
+          if (!targetIds.length) return;
+
+          filters.push({ k: "folder", o: "in", v: targetIds });
+        },
+      });
+    }
+  }
+
   /**
    * Generates a sorted list of available compendium sources based on user rank and folder content.
    * @returns {Object[]} An array of formatted and sorted source options.
@@ -741,11 +775,12 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const allowedNames = getRankFolderNames() ?? [];
     const allRankNames = getAllRankFolderNames() ?? [];
     const lockedSources = new Set(this.options.sources?.locked ?? []);
+    const currentDocumentName = this.currentFilters.documentClass ?? "Item";
 
     return Object.entries(SourcesConfig.SETTING)
       .reduce((acc, [id, { label }]) => {
         const pack = game.packs.get(id);
-        if (!pack) return acc;
+        if (!pack || pack.documentName !== currentDocumentName) return acc;
 
         // Logic Check:
         // 1. GM with a non-empty pack
@@ -847,10 +882,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         const pack = game.packs.get(sourceId);
         if (!pack) continue;
 
-        const restrictedFolderIds = CompendiumBrowser.getRestrictedFolderIds(pack);
+        const restrictedFolderIds =
+          CompendiumBrowser.getRestrictedFolderIds(pack);
         const index = await pack.getIndex();
         for (const entry of index) {
-          const isVisible = CompendiumBrowser.checkFolderAccess(entry, restrictedFolderIds);
+          const isVisible = CompendiumBrowser.checkFolderAccess(
+            entry,
+            restrictedFolderIds,
+          );
           if (isVisible) availableTypeKeys.add(entry.type);
         }
       }
@@ -1176,7 +1215,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (!card.draggable) return;
     try {
       const { type } = foundry.utils.parseUuid(uuid);
-      event.dataTransfer.setData("text/plain", JSON.stringify({ type, uuid }));
+      event.dataTransfer.setData("text/plain", JSON.stringify({ type, uuid, isFromCompendiumBrowser: true }));
     } catch (e) {
       console.error(e);
     }
@@ -1655,7 +1694,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @param {HTMLElement} html  HTML of the sidebar being rendered.
    */
   static injectSidebarButton(html) {
-    if (game.release.generation < 12) return;
     const button = document.createElement("button");
     button.type = "button";
     button.classList.add("open-compendium-browser");
