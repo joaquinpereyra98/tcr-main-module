@@ -80,7 +80,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         documentClass: "Item",
         operators: {},
         additional: {
-          folderId: {},
+          folderId: [],
         },
       },
     },
@@ -734,10 +734,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   }
 
   _prepareFolderIdFilters(context) {
-    const configuredFilters = context.filters.additional?.folderId ?? {};
+    const configuredFilters = context.filters.additional?.folderId ?? [];
     const folderChoices = {};
 
-    for (const folderId of Object.keys(configuredFilters)) {
+    for (const folderId of configuredFilters) {
       if (foundry.data.validators.isValidId(folderId)) {
         folderChoices[folderId] = folderId;
       }
@@ -753,14 +753,12 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           multiple: true,
         },
         createFilter: (filters, value, def) => {
-          const targetIds = Array.isArray(value)
-            ? value
-            : Object.entries(value)
-                .filter(([_, mode]) => mode === 1)
-                .map(([id]) => id);
-          if (!targetIds.length) return;
-
-          filters.push({ k: "folder", o: "in", v: targetIds });
+          if (!Array.isArray(value) || !value.length) return;
+          filters.push({
+            k: "folder",
+            o: "in",
+            v: value.filter((id) => foundry.data.validators.isValidId(id)),
+          });
         },
       });
     }
@@ -1215,7 +1213,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (!card.draggable) return;
     try {
       const { type } = foundry.utils.parseUuid(uuid);
-      event.dataTransfer.setData("text/plain", JSON.stringify({ type, uuid, isFromCompendiumBrowser: true }));
+      event.dataTransfer.setData(
+        "text/plain",
+        JSON.stringify({ type, uuid, isFromCompendiumBrowser: true }),
+      );
     } catch (e) {
       console.error(e);
     }
