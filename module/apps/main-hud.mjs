@@ -387,7 +387,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const segments = await Promise.all(
       tab.segments.map(async (model) => ({
         model,
-        style: model.styleAttr,
+        style: await model.styleAttr(),
         enrichedHTML: await model.getEnrichedContent(),
       })),
     );

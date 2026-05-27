@@ -703,9 +703,9 @@
           bottom: 0;
           background-image: var(--bg-image, none);
           opacity: var(--bg-opacity, 1);
-          background-size: cover;
-          background-repeat: no-repeat;
+          background-size: var(--bg-size, auto auto);
           background-position: center;
+          background-repeat: no-repeat;
           z-index: -1;
           transition: opacity 300ms ease;
         }

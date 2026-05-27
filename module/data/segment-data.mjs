@@ -34,7 +34,7 @@ export default class SegmentData extends foundry.abstract.DataModel {
           integer: true,
           label: "Z-Index",
           initial: 0,
-        })
+        }),
       }),
 
       geometry: new f.SchemaField({
@@ -53,6 +53,18 @@ export default class SegmentData extends foundry.abstract.DataModel {
           categories: ["IMAGE"],
           label: "Background Image",
           blank: true,
+        }),
+
+        backgroundSize: new f.StringField({
+          required: true,
+          choices: Object.fromEntries(
+            Object.entries(this.backgroundSizeOptions).map(([k, { label }]) => [
+              k,
+              label,
+            ]),
+          ),
+          label: "Background Scaling Mode",
+          initial: "heightFill",
         }),
 
         opacity: new f.NumberField({
@@ -100,6 +112,29 @@ export default class SegmentData extends foundry.abstract.DataModel {
     };
   }
 
+  static backgroundSizeOptions = {
+    heightFill: {
+      bgSize: "auto 100%",
+      label: "Height Fill (Keep Ratio)",
+    },
+    widthFill: {
+      bgSize: "100% auto",
+      label: "Length Fill (Keep Ratio)",
+    },
+    stretchHeight: {
+      bgSize: "HEIGHTpx 100%",
+      label: "Stretch Height Fill (Warped)",
+    },
+    stretchWidth: {
+      bgSize: "100% WIDTHpx",
+      label: "Stretch Width Fill (Warped)",
+    },
+    cornerToCorner: {
+      bgSize: "100% 100%",
+      label: "Corner to Corner (Stretch)",
+    },
+  };
+
   /**
    * Internal reference to the configuration application.
    * @type {SegmentConfig|null}
@@ -119,9 +154,9 @@ export default class SegmentData extends foundry.abstract.DataModel {
   /**
    * Generates an inline CSS style string based on geometry and display data.
    * Used for the element's 'style' attribute in the DOM.
-   * @type {string}
+   * @return {string}
    */
-  get styleAttr() {
+  async styleAttr() {
     const styles = [];
     const { display, geometry, content } = this;
 
@@ -139,7 +174,7 @@ export default class SegmentData extends foundry.abstract.DataModel {
     // --- Visual Display ---
     if (display.textColor) styles.push(`color: ${display.textColor}`);
     if (display.textSize) styles.push(`--font-size: ${display.textSize}`);
-    if(display.zIndex) styles.push(`--zIndex: ${display.zIndex}`)
+    if (display.zIndex) styles.push(`--zIndex: ${display.zIndex}`);
 
     // --- Content Background ---
     if (content.src) {
@@ -152,12 +187,43 @@ export default class SegmentData extends foundry.abstract.DataModel {
 
       const opacityValue = content.opacity !== undefined ? content.opacity : 1;
       styles.push(`--bg-opacity: ${opacityValue}`);
+
+      const selectedSizeKey = content.backgroundSize || "heightFill";
+      let bgSize =
+        SegmentData.backgroundSizeOptions[selectedSizeKey]?.bgSize;
+      if(["stretchHeight", "stretchWidth"].includes(selectedSizeKey)) {
+        const { width, height } = await this.#getImgDimension(imagePath);
+        bgSize = bgSize.replace("WIDTH", width).replace("HEIGHT", height);
+      }
+      styles.push(`--bg-size: ${bgSize}`);
     }
+
 
     const rgba = content.color.toRGBA(content.colorOpacity);
     styles.push(`--bg-color: ${rgba}`);
 
     return styles.join("; ");
+  }
+
+  /**
+   *
+   * @param {string} path
+   * @returns {Promise<{width: number, height: number}>}
+   */
+  #getImgDimension(path) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = path;
+
+      img.onload = () => {
+        const { naturalWidth, naturalHeight } = img;
+        resolve({ width: naturalWidth, height: naturalHeight });
+      };
+
+      img.onerror = (error) => {
+        reject(new Error(`Failed to load image at clone path: ${path}`));
+      };
+    });
   }
 
   /**
@@ -179,7 +245,6 @@ export default class SegmentData extends foundry.abstract.DataModel {
     if (isContext && !game.user.isGM) return;
 
     try {
-      
       const uuid = isContext ? this.docContextMenu : this.docClick;
       if (uuid) {
         const doc = await fromUuid(uuid);
