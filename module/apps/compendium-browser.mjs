@@ -1,4 +1,4 @@
-import { ITEM_FLAGS, MODULE_ID } from "../constants.mjs";
+import { ITEM_FLAGS, MODULE_ID, SETTINGS } from "../constants.mjs";
 import SourcesConfig from "../settings/sources-config.mjs";
 import {
   formatIdentifier,
@@ -92,6 +92,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       min: null,
       max: null,
     },
+    gridSize: 100,
   };
 
   /* -------------------------------------------- */
@@ -312,7 +313,16 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   static #identifierMap = new Map();
 
-  #gridSize = 100;
+  get _gridSize() {
+    const gridSize = this.options.gridSize ?? 100;
+    const setting = game.settings.get(MODULE_ID, SETTINGS.OVERRIDE_GRID_SIZE);
+    const flag = game.user.getFlag(MODULE_ID, "compendiumBrowserGridSize");
+    return setting && Number.isNumeric(flag) ? flag : gridSize;
+  }
+
+  set _gridSize(val) {
+    this.options.gridSize = val;
+  }
 
   /* -------------------------------------------- */
   /*  Rendering                                   */
@@ -388,9 +398,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     );
     sliderSize.addEventListener("change", (event) => {
       const windowsContent = event.target.closest(".window-content");
-      const val = event.target.value;
-      this.#gridSize = val;
+      const val = Number(event.target.value ?? 0);
+      this._gridSize = val;
       windowsContent.style.setProperty("--grid-size", `${val + 80}px`);
+      game.user.setFlag(MODULE_ID, "compendiumBrowserGridSize", val);
     });
   }
 
@@ -849,7 +860,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   async _prepareHeaderContext(partId, context, options) {
     context.headerCollapsed = this._headerCollapsed;
-    context.gridSize = this.#gridSize;
+    console.log(this._gridSize);
+    context.gridSize = this._gridSize;
 
     const lockedFilters = this.options.filters.locked;
     const lockedSources = this.options.sources?.locked ?? [];

@@ -40,6 +40,8 @@ Hooks.on("init", () => {
   settings.SourcesConfig.registerSetting();
   settings.LoginTracker.registerSetting();
   settings.registerMetricsSetting();
+  settings.registerGridSizeSetting();
+
   JiraIssueManager.registerTokenSetting();
   canvas.CanvasDropManager.initialize();
 

@@ -20,6 +20,7 @@ export const SETTINGS = {
   METRICS_TIME_UNIT: "metricsTimeUnit",
   INACTIVE_THRESHOLD: "inactiveThreshold",
   TOKEN_API: "tokenApi",
+  OVERRIDE_GRID_SIZE: "overrideGridSize",
 };
 export const ISSUE_TYPES = {
   bug: {
