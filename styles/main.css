@@ -15,13 +15,6 @@
     --color-form-label-hover: var(--color-light-2);
     --color-select-option-bg: transparent;
 
-    .window-resize-handle {
-      inset: auto 0 0 auto;
-      z-index: 1;
-      width: 13px;
-      height: 13px;
-    }
-
     input,
     select {
       --input-background-color: var(--color-cool-4);
@@ -265,6 +258,13 @@
       opacity: 0;
       transition: opacity 0.8s ease-in-out;
     }
+  }
+
+  &.application .window-resize-handle {
+    inset: auto 0 0 auto;
+    z-index: 1;
+    width: 13px;
+    height: 13px;
   }
 
   &.hud-config {
