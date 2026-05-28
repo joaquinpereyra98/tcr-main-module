@@ -743,7 +743,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const activeTabId = this.tabGroups.primary;
 
     if (activeTabId) {
-      this.render({ parts: [activeTabId] });
+      this.render();
     }
   }
 
