@@ -121,13 +121,9 @@ export default class SegmentData extends foundry.abstract.DataModel {
       bgSize: "100% auto",
       label: "Length Fill (Keep Ratio)",
     },
-    stretchHeight: {
-      bgSize: "HEIGHTpx 100%",
-      label: "Stretch Height Fill (Warped)",
-    },
-    stretchWidth: {
-      bgSize: "100% WIDTHpx",
-      label: "Stretch Width Fill (Warped)",
+    coverSpace: {
+      bgSize: "cover",
+      label: "Cover (Keep Ratio)",
     },
     cornerToCorner: {
       bgSize: "100% 100%",
@@ -189,41 +185,14 @@ export default class SegmentData extends foundry.abstract.DataModel {
       styles.push(`--bg-opacity: ${opacityValue}`);
 
       const selectedSizeKey = content.backgroundSize || "heightFill";
-      let bgSize =
-        SegmentData.backgroundSizeOptions[selectedSizeKey]?.bgSize;
-      if(["stretchHeight", "stretchWidth"].includes(selectedSizeKey)) {
-        const { width, height } = await this.#getImgDimension(imagePath);
-        bgSize = bgSize.replace("WIDTH", width).replace("HEIGHT", height);
-      }
+      const bgSize = SegmentData.backgroundSizeOptions[selectedSizeKey]?.bgSize;
       styles.push(`--bg-size: ${bgSize}`);
     }
-
 
     const rgba = content.color.toRGBA(content.colorOpacity);
     styles.push(`--bg-color: ${rgba}`);
 
     return styles.join("; ");
-  }
-
-  /**
-   *
-   * @param {string} path
-   * @returns {Promise<{width: number, height: number}>}
-   */
-  #getImgDimension(path) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = path;
-
-      img.onload = () => {
-        const { naturalWidth, naturalHeight } = img;
-        resolve({ width: naturalWidth, height: naturalHeight });
-      };
-
-      img.onerror = (error) => {
-        reject(new Error(`Failed to load image at clone path: ${path}`));
-      };
-    });
   }
 
   /**

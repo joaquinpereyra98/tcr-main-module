@@ -67,6 +67,20 @@ export default class TabData extends foundry.abstract.DataModel {
     };
   }
 
+  _initializeSource(data, options = {}) {
+    super._initializeSource(data, options);
+
+    const legacySizes = new Set(["stretchHeight", "stretchWidth"]);
+
+    data.segments.forEach(({ content }) => {
+      if (legacySizes.has(content.backgroundSize)) {
+        content.backgroundSize = "coverSpace";
+      }
+    });
+
+    return data;
+  }
+
   /**
    * Generates a CSS style string for grid configuration based on tab data.
    * @type {string}
