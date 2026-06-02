@@ -314,15 +314,17 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   static #identifierMap = new Map();
 
   get _gridSize() {
-    const gridSize = this.options.gridSize ?? 100;
+    const gridSize = this.#gridSize ?? this.options.gridSize ?? 100;
     const setting = game.settings.get(MODULE_ID, SETTINGS.OVERRIDE_GRID_SIZE);
     const flag = game.user.getFlag(MODULE_ID, "compendiumBrowserGridSize");
     return setting && Number.isNumeric(flag) ? flag : gridSize;
   }
 
   set _gridSize(val) {
-    this.options.gridSize = val;
+    this.#gridSize = val;
   }
+
+  #gridSize;
 
   /* -------------------------------------------- */
   /*  Rendering                                   */
@@ -860,7 +862,6 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    */
   async _prepareHeaderContext(partId, context, options) {
     context.headerCollapsed = this._headerCollapsed;
-    console.log(this._gridSize);
     context.gridSize = this._gridSize;
 
     const lockedFilters = this.options.filters.locked;
