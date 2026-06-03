@@ -13,7 +13,7 @@ import {
  * @returns {boolean|void}
  */
 export default function onUpdateUser(_user, changed, _options, _userId) {
-  const moduleFlag = foundry.utils.getProperty(changed, `flags.${MODULE_ID}`);
+  const moduleFlag = foundry.utils.getProperty(changed, `flags.${MODULE_ID}`) ?? {};
   const flags = Object.keys(moduleFlag);
 
   if (flags.some((k) => Object.values(USER_FLAGS).includes(k))) {

@@ -68,7 +68,9 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
   /**@override */
   static get TABS() {
     const tabsSetting = Object.values(MainHud.SETTING).filter((tab) => {
-      const rankIdx = (game.membership?.membershipLevel ?? -1) + 1;
+      const rankIdx = game.membership.ready
+        ? (game.membership.membershipLevel ?? -1) + 1
+        : 0;
       const includeGMs = (tab.gmVisibility ?? true) && game.user.isGM;
       const includeUser = (tab.userVisibility ?? []).includes(game.user.id);
       return (
@@ -305,7 +307,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
     const tabs = Array.from(
       this.element.querySelectorAll('.tab[data-group="primary"]'),
     ).filter((t) => options.parts.includes(t.dataset.tab));
-    
+
     let tabContainer = this.element.querySelector(".tab-container");
     if (!tabContainer) {
       tabContainer = document.createElement("div");
