@@ -23,9 +23,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @mixes HandlebarsApplicationMixin
  * @template {CompendiumBrowserConfiguration}
  */
-export default class CompendiumBrowser extends HandlebarsApplicationMixin(
-  ApplicationV2,
-) {
+export default class CompendiumBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(...args) {
     super(...args);
     this.#filters = this.options.filters?.initial ?? {};
@@ -330,6 +328,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
   #gridSize;
 
+  #contentScroll = {};
+
   /* -------------------------------------------- */
   /*  Rendering                                   */
   /* -------------------------------------------- */
@@ -375,6 +375,13 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     }
 
     super._preSyncPartState(partId, newElement, priorElement, state);
+  }
+
+  _replaceHTML(result, content, options) {
+    const { scrollTop, scrollLeft } = content;
+    Object.assign(this.#contentScroll, { scrollTop, scrollLeft });
+    
+    super._replaceHTML(result, content, options);
   }
 
   _onFirstRender(context, options) {
@@ -511,12 +518,18 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const wantsSpell =
       types?.has("spell") ||
       (hasNoFilters && dataModels.some(([t]) => t === "spell"));
+    const wantsFeats =
+      types?.has("feat") ||
+      (hasNoFilters && dataModels.some(([t]) => t === "feat"));
 
-    if (!wantsSubclass && !wantsSpell) return;
+    if (!wantsSubclass && !wantsSpell && !wantsFeats) return;
 
     const classIdentifiers = new Set();
     const classUuids = new Set();
+    const featDocUuids = new Set();
+
     const spellFlagPath = `flags.${MODULE_ID}.${ITEM_FLAGS.SPELL_CLASSES}`;
+    const featFlagPath = `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`;
 
     // Single pass over sources
     for (const sourceId of this.currentSources) {
@@ -527,6 +540,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       const fields = [];
       if (wantsSubclass) fields.push("system.classIdentifier");
       if (wantsSpell) fields.push(spellFlagPath);
+      if (wantsFeats) fields.push(featFlagPath);
 
       const index = await pack.getIndex({ fields });
 
@@ -545,6 +559,13 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           const spellClasses = foundry.utils.getProperty(entry, spellFlagPath);
           if (Array.isArray(spellClasses)) {
             spellClasses.forEach((uuid) => classUuids.add(uuid));
+          }
+        }
+
+        if (wantsFeats && entry.type === "feat") {
+          const linkedDocs = foundry.utils.getProperty(entry, featFlagPath);
+          if (Array.isArray(linkedDocs)) {
+            linkedDocs.forEach((uuid) => featDocUuids.add(uuid));
           }
         }
       }
@@ -607,6 +628,19 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         },
       });
     }
+    if (featDocUuids.size > 0) {
+      const choices = await this.#prepareLinkedDocChoices(featDocUuids);
+
+      context.filterDefinitions.set(ITEM_FLAGS.LINKED_DOCS, {
+        type: "set",
+        label: "Linked Documents",
+        config: {
+          keyPath: "_linkedDocUuid",
+          choices,
+          multiple: true,
+        },
+      });
+    }
   }
 
   /**
@@ -663,6 +697,32 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       );
     }
     return results;
+  }
+
+  /**
+   * Prepares choices for feat linked documents.
+   * @param {Set<string>} docUuids
+   * @returns {Promise<Record<string, {label: string}>>}
+   */
+  async #prepareLinkedDocChoices(docUuids) {
+    const choices = {};
+
+    for (const uuid of docUuids) {
+      const doc = fromUuidSync(uuid);
+      if (!doc) continue;
+
+      const id = doc._id;
+
+      choices[id] = {
+        label: doc.name || id,
+      };
+    }
+
+    return Object.fromEntries(
+      Object.entries(choices).sort(([, a], [, b]) =>
+        a.label.localeCompare(b.label, game.i18n.lang),
+      ),
+    );
   }
 
   /**
@@ -973,11 +1033,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           "rankFilter",
           "spellClasses_base",
           "spellClasses_sub",
+          ITEM_FLAGS.LINKED_DOCS,
         ];
 
         for (const key of specialKeys) {
           if (context.filterDefinitions.has(key)) {
             if (key.includes("spell") && !activeTypes.has("spell")) continue;
+            if (key === ITEM_FLAGS.LINKED_DOCS && !activeTypes.has("feat"))
+              continue;
             filteredDefinitions.set(key, context.filterDefinitions.get(key));
           }
         }
@@ -1131,6 +1194,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       .querySelector('[data-application-part="results"] .item-list')
       .replaceChildren(...(await Promise.all(rendered)));
     this.#resultIndex = batchEnd;
+
+    const content = this.element.querySelector(".window-content")
+    Object.assign(content, this.#contentScroll );
   }
 
   /* -------------------------------------------- */
@@ -1591,6 +1657,18 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             );
             const levelFilter = filters.find((f) => f.k === "system.level");
             if (levelFilter) levelFilter.v.map((s) => parseInt(s));
+          }
+
+          if (i.type === "feat") {
+            const uuids =
+              foundry.utils.getProperty(
+                i,
+                `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`,
+              ) || [];
+
+            i._linkedDocUuid = uuids.map(
+              (uuid) => foundry.utils.parseUuid(uuid)?.id,
+            );
           }
 
           const matchesFilters =

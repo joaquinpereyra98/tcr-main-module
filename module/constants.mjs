@@ -11,7 +11,8 @@ export const USER_FLAGS = {
   TIME_MODE: "timeMode",
 };
 export const ITEM_FLAGS = {
-  SPELL_CLASSES: "spellClasses"
+  SPELL_CLASSES: "spellClasses",
+  LINKED_DOCS: "linkedDocuments"
 }
 export const SETTINGS = {
   TAB_CONFIGURATION: "tabConfiguration",

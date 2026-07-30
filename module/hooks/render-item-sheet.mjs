@@ -16,37 +16,71 @@ export default function onRenderItemSheet5e(
 ) {
   const item = app.document;
 
-  if (item.type !== "spell") return;
+  if (item.type === "spell") {
+    const selectors = [
+      '[data-tidy-field="system.sourceClass"]',
+      'select[name="system.sourceClass"]',
+      'select[name="system.preparation.mode"]',
+    ];
 
-  const selectors = [
-    '[data-tidy-field="system.sourceClass"]',
-    'select[name="system.sourceClass"]',
-    'select[name="system.preparation.mode"]',
-  ];
+    const previousGroup = element
+      .querySelector(selectors.join(", "))
+      ?.closest(".form-group");
 
-  const previousGroup = element
-    .querySelector(selectors.join(", "))
-    ?.closest(".form-group");
-  if (!previousGroup) return;
+    if (!previousGroup) return;
 
-  const input = HTMLDocumentTagsElementV2.create({
-    name: `flags.${MODULE_ID}.${ITEM_FLAGS.SPELL_CLASSES}`,
-    type: "Item",
-    subtypes: ["class", "subclass"],
-    value: item.getFlag(MODULE_ID, ITEM_FLAGS.SPELL_CLASSES) ?? [],
-    single: false,
-    disabled: !app.isEditable,
-  });
+    const input = HTMLDocumentTagsElementV2.create({
+      name: `flags.${MODULE_ID}.${ITEM_FLAGS.SPELL_CLASSES}`,
+      type: "Item",
+      subtypes: ["class", "subclass"],
+      value: item.getFlag(MODULE_ID, ITEM_FLAGS.SPELL_CLASSES) ?? [],
+      single: false,
+      disabled: !app.isEditable,
+    });
 
-  input.addEventListener("change", (event) => {
-    item.setFlag(MODULE_ID, ITEM_FLAGS.SPELL_CLASSES, event.target.value);
-  });
+    input.addEventListener("change", (event) => {
+      item.setFlag(MODULE_ID, ITEM_FLAGS.SPELL_CLASSES, event.target.value);
+    });
 
-  const formGroup = foundry.applications.fields.createFormGroup({
-    label: "Spell Classes",
-    hint: "List the classes that grant access to this spell",
-    input,
-  });
+    const formGroup = foundry.applications.fields.createFormGroup({
+      label: "Spell Classes",
+      hint: "List the classes that grant access to this spell",
+      input,
+    });
 
-  previousGroup.insertAdjacentElement("afterend", formGroup);
+    previousGroup.insertAdjacentElement("afterend", formGroup);
+  }
+
+  if (item.type === "feat") {
+    const selectors = [
+      '[data-tidy-field="system.type.value"]',
+      'select[name="system.type.value"]',
+    ];
+
+    const previousGroup = element
+      .querySelector(selectors.join(", "))
+      ?.closest(".form-group");
+
+    if (!previousGroup) return;
+
+    const input = HTMLDocumentTagsElementV2.create({
+      name: `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`,
+      type: "Item",
+      value: item.getFlag(MODULE_ID, ITEM_FLAGS.LINKED_DOCS) ?? [],
+      single: false,
+      disabled: !app.isEditable,
+    });
+
+    input.addEventListener("change", (event) => {
+      item.setFlag(MODULE_ID, ITEM_FLAGS.LINKED_DOCS, event.target.value);
+    });
+
+    const formGroup = foundry.applications.fields.createFormGroup({
+      label: "Linked Documents",
+      hint: "List the documents that grant access to this feature",
+      input,
+    });
+
+    previousGroup.insertAdjacentElement("afterend", formGroup);
+  }
 }
