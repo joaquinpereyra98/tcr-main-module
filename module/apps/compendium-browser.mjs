@@ -23,10 +23,24 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @mixes HandlebarsApplicationMixin
  * @template {CompendiumBrowserConfiguration}
  */
-export default class CompendiumBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
+export default class CompendiumBrowser extends HandlebarsApplicationMixin(
+  ApplicationV2,
+) {
   constructor(...args) {
     super(...args);
     this.#filters = this.options.filters?.initial ?? {};
+
+    const linkedDocs = this.#filters.additional?.[ITEM_FLAGS.LINKED_DOCS];
+    if (linkedDocs) {
+      this.#filters.additional[ITEM_FLAGS.LINKED_DOCS] =
+        CompendiumBrowser.parseUUIDFilter(linkedDocs);
+    }
+    const linkedLockedDocs =
+      this.options.filters?.locked?.additional?.[ITEM_FLAGS.LINKED_DOCS];
+    if (linkedLockedDocs) {
+      this.options.filters.locked.additional[ITEM_FLAGS.LINKED_DOCS] =
+        CompendiumBrowser.parseUUIDFilter(linkedLockedDocs);
+    }
 
     const initialSources = this.options.sources?.initial ?? [];
     this.#sources = new Set(initialSources);
@@ -211,6 +225,37 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
     return matchesFolder;
   }
 
+  /**
+   * Convert a single UUID, array of UUIDs, or an object with UUID keys into short Document IDs.
+   * @param {string|string[]|Record<string, any>} input - The UUID(s) or filter map to convert.
+   * @returns {string|string[]|Record<string, any>} The converted ID(s) or map with ID keys.
+   */
+  static parseUUIDFilter(input) {
+    if (!input) return input;
+
+    const parse =
+    /** @param {String} uuid */
+    (uuid) => uuid.replaceAll(".", "_");
+
+    if (typeof input === "string") {
+      return parse(input);
+    }
+
+    if (Array.isArray(input)) {
+      return input.map(parse);
+    }
+
+    if (typeof input === "object") {
+      const converted = {};
+      for (const [key, value] of Object.entries(input)) {
+        converted[parse(key)] = value;
+      }
+      return converted;
+    }
+
+    return input;
+  }
+
   /* -------------------------------------------- */
   /*  Properties                                  */
   /* -------------------------------------------- */
@@ -241,7 +286,15 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
       { inplace: false },
     );
     filters.documentClass ??= "Item";
-    return filters;
+
+    if (filters.additional?.[ITEM_FLAGS.LINKED_DOCS]) {
+      filters.additional[ITEM_FLAGS.LINKED_DOCS] =
+        CompendiumBrowser.parseUUIDFilter(
+          filters.additional[ITEM_FLAGS.LINKED_DOCS],
+        );
+    }
+
+    if (filters) return filters;
   }
 
   /**
@@ -380,7 +433,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
   _replaceHTML(result, content, options) {
     const { scrollTop, scrollLeft } = content;
     Object.assign(this.#contentScroll, { scrollTop, scrollLeft });
-    
+
     super._replaceHTML(result, content, options);
   }
 
@@ -711,10 +764,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
       const doc = fromUuidSync(uuid);
       if (!doc) continue;
 
-      const id = doc._id;
-
-      choices[id] = {
-        label: doc.name || id,
+      choices[CompendiumBrowser.parseUUIDFilter(uuid)] = {
+        label: doc.name || uuid,
       };
     }
 
@@ -1195,8 +1246,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
       .replaceChildren(...(await Promise.all(rendered)));
     this.#resultIndex = batchEnd;
 
-    const content = this.element.querySelector(".window-content")
-    Object.assign(content, this.#contentScroll );
+    const content = this.element.querySelector(".window-content");
+    Object.assign(content, this.#contentScroll);
   }
 
   /* -------------------------------------------- */
@@ -1660,15 +1711,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
           }
 
           if (i.type === "feat") {
+            /**@type {String[]} */
             const uuids =
               foundry.utils.getProperty(
                 i,
                 `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`,
               ) || [];
 
-            i._linkedDocUuid = uuids.map(
-              (uuid) => foundry.utils.parseUuid(uuid)?.id,
-            );
+            i._linkedDocUuid = CompendiumBrowser.parseUUIDFilter(uuids);
           }
 
           const matchesFilters =
