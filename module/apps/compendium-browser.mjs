@@ -234,8 +234,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (!input) return input;
 
     const parse =
-    /** @param {String} uuid */
-    (uuid) => uuid.replaceAll(".", "_");
+      /** @param {String} uuid */
+      (uuid) => uuid.replaceAll(".", "_");
 
     if (typeof input === "string") {
       return parse(input);
@@ -286,6 +286,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       { inplace: false },
     );
     filters.documentClass ??= "Item";
+    filters.operators ??= {};
 
     if (filters.additional?.[ITEM_FLAGS.LINKED_DOCS]) {
       filters.additional[ITEM_FLAGS.LINKED_DOCS] =
@@ -294,7 +295,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         );
     }
 
-    if (filters) return filters;
+    return filters;
   }
 
   /**
@@ -595,9 +596,12 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       if (wantsSpell) fields.push(spellFlagPath);
       if (wantsFeats) fields.push(featFlagPath);
 
+      const entries = pack.map(d => d.toObject())
       const index = await pack.getIndex({ fields });
 
-      for (const entry of index) {
+      for (const e of index) {
+        const findedEntry = entries.find(d => d._id === e.id);
+        const entry = findedEntry ?? e;
         // Logic for Subclasses
         if (
           wantsSubclass &&
@@ -1135,10 +1139,13 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               sort,
               value: context.filters.additional?.[key],
               locked: this.options.filters.locked?.additional?.[key],
-              operators: this.#filters.operators?.[key] ?? {
-                pos: "AND",
-                neg: "OR",
-              },
+              operators: Object.assign(
+                {
+                  pos: "AND",
+                  neg: "OR",
+                },
+                this.currentFilters.operators?.[key] ?? {},
+              ),
               posCount: posCount > 0 ? posCount : null,
               negCount: negCount > 0 ? negCount : null,
             },
@@ -1167,7 +1174,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     const filters = CompendiumBrowser.applyFilters(
       context.filterDefinitions,
       context.filters.additional,
+      context.filters.operators,
     );
+
     // Add the name filter
     if (this.#filters.name?.length)
       filters.push({ k: "name", o: "icontains", v: this.#filters.name });
@@ -1766,18 +1775,23 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @param {object} values                                 Values of currently selected filters.
    * @returns {FilterDescription[]}
    */
-  static applyFilters(definition, values) {
+  static applyFilters(definition, values = {}, operators = {}) {
     const filters = [];
-    const operators = values?.operators ?? {};
 
-    for (const [key, value] of Object.entries(values ?? {})) {
-      if (key === "operators") continue;
+    for (const [key, value] of Object.entries(values)) {
+      if (key === "operators" || value === undefined || value === null)
+        continue;
+
       const def = definition.get(key);
       if (!def) continue;
-      if (foundry.utils.getType(def.createFilter) === "function") {
-        def.createFilter(filters, value, def, key, operators);
+
+      const opCfg = operators[key] ?? { pos: "AND", neg: "OR" };
+
+      if (typeof def.createFilter === "function") {
+        def.createFilter(filters, value, def, key, opCfg);
         continue;
       }
+
       switch (def.type) {
         case "boolean":
           if (value) filters.push({ k: def.config.keyPath, v: value === 1 });
@@ -1794,16 +1808,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           const choices = foundry.utils.deepClone(def.config.choices);
           if (def.config.blank) choices._blank = "";
 
-          const opCfg = operators[key] ?? { pos: "AND", neg: "OR" };
-
           const [positive, negative] = Object.entries(value ?? {}).reduce(
-            ([positive, negative], [k, v]) => {
+            ([pos, neg], [k, v]) => {
               if (k in choices) {
-                if (k === "_blank") k = "";
-                if (v === 1) positive.push(k);
-                else if (v === -1) negative.push(k);
+                const choiceKey = k === "_blank" ? "" : k;
+                if (v === 1) pos.push(choiceKey);
+                else if (v === -1) neg.push(choiceKey);
               }
-              return [positive, negative];
+              return [pos, neg];
             },
             [[], []],
           );
@@ -1817,8 +1829,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               v: positive,
             });
           }
+
           if (negative.length) {
-            const negOp = opCfg.pos === "OR" ? "hasany" : "hasall";
+            const negOp = opCfg.neg === "OR" ? "hasany" : "hasall";
             filters.push({
               o: "NOT",
               v: {
@@ -1828,6 +1841,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               },
             });
           }
+
           break;
         default:
           console.warn(`Filter type ${def.type} not handled.`);
