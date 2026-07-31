@@ -596,11 +596,11 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       if (wantsSpell) fields.push(spellFlagPath);
       if (wantsFeats) fields.push(featFlagPath);
 
-      const entries = pack.map(d => d.toObject())
+      const entries = pack.map((d) => d.toObject());
       const index = await pack.getIndex({ fields });
 
       for (const e of index) {
-        const findedEntry = entries.find(d => d._id === e.id);
+        const findedEntry = entries.find((d) => d._id === e.id);
         const entry = findedEntry ?? e;
         // Logic for Subclasses
         if (
@@ -1034,6 +1034,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             data.children = filterTypeMap(data.children);
             if (Object.keys(data.children).length > 0) acc[key] = data;
           } else if (availableTypeKeys.has(key)) {
+            data.locked = !!lockedFilters?.types?.has(key);
             acc[key] = data;
           }
           return acc;
@@ -1101,6 +1102,49 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         }
       }
 
+      /* ------------------------------------------------------------- */
+      /*  Apply Default Initial State Set Filters                      */
+      /* ------------------------------------------------------------- */
+
+      const defaultStates = this.options.defaultSetFilterStates ?? {};
+      const isDefault = {};
+      if (!foundry.utils.isEmpty(defaultStates)) {
+        this.#filters.additional ??= {};
+
+        for (const [key, data] of filteredDefinitions.entries()) {
+          if (
+            data?.type !== "set" ||
+            !data?.config?.choices ||
+            defaultStates[key] === undefined
+          )
+            continue;
+
+          const choices = data.config.choices;
+          const defaultValue = defaultStates[key];
+          const locked = this.options.filters.locked?.additional?.[key];
+
+          if (this.#filters.additional[key] === undefined) {
+            this.#filters.additional[key] = Object.fromEntries(
+              Object.keys(choices)
+                .filter((k) => locked[k] === undefined)
+                .map((k) => [k, defaultValue]),
+            );
+          }
+
+          const currentValues = this.#filters.additional[key];
+          isDefault[key] = Object.fromEntries(
+            Object.keys(choices).map((choiceKey) => [
+              choiceKey,
+              currentValues[choiceKey] === defaultValue,
+            ]),
+          );
+        }
+
+        context.filters = this.currentFilters;
+      }
+
+      /* ------------------------------------------------------------- */
+
       context.additional = Array.from(
         filteredDefinitions.entries() ?? [],
       ).reduce((arr, [key, data]) => {
@@ -1131,6 +1175,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             break;
         }
 
+        const locked = this.options.filters.locked ?? {};
         arr.push(
           foundry.utils.mergeObject(
             data,
@@ -1138,7 +1183,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               key,
               sort,
               value: context.filters.additional?.[key],
-              locked: this.options.filters.locked?.additional?.[key],
+              locked: locked.additional?.[key],
+              isDefault: isDefault[key] ?? {},
               operators: Object.assign(
                 {
                   pos: "AND",
@@ -1146,6 +1192,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
                 },
                 this.currentFilters.operators?.[key] ?? {},
               ),
+              operatorsLocked: {
+                pos: locked?.operators?.[key]?.pos ?? false,
+                neg: locked?.operators?.[key]?.neg ?? false,
+              },
               posCount: posCount > 0 ? posCount : null,
               negCount: negCount > 0 ? negCount : null,
             },

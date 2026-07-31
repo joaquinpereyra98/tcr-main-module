@@ -11,7 +11,7 @@
         {{#if value._blank}}{{> "blank-tag" }}{{/if}}
         {{#each config.choices}}
         {{#if (lookup ../value @key)}}
-        <div class="type-tag stateful-tag {{ifThen (and ../locked @root.isLocked.hideFilters) "hidden" ""}}">
+        <div class="type-tag stateful-tag {{ifThen (or (and ../locked @root.isLocked.hideFilters) (lookup ../isDefault @key)) "hidden" ""}}">
             <label>  
                 <filter-state
                     name="additional.{{ ../key }}.{{ @key }}"
@@ -76,14 +76,17 @@
                         data-filter="{{key}}"
                         data-logic-type="pos"
                         class="logic-btn pos {{operators.pos}}"
+                        {{disabled operatorsLocked.pos}}
                     > {{operators.pos}}
                     </button>
+
                     <button
                         type="button"
                         data-action="toggleLogic"
                         data-filter="{{key}}"
                         data-logic-type="neg"
                         class="logic-btn neg {{operators.neg}}"
+                        {{disabled operatorsLocked.neg}}
                     >{{operators.neg}}
                     </button>
                 </div>
@@ -92,7 +95,7 @@
                 <div class="wrapper filter-tag-container">
                     {{#if config.blank}}{{> "blank-tag" }}{{/if}}
                     {{#each config.choices}}
-                    <div class="type-tag stateful-tag">
+                    <div class="type-tag stateful-tag {{ ifThen (lookup ../locked @key) "locked" ""}}">
                         <label>  
                             <filter-state
                                 name="additional.{{ ../key }}.{{ @key }}"

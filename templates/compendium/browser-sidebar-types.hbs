@@ -23,7 +23,7 @@
 
 {{!-- Individual Entry Partial --}}
 {{#*inline "type-entry"}}
-<div class="type-tag {{#if chosen}}active{{/if}}">
+<div class="type-tag {{#if chosen}}active{{/if}} {{#if locked}}locked{{/if}}">
     <label>
         <input
             type="checkbox"
