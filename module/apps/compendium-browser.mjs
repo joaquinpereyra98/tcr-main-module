@@ -23,9 +23,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @mixes HandlebarsApplicationMixin
  * @template {CompendiumBrowserConfiguration}
  */
-export default class CompendiumBrowser extends HandlebarsApplicationMixin(
-  ApplicationV2,
-) {
+export default class CompendiumBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
   constructor(...args) {
     super(...args);
     this.#filters = this.options.filters?.initial ?? {};
@@ -1337,6 +1335,24 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     });
   }
 
+  /* -------------------------------------------- */
+  /*  Life-Cycle Methods                          */
+  /* -------------------------------------------- */
+
+  /** @inheritDoc */
+  _onPosition(position) {
+    super._onPosition(position);
+    this._debouncedResizeResults();
+  }
+
+  _debouncedResizeResults = foundry.utils.debounce(() => {
+    const resultsEl = this.element?.querySelector(
+      '[data-application-part="results"]',
+    );
+    if (resultsEl)
+      this._onScrollResults({ target: resultsEl.closest(".window-content") });
+  }, 150);
+
   /**
    * Handles the cross-fade transition for any background type (Video, Image, or Color)
    */
@@ -1835,7 +1851,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       const def = definition.get(key);
       if (!def) continue;
 
-      const opCfg = operators[key] ?? { pos: "AND", neg: "OR" };
+      const opCfg = Object.assign({ pos: "AND", neg: "OR" }, operators[key]);
 
       if (typeof def.createFilter === "function") {
         def.createFilter(filters, value, def, key, opCfg);
