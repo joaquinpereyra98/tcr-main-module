@@ -479,7 +479,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       "range-picker.size-range-picker",
     );
 
-    sliderSize.addEventListener("change", (event) => {
+    sliderSize?.addEventListener("change", (event) => {
       const windowsContent = event.target.closest(".window-content");
       const val = Number(event.target.value ?? 0);
       this._gridSize = val;
@@ -487,6 +487,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       game.user.setFlag(MODULE_ID, "compendiumBrowserGridSize", val);
       this._debouncedResizeResults();
     });
+
+    if (options.parts?.includes("results") || !options.parts) {
+      this._debouncedResizeResults();
+    }
   }
 
   /* -------------------------------------------- */
@@ -1304,22 +1308,27 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @protected
    */
   async _renderResults() {
-    let rendered = [];
-    const { documentClass } = this.currentFilters;
-    const results = await this.#results;
-    this.#results = results;
-    const batchEnd = Math.min(this.constructor.BATCHING.SIZE, results.length);
-    for (let i = 0; i < batchEnd; i++) {
-      rendered.push(this._renderResult(results[i], documentClass));
-    }
-    this.element.querySelector(".results-loading").hidden = true;
-    this.element
-      .querySelector('[data-application-part="results"] .item-list')
-      .replaceChildren(...(await Promise.all(rendered)));
-    this.#resultIndex = batchEnd;
+    this.#resultIndex = 0;
+    const resultsEl = this.element?.querySelector(
+      '[data-application-part="results"]',
+    );
+    if (!resultsEl) return;
 
-    const content = this.element.querySelector(".window-content");
-    Object.assign(content, this.#contentScroll);
+    const itemList = resultsEl.querySelector(".item-list");
+    if (itemList) itemList.replaceChildren();
+
+    const loadingEl = this.element.querySelector(".results-loading");
+    if (loadingEl) loadingEl.hidden = false;
+
+    this.#results = await this.#results;
+
+    if (loadingEl) loadingEl.hidden = true;
+
+    const scrollContainer = this.element.querySelector(".window-content");
+    if (scrollContainer) {
+      Object.assign(scrollContainer, this.#contentScroll);
+      await this._onScrollResults({ target: scrollContainer });
+    }
   }
 
   /* -------------------------------------------- */
@@ -1645,9 +1654,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
     target.closest(".type-tag")?.classList.toggle("active", target.checked);
 
-    this.render({ parts: ["filters", "results"] }).then((app) =>
-      app._debouncedResizeResults(),
-    );
+    this.render({ parts: ["filters", "results"] });
   }
 
   /**
@@ -1697,7 +1704,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     ${negCount ? `<span class="count neg">${negCount}</span>` : ""}
   `;
 
-  this._debouncedResizeResults();
+    this._debouncedResizeResults();
   }
 
   /* -------------------------------------------- */
