@@ -1370,7 +1370,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     );
     if (resultsEl)
       this._onScrollResults({ target: resultsEl.closest(".window-content") });
-  }, 150);
+  }, 100);
 
   /**
    * Handles the cross-fade transition for any background type (Video, Image, or Color)
@@ -1645,7 +1645,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
     target.closest(".type-tag")?.classList.toggle("active", target.checked);
 
-    this.render({ parts: ["filters", "results"] });
+    this.render({ parts: ["filters", "results"] }).then((app) =>
+      app._debouncedResizeResults(),
+    );
   }
 
   /**
@@ -1694,6 +1696,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     ${posCount ? `<span class="count pos">${posCount}</span>` : ""}
     ${negCount ? `<span class="count neg">${negCount}</span>` : ""}
   `;
+
+  this._debouncedResizeResults();
   }
 
   /* -------------------------------------------- */
@@ -1707,6 +1711,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     this._headerCollapsed = !collapsible.classList.contains("collapsed");
     await this.render({ parts: ["filters", "types", "sources"] });
     collapsible.classList.toggle("collapsed", this._headerCollapsed);
+    this._debouncedResizeResults();
   }
 
   /* -------------------------------------------- */
@@ -1911,7 +1916,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             ([pos, neg], [k, v]) => {
               if (k in choices) {
                 const choiceKey = k === "_blank" ? "" : k;
-                
+
                 const { POS, NEG } = CompendiumBrowser.STATE;
                 if (v === POS) pos.push(choiceKey);
                 else if (v === NEG) neg.push(choiceKey);
