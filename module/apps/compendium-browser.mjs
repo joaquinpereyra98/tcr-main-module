@@ -9,11 +9,11 @@ import {
 } from "../utils.mjs";
 
 /**
- * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationFormConfiguration, ApplicationRenderContext} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
+ * @import {ApplicationClickAction, ApplicationFormConfiguration, ApplicationRenderContext} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  * @import ApplicationV2 from "../../foundry/resources/app/client-esm/applications/api/application.mjs";
  * @import {HandlebarsRenderOptions} from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
  * @import Document from "../../foundry/resources/app/common/abstract/document.mjs";
- * @import { CompendiumBrowserFilterDefinition, CompendiumBrowserConfiguration, CompendiumBrowserFilterState, CompendiumBrowserFilters } from "./_types.mjs";
+ * @import { CompendiumBrowserFilterDefinition, CompendiumBrowserConfiguration, CompendiumBrowserFilters } from "./_types.mjs";
  */
 
 const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
@@ -23,7 +23,10 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @mixes HandlebarsApplicationMixin
  * @template {CompendiumBrowserConfiguration}
  */
-export default class CompendiumBrowser extends HandlebarsApplicationMixin(ApplicationV2) {
+export default class CompendiumBrowser extends HandlebarsApplicationMixin(
+  ApplicationV2,
+) {
+  /** @param  {Partial<CompendiumBrowserConfiguration>} args */
   constructor(...args) {
     super(...args);
     this.#filters = this.options.filters?.initial ?? {};
@@ -143,6 +146,16 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
     },
   };
 
+  /**
+   * Numeric states for signal/direction representation.
+   * @readonly
+   * @enum {number}
+   */
+  static STATE = Object.freeze({
+    POS: 1,
+    NEG: -1,
+    NONE: 0,
+  });
   /* -------------------------------------------- */
 
   /**
@@ -465,12 +478,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
     const sliderSize = this.element.querySelector(
       "range-picker.size-range-picker",
     );
+
     sliderSize.addEventListener("change", (event) => {
       const windowsContent = event.target.closest(".window-content");
       const val = Number(event.target.value ?? 0);
       this._gridSize = val;
       windowsContent.style.setProperty("--grid-size", `${val + 80}px`);
       game.user.setFlag(MODULE_ID, "compendiumBrowserGridSize", val);
+      this._debouncedResizeResults();
     });
   }
 
@@ -1149,11 +1164,11 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
         const filterValue = context.filters.additional?.[key] ?? {};
 
         const posCount = Object.values(filterValue).filter(
-          (v) => v === 1,
+          (v) => v === CompendiumBrowser.STATE.POS,
         ).length;
 
         const negCount = Object.values(filterValue).filter(
-          (v) => v === -1,
+          (v) => v === CompendiumBrowser.STATE.NEG,
         ).length;
 
         // Special case handling for 'Feats' tab in basic mode.
@@ -1345,6 +1360,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
     this._debouncedResizeResults();
   }
 
+  /**
+   * Debounced callback to recalculate and update scroll position for the results container.
+   * @type {Function}
+   */
   _debouncedResizeResults = foundry.utils.debounce(() => {
     const resultsEl = this.element?.querySelector(
       '[data-application-part="results"]',
@@ -1480,7 +1499,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
       this.#results.length,
     );
     for (let i = batchStart; i < batchEnd; i++) {
-      rendered.push(this._renderResult(this.#results[i], documentClass));
+      const entry = this.#results[i];
+      if (entry) rendered.push(this._renderResult(entry, documentClass));
     }
     this.element
       .querySelector('[data-application-part="results"] .item-list')
@@ -1555,11 +1575,19 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
     const value = target.value;
     const existingValue = foundry.utils.getProperty(this.#filters, name);
     if (value === existingValue) return;
-    foundry.utils.setProperty(
-      this.#filters,
-      name,
-      value === "" ? undefined : value,
-    );
+
+    if (value === CompendiumBrowser.STATE.NONE || value === undefined) {
+      const parts = name.split(".");
+      const propToKey = parts.pop();
+      const parentPath = parts.join(".");
+      const parentObj = foundry.utils.getProperty(this.#filters, parentPath);
+
+      if (parentObj && propToKey in parentObj) {
+        delete parentObj[propToKey];
+      }
+    } else {
+      foundry.utils.setProperty(this.#filters, name, value);
+    }
 
     const isBaseClassFilter = name.startsWith(
       `additional.${ITEM_FLAGS.SPELL_CLASSES}_base.`,
@@ -1578,8 +1606,12 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
       for (const subId of childSubclasses) {
         const fullSubPath = `${subFilterKey}.${subId}`;
 
-        if (value === -1) {
-          foundry.utils.setProperty(this.#filters, fullSubPath, -1);
+        if (value === CompendiumBrowser.STATE.NEG) {
+          foundry.utils.setProperty(
+            this.#filters,
+            fullSubPath,
+            CompendiumBrowser.STATE.NEG,
+          );
         } else if (value === 0) {
           foundry.utils.setProperty(this.#filters, fullSubPath, undefined);
         }
@@ -1654,8 +1686,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
 
     const values = Object.values(this.#filters.additional?.[filterId] ?? {});
 
-    const posCount = values.filter((v) => v === 1).length;
-    const negCount = values.filter((v) => v === -1).length;
+    const { POS, NEG } = CompendiumBrowser.STATE;
+    const posCount = values.filter((v) => v === POS).length;
+    const negCount = values.filter((v) => v === NEG).length;
 
     counters.innerHTML = `
     ${posCount ? `<span class="count pos">${posCount}</span>` : ""}
@@ -1878,8 +1911,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(Applic
             ([pos, neg], [k, v]) => {
               if (k in choices) {
                 const choiceKey = k === "_blank" ? "" : k;
-                if (v === 1) pos.push(choiceKey);
-                else if (v === -1) neg.push(choiceKey);
+                
+                const { POS, NEG } = CompendiumBrowser.STATE;
+                if (v === POS) pos.push(choiceKey);
+                else if (v === NEG) neg.push(choiceKey);
               }
               return [pos, neg];
             },
