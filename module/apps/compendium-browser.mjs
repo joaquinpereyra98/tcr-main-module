@@ -29,7 +29,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   /** @param  {Partial<CompendiumBrowserConfiguration>} args */
   constructor(...args) {
     super(...args);
-    this.#filters = this.options.filters?.initial ?? {};
+    this.#filters =
+      foundry.utils.deepClone(this.options.filters?.initial) ?? {};
 
     const linkedDocs = this.#filters.additional?.[ITEM_FLAGS.LINKED_DOCS];
     if (linkedDocs) {
@@ -1486,35 +1487,46 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * @protected
    */
   async _onScrollResults(event) {
-    if (this.#renderThrottle || !event.target.matches(".window-content"))
-      return;
+    const target = event.target ?? event;
+    if (this.#renderThrottle || !target?.matches?.(".window-content")) return;
+
     if (
       this.#results instanceof Promise ||
       this.#resultIndex >= this.#results.length
     )
       return;
-    const { scrollTop, scrollHeight, clientHeight } = event.target;
-    if (
-      scrollTop + clientHeight <
-      scrollHeight - this.constructor.BATCHING.MARGIN
-    )
-      return;
-    this.#renderThrottle = true;
+
     const { documentClass } = this.currentFilters;
-    const rendered = [];
-    const batchStart = this.#resultIndex;
-    const batchEnd = Math.min(
-      batchStart + this.constructor.BATCHING.SIZE,
-      this.#results.length,
-    );
-    for (let i = batchStart; i < batchEnd; i++) {
-      const entry = this.#results[i];
-      if (entry) rendered.push(this._renderResult(entry, documentClass));
+
+    while (
+      this.#resultIndex < this.#results.length &&
+      (target.scrollHeight <= target.clientHeight ||
+        target.scrollTop + target.clientHeight >=
+          target.scrollHeight - this.constructor.BATCHING.MARGIN)
+    ) {
+      this.#renderThrottle = true;
+
+      const rendered = [];
+      const batchStart = this.#resultIndex;
+      const batchEnd = Math.min(
+        batchStart + this.constructor.BATCHING.SIZE,
+        this.#results.length,
+      );
+
+      for (let i = batchStart; i < batchEnd; i++) {
+        const entry = this.#results[i];
+        if (entry) rendered.push(this._renderResult(entry, documentClass));
+      }
+
+      const container = this.element.querySelector(
+        '[data-application-part="results"] .item-list',
+      );
+      container.append(...(await Promise.all(rendered)));
+      this.#resultIndex = batchEnd;
+
+      await new Promise((resolve) => requestAnimationFrame(resolve));
     }
-    this.element
-      .querySelector('[data-application-part="results"] .item-list')
-      .append(...(await Promise.all(rendered)));
-    this.#resultIndex = batchEnd;
+
     this.#renderThrottle = false;
   }
 
@@ -1832,11 +1844,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
           if (i.type === "feat") {
             /**@type {String[]} */
-            const uuids =
-              foundry.utils.getProperty(
-                i,
-                `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`,
-              ) || [];
+            const uuids = foundry.utils.getProperty(
+              i,
+              `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`,
+            ) || [""];
 
             i._linkedDocUuid = CompendiumBrowser.parseUUIDFilter(uuids);
           }
