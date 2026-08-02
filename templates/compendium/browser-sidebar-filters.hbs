@@ -9,7 +9,7 @@
 
         {{else if (eq type "set")}}
         {{#each config.choices}}
-        {{#if (lookup ../value @key)}}
+        {{#if (and (lookup ../value @key) (ne @key "_blank"))}}
         <div class="type-tag stateful-tag {{ifThen (or (and ../locked @root.isLocked.hideFilters) (lookup ../isDefault @key)) "hidden" ""}}">
             <label>  
                 <filter-state

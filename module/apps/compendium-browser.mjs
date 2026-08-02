@@ -288,7 +288,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   #filters;
 
   get initialFitler() {
-    return this.options.filters?.initial ?? {};
+    const option = this.options.filters?.initial ?? {};
+    option.additional ??= {};
+    return option;
   }
 
   /**
@@ -1144,12 +1146,15 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             continue;
 
           const choices = data.config.choices;
+          choices._blank = "";
           const defaultValue = defaultStates[key];
-          const locked = this.options.filters.locked?.additional?.[key];
+          const locked = this.options.filters.locked?.additional?.[key] ?? {};
+          const initial = this.initialFitler?.additional?.[key] ?? {};
 
           for (const k of Object.keys(choices)) {
-            if (this.initialFitler?.additional?.[k] || locked[k] !== undefined)
+            if (initial?.[k] || locked[k] !== undefined)
               continue;
+            this.#filters.additional[key] ??= {};
             this.#filters.additional[key][k] = defaultValue;
           }
 
