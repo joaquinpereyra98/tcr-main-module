@@ -8,7 +8,6 @@
         {{#if (or value.min value.max)}}{{> "range-display" }}{{/if}}
 
         {{else if (eq type "set")}}
-        {{#if value._blank}}{{> "blank-tag" }}{{/if}}
         {{#each config.choices}}
         {{#if (lookup ../value @key)}}
         <div class="type-tag stateful-tag {{ifThen (or (and ../locked @root.isLocked.hideFilters) (lookup ../isDefault @key)) "hidden" ""}}">
@@ -156,6 +155,7 @@
 {{#*inline "blank-tag"}}
 <div class="type-tag stateful-tag">
     <label>
+        <i class="fa-solid fa-empty-set"></i>
         <filter-state
             name="additional.{{key}}._blank"
             value="{{value._blank}}"

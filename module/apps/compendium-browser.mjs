@@ -9,7 +9,7 @@ import {
 } from "../utils.mjs";
 
 /**
- * @import {ApplicationClickAction, ApplicationFormConfiguration, ApplicationRenderContext} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
+ * @import {ApplicationClickAction, ApplicationFormConfiguration, ApplicationRenderContext, ApplicationRenderOptions} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  * @import ApplicationV2 from "../../foundry/resources/app/client-esm/applications/api/application.mjs";
  * @import {HandlebarsRenderOptions} from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
  * @import Document from "../../foundry/resources/app/common/abstract/document.mjs";
@@ -29,8 +29,8 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
   /** @param  {Partial<CompendiumBrowserConfiguration>} args */
   constructor(...args) {
     super(...args);
-    this.#filters =
-      foundry.utils.deepClone(this.options.filters?.initial) ?? {};
+
+    this.#filters = foundry.utils.deepClone(this.initialFitler);
 
     const linkedDocs = this.#filters.additional?.[ITEM_FLAGS.LINKED_DOCS];
     if (linkedDocs) {
@@ -286,6 +286,10 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
    * Currently defined filters.
    */
   #filters;
+
+  get initialFitler() {
+    return this.options.filters?.initial ?? {};
+  }
 
   /**
    * Current filters selected.
@@ -710,6 +714,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
         type: "set",
         label: "Linked Documents",
         config: {
+          blank: "None",
           keyPath: "_linkedDocUuid",
           choices,
           multiple: true,
@@ -993,11 +998,13 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
   /* -------------------------------------------- */
 
+  isDefault = {};
+
   /**
    * Prepare the header context.
    * @param {string} partId - The part being rendered.
    * @param {ApplicationRenderContext} context - Shared context provided by _prepareContext.
-   * @param {HandlebarsRenderOptions} options - Options which configure application rendering behavior.
+   * @param {ApplicationRenderOptions & HandlebarsRenderOptions} options - Options which configure application rendering behavior.
    * @returns {Promise<ApplicationRenderContext>} - Context data for a specific part.
    * @protected
    */
@@ -1125,8 +1132,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
       /* ------------------------------------------------------------- */
 
       const defaultStates = this.options.defaultSetFilterStates ?? {};
-      const isDefault = {};
-      if (!foundry.utils.isEmpty(defaultStates)) {
+      if (!foundry.utils.isEmpty(defaultStates) && options.isFirstRender) {
         this.#filters.additional ??= {};
 
         for (const [key, data] of filteredDefinitions.entries()) {
@@ -1141,16 +1147,14 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           const defaultValue = defaultStates[key];
           const locked = this.options.filters.locked?.additional?.[key];
 
-          if (this.#filters.additional[key] === undefined) {
-            this.#filters.additional[key] = Object.fromEntries(
-              Object.keys(choices)
-                .filter((k) => locked[k] === undefined)
-                .map((k) => [k, defaultValue]),
-            );
+          for (const k of Object.keys(choices)) {
+            if (this.initialFitler?.additional?.[k] || locked[k] !== undefined)
+              continue;
+            this.#filters.additional[key][k] = defaultValue;
           }
 
           const currentValues = this.#filters.additional[key];
-          isDefault[key] = Object.fromEntries(
+          this.isDefault[key] = Object.fromEntries(
             Object.keys(choices).map((choiceKey) => [
               choiceKey,
               currentValues[choiceKey] === defaultValue,
@@ -1202,7 +1206,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
               sort,
               value: context.filters.additional?.[key],
               locked: locked.additional?.[key],
-              isDefault: isDefault[key] ?? {},
+              isDefault: this.isDefault[key] ?? {},
               operators: Object.assign(
                 {
                   pos: "AND",
@@ -1847,9 +1851,9 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
             const uuids = foundry.utils.getProperty(
               i,
               `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`,
-            ) || [""];
+            ) || [];
 
-            i._linkedDocUuid = CompendiumBrowser.parseUUIDFilter(uuids);
+            i._linkedDocUuid = !!uuids.length ? CompendiumBrowser.parseUUIDFilter(uuids) : [""];
           }
 
           const matchesFilters =

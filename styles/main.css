@@ -1173,7 +1173,7 @@
         background-color: var(--hud-blue);
         border-color: black;
 
-        span {
+        span, i {
           font-weight: bold;
           color: black;
         }
@@ -1183,7 +1183,7 @@
         background-color: var(--hud-red);
         border-color: black;
 
-        span {
+        span, i {
           color: black;
           font-weight: bold;
         }
