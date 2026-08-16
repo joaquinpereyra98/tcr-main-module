@@ -5,11 +5,15 @@ import {
 } from "../constants.mjs";
 
 /**
+ * @import { DatabaseUpdateOperation } from "../../foundry/resources/app/common/abstract/_types.mjs"
+ */
+
+/**
  * A hook event that fires for every User after conclusion of an update workflow.
- * @param {import("../../foundry/resources/app/dist/database/database.mjs").User} user - The user instance being updated
+ * @param {User} _user - The user instance being updated
  * @param {object} changed - Differential data that will be used to update the document
- * @param {Partial<import("../../foundry/resources/app/common/abstract/_types.mjs").DatabaseUpdateOperation>} options Additional options which modify the update request
- * @param {string} userId - The ID of the requesting user, always game.user.id
+ * @param {Partial<DatabaseUpdateOperation>} _options Additional options which modify the update request
+ * @param {string} _userId - The ID of the requesting user, always game.user.id
  * @returns {boolean|void}
  */
 export default function onUpdateUser(_user, changed, _options, _userId) {

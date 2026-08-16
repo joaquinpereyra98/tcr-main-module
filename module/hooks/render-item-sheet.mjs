@@ -2,11 +2,16 @@ import { ITEM_FLAGS, MODULE_ID } from "../constants.mjs";
 import HTMLDocumentTagsElementV2 from "../apps/elements/document-tags-v2.mjs";
 
 /**
+ * @import ApplicationV2 from "../../foundry/resources/app/client-esm/applications/api/application.mjs"
+ * @import { ApplicationRenderContext, ApplicationRenderOptions } from "../../foundry/resources/app/client-esm/applications/_types.mjs"
+ */
+
+/**
  * A hook event that fires whenever an ItemsSheet5e is rendered.
- * @param {ApplicationV2} application - The Application instance being rendered
- * @param {HTMLElement} element - The inner HTML of the document that will be displayed and may be modified
- * @param {import("../../foundry/resources/app/client-esm/applications/_types.mjs").ApplicationRenderContext} _context - The application rendering context data
- * @param {import("../../foundry/resources/app/client-esm/applications/_types.mjs").ApplicationRenderOptions} _options - The application rendering options
+ * @param {ApplicationV2} app - The Application instance being rendered
+ * @param {JQuery} $element - The inner HTML of the document that will be displayed and may be modified
+ * @param {ApplicationRenderContext} _context - The application rendering context data
+ * @param {ApplicationRenderOptions} _options - The application rendering options
  */
 export default function onRenderItemSheet5e(
   app,
