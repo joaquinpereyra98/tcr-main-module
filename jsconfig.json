@@ -1,10 +1,14 @@
 {
   "compilerOptions": {
     "module": "ES6",
-    "target": "ES6"
+    "target": "ES6",
+    "paths": {
+      "@client": ["./foundry/resources/app/client"],
+      "@common": ["./foundry/resources/app/common"]
+    }
   },
   "exclude": ["node_modules", "**/node_modules/*"],
-  "include": ["main.mjs", "foundry/client/**/*.js", "foundry/**/*.mjs"],
+  "include": ["main.mjs", "./foundry/resources/app/common", "./foundry/resources/app/client"],
   "typeAcquisition": {
     "include": ["jquery"]
   }

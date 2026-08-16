@@ -22,7 +22,10 @@ export const SETTINGS = {
   INACTIVE_THRESHOLD: "inactiveThreshold",
   TOKEN_API: "tokenApi",
   OVERRIDE_GRID_SIZE: "overrideGridSize",
+  UNPACKING_FOLDER: "unpackingFolder",
+  PACKING_COMPENDIUM: "packingCompendium",
 };
+
 export const ISSUE_TYPES = {
   bug: {
     label: "Bug",
@@ -55,6 +58,7 @@ export const ISSUE_TYPES = {
     color: "rgb(191, 99, 243)",
   },
 };
+
 export const PRIORITY = {
   lowest: {
     label: "Lowest",
@@ -92,6 +96,7 @@ export const PRIORITY = {
     sort: 2,
   },
 };
+
 export const ISSUE_STATUSES = {
   unread: {
     label: "Unread",

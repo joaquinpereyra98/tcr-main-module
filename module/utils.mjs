@@ -95,8 +95,8 @@ export function hasDocumentsInFolder(folder) {
 
 /**
  *
- * @param {BaseFolder} folder - The folder itself.
- * @returns {BaseFolder[]}
+ * @param {Folder} folder - The folder itself.
+ * @returns {Folder[]}
  */
 export function getSubfoldersInCompenidum(folder) {
   return folder.compendium.folders.filter(f => f.ancestors.some(f => f.id === folder.id));

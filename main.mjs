@@ -5,6 +5,7 @@ import * as hooks from "./module/hooks/_module.mjs";
 import * as canvas from "./module/canvas/_module.mjs";
 
 import JiraIssueManager from "./module/jira/jira-manager.mjs";
+import TCRPackManager from "./module/pack-manager/pack-manager.mjs";
 
 import { moduleToObject } from "./module/utils.mjs";
 import {
@@ -29,6 +30,7 @@ Hooks.on("init", () => {
     renderAvailabilityTracker:
       apps.AvailabilityTracker.renderAvailabilityTracker,
     renderAvailabilityViewer: apps.AvailabilityViewer.renderAvailabilityViewer,
+    TCRPackManager,
   };
 
   CONFIG.ui[MAIN_HUD_KEY] = module.api.apps.MainHud;
@@ -41,6 +43,7 @@ Hooks.on("init", () => {
   settings.LoginTracker.registerSetting();
   settings.registerMetricsSetting();
   settings.registerGridSizeSetting();
+  TCRPackManager.registerSetting();
 
   JiraIssueManager.registerTokenSetting();
   canvas.CanvasDropManager.initialize();
@@ -137,6 +140,9 @@ Hooks.once("setup", () => {
 
 Hooks.on("ready", () => {
   settings.LoginTracker.initialize();
+  TCRPackManager.packingProcess();
+  TCRPackManager.unpackingProcess();
+
   Hooks.on("renderApplicationV2", (_, element) => {
     /**@type {HTMLButtonElement} */
     const btn = element.querySelector(
