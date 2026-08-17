@@ -107,7 +107,6 @@ export default class TCRPackManager {
     if (!game.users.activeGM?.isSelf) return;
     console.log("TCR | Initializing GM Auto-Packing check...");
 
-    /**@type {Folder} */
     const playersFolder = this.#unpackingFolder;
     if (!playersFolder) return;
 
@@ -179,6 +178,255 @@ export default class TCRPackManager {
       await Actor.deleteDocuments(actorsToDelete);
     } catch (error) {
       console.error("TCR | Auto-Packing encountered an error:", error);
+    }
+  }
+
+  /**
+   * Packs all subfolders in the unpacking folder into the compendium
+   * @returns {Promise<void>}
+   */
+  static async packingAll() {
+    if (!game.user.isGM) return;
+    console.log("TCR | Initializing Packing...");
+
+    const playersFolder = this.#unpackingFolder;
+    if (!playersFolder)
+      return void console.warn(
+        "TCR | Unpacking target folder not found in world actors.",
+      );
+
+    const pack = await this.#getCompendium({ unlock: true });
+    if (!pack)
+      return void console.warn(
+        "TCR | Could not open compendium. Aborting packing process.",
+      );
+
+    try {
+      const perUserFolders = playersFolder.getSubfolders();
+
+      const nonEmptyFolders = perUserFolders.filter((userFolder) =>
+        hasDocumentsInFolder(userFolder),
+      );
+
+      if (!nonEmptyFolders.length) {
+        return void console.log("TCR | No non-empty folders to pack.");
+      }
+
+      const actorsToDelete = [];
+
+      const getDocIds = (f) => [
+        ...(f.contents?.map((c) => c.id) || []),
+        ...(f.children || []).flatMap((child) =>
+          getDocIds(child.folder || child),
+        ),
+      ];
+
+      for (const folder of nonEmptyFolders) {
+        console.log(`TCR | Exporting folder "${folder.name}" to compendium...`);
+
+        const targetCompendiumFolder = await this.#getOrCreateCompendiumFolder(
+          pack,
+          folder.name,
+        );
+
+        await folder.exportToCompendium(pack, {
+          folder: targetCompendiumFolder.id,
+          keepFolders: true,
+          keepId: true,
+          updateByName: true,
+        });
+
+        actorsToDelete.push(...getDocIds(folder));
+      }
+
+      if (actorsToDelete.length > 0) {
+        await Actor.deleteDocuments(actorsToDelete);
+        console.log(
+          `TCR | Successfully packed and removed ${actorsToDelete.length} actors from the world.`,
+        );
+      }
+
+      ui.notifications.info(
+        `Successfully packed ${nonEmptyFolders.length} folder(s) into ${pack.metadata.label}.`,
+      );
+
+      if (actorsToDelete.length > 0) {
+        await Actor.deleteDocuments(actorsToDelete);
+        console.log(
+          `TCR | Successfully packed and removed ${actorsToDelete.length} actors from the world.`,
+        );
+      }
+    } catch (error) {}
+  }
+
+  /**
+   * Packs a specific user's folder into the compendium and removes the actors from the world.
+   * @param {string} userName - The name of the user whose folder should be packed.
+   * @returns {Promise<void>}
+   */
+  static async packUserFolder(userName) {
+    if (!game.user.isGM) return;
+
+    const playersFolder = this.#unpackingFolder;
+    if (!playersFolder)
+      return void console.log("TCR | Destination folder not found.");
+
+    const targetFolder = game.actors.folders.find(
+      (f) => f.name === userName && f.folder?.id === playersFolder.id,
+    );
+
+    if (!targetFolder)
+      return void ui.notifications.warn(
+        `TCR | No folder found for user "${userName}".`,
+      );
+
+    if (!hasDocumentsInFolder(targetFolder))
+      return void ui.notifications.info(
+        `TCR | Folder for "${userName}" is empty. Nothing to pack.`,
+      );
+
+    const pack = await this.#getCompendium({ unlock: true });
+    if (!pack) return;
+
+    try {
+      console.log(
+        `TCR | Exporting folder "${targetFolder.name}" to compendium...`,
+      );
+      const targetCompendiumFolder = await this.#getOrCreateCompendiumFolder(
+        pack,
+        targetFolder.name,
+      );
+
+      await targetFolder.exportToCompendium(pack, {
+        folder: targetCompendiumFolder.id,
+        keepFolders: true,
+        keepId: true,
+        updateByName: true,
+      });
+
+      const getDocIds = (f) => [
+        ...(f.contents?.map((c) => c.id) || []),
+        ...(f.children || []).flatMap((child) =>
+          getDocIds(child.folder || child),
+        ),
+      ];
+
+      const actorsToDelete = getDocIds(targetFolder);
+      if (actorsToDelete.length > 0)
+        await Actor.deleteDocuments(actorsToDelete);
+
+      ui.notifications.info(
+        `Successfully packed folder for user "${userName}".`,
+      );
+    } catch (error) {
+      console.error(
+        `TCR | Failed to pack folder for user "${userName}":`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Unpacks a specific user's folder from the compendium into their designated world folder.
+   * @param {string} userName - The name of the user whose folder should be unpacked.
+   * @returns {Promise<void>}
+   */
+  static async unpackUserFolder(userName) {
+    const playersFolders = this.#unpackingFolder;
+    if (!playersFolders)
+      return void console.warn(
+        "TCR | 'Players' folder not found in world actors.",
+      );
+
+    const playerFolder = game.actors.folders.find(
+      (f) => f.name === userName && f.folder?.id === playersFolders.id,
+    );
+
+    if (!playerFolder)
+      return void ui.notifications.warn(
+        `TCR | Target folder for "${userName}" not found in world actors.`,
+      );
+
+    const pack = await this.#getCompendium();
+    if (!pack) return;
+
+    const rootCompFolder = pack.folders?.find(
+      (f) => f.name === userName && !f.folder,
+    );
+
+    if (!rootCompFolder) {
+      ui.notifications.info(
+        `TCR | No compendium folder found for user "${userName}".`,
+      );
+      return;
+    }
+
+    const subfoldersMap = new Map(
+      playerFolder.getSubfolders(true).map((f) => [f.id, f]),
+    );
+    subfoldersMap.set(playerFolder.id, playerFolder);
+
+    const resolveFolderId = (compFolder) => {
+      if (!compFolder) return null;
+      const match =
+        subfoldersMap.get(compFolder.id) ||
+        Array.from(subfoldersMap.values()).find(
+          (f) => f.name === compFolder.name,
+        );
+
+      if (match) return match.id;
+      return compFolder.folder ? resolveFolderId(compFolder.folder) : null;
+    };
+
+    const actorsToCreate = [];
+
+    const extractContent = async (compFolder) => {
+      const docs = await pack.getDocuments({ folder: compFolder.id });
+      const targetWorldFolderId = resolveFolderId(compFolder);
+
+      if (targetWorldFolderId) {
+        for (const doc of docs) {
+          const existingActor = game.actors.find(
+            (a) =>
+              a.folder?.id === targetWorldFolderId &&
+              (a.id === doc.id || a.name === doc.name),
+          );
+
+          if (!existingActor) {
+            const actorData = doc.toObject();
+            actorData.folder = targetWorldFolderId;
+            actorsToCreate.push(actorData);
+          }
+        }
+      }
+
+      const children = pack.folders.filter(
+        (f) => f.folder?.id === compFolder.id,
+      );
+      for (const child of children) {
+        await extractContent(child);
+      }
+    };
+
+    try {
+      await extractContent(rootCompFolder);
+
+      if (actorsToCreate.length === 0) {
+        ui.notifications.info(
+          `TCR | No new actors to unpack for "${userName}".`,
+        );
+        return;
+      }
+
+      await Actor.createDocuments(actorsToCreate, { keepId: true });
+      ui.notifications.info(
+        `Successfully unpacked ${actorsToCreate.length} actor(s) for "${userName}".`,
+      );
+    } catch (error) {
+      console.error(
+        `TCR | Failed to unpack folder for user "${userName}":`,
+        error,
+      );
     }
   }
 
