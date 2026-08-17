@@ -12,6 +12,7 @@ export default class TCRPackManager {
     return game.actors.folders.get(folderID);
   }
 
+  /**@returns {boolean} */
   static get startPacking() {
     return game.settings.get(MODULE_ID, SETTINGS.AUTO_PACKING);
   }
@@ -28,6 +29,62 @@ export default class TCRPackManager {
       this.#getDocIds(child.folder || child),
     );
     return [...contentIds, ...childIds];
+  }
+
+  /**
+   * Helper to resolve or dynamically create missing world folders when unpacking.
+   * @param {Folder} compFolder - The folder inside the compendium.
+   * @param {Map<string, Folder>} subfoldersMap - Map of existing world subfolders.
+   * @param {Folder} rootPlayerFolder - The user's root folder in the world actors sidebar.
+   * @param {boolean} createMissingFolders - Whether to create missing world folders.
+   * @returns {Promise<string|null>} World folder ID.
+   */
+  static async #resolveOrCreateWorldFolder(
+    compFolder,
+    subfoldersMap,
+    rootPlayerFolder,
+    createMissingFolders,
+  ) {
+    if (!compFolder) return null;
+
+    let match =
+      subfoldersMap.get(compFolder.id) ||
+      Array.from(subfoldersMap.values()).find(
+        (f) => f.name === compFolder.name,
+      );
+
+    if (match) return match.id;
+
+    if (createMissingFolders) {
+      let parentWorldFolderId = rootPlayerFolder.id;
+
+      if (compFolder.folder) {
+        parentWorldFolderId = await this.#resolveOrCreateWorldFolder(
+          compFolder.folder,
+          subfoldersMap,
+          rootPlayerFolder,
+          true,
+        );
+      }
+
+      const newWorldFolder = await Folder.create({
+        name: compFolder.name,
+        type: Actor.documentName,
+        folder: parentWorldFolderId,
+        sorting: compFolder.sorting || "m",
+      });
+      subfoldersMap.set(compFolder.id, newWorldFolder);
+      return newWorldFolder.id;
+    }
+
+    return compFolder.folder
+      ? this.#resolveOrCreateWorldFolder(
+          compFolder.folder,
+          subfoldersMap,
+          rootPlayerFolder,
+          false,
+        )
+      : rootPlayerFolder.id;
   }
 
   /**
@@ -344,9 +401,10 @@ export default class TCRPackManager {
   /**
    * Unpacks a specific user's folder from the compendium into their designated world folder.
    * @param {string} userName - The name of the user whose folder should be unpacked.
+   * @param {boolean} [createMissingFolders=false] - If true, recreates missing subfolder trees in the world.
    * @returns {Promise<void>}
    */
-  static async unpackUserFolder(userName) {
+  static async unpackUserFolder(userName, createMissingFolders = false) {
     const playersFolders = this.#unpackingFolder;
     if (!playersFolders)
       return void console.warn(
@@ -397,7 +455,12 @@ export default class TCRPackManager {
 
     const extractContent = async (compFolder) => {
       const docs = await pack.getDocuments({ folder: compFolder.id });
-      const targetWorldFolderId = resolveFolderId(compFolder);
+      const targetWorldFolderId = await this.#resolveOrCreateWorldFolder(
+        compFolder,
+        subfoldersMap,
+        playerFolder,
+        createMissingFolders,
+      );
 
       if (targetWorldFolderId) {
         for (const doc of docs) {
@@ -447,9 +510,10 @@ export default class TCRPackManager {
 
   /**
    * Unpacks Actorsfrom a user-specific compendium folder into the world's.
+   * @param {boolean} [createMissingFolders=false] - If true, recreates missing subfolder trees in the world.
    * @returns {Promise<void>}
    */
-  static async unpackingProcess() {
+  static async unpackingProcess(createMissingFolders = false) {
     if (game.user.isGM) return;
     console.log("TCR | Initializing PLayer Auto-UnPacking check...");
 
@@ -517,7 +581,12 @@ export default class TCRPackManager {
      */
     const extractContent = async (compFolder) => {
       const docs = await pack.getDocuments({ folder: compFolder.id });
-      const targetWorldFolderId = resolveFolderId(compFolder);
+      const targetWorldFolderId = await this.#resolveOrCreateWorldFolder(
+        compFolder,
+        subfoldersMap,
+        playerFolder,
+        createMissingFolders,
+      );
       if (!targetWorldFolderId) return;
       for (const doc of docs) {
         const existingActor = game.actors.find(
