@@ -12,6 +12,24 @@ export default class TCRPackManager {
     return game.actors.folders.get(folderID);
   }
 
+  static get startPacking() {
+    return game.settings.get(MODULE_ID, SETTINGS.AUTO_PACKING);
+  }
+
+  /**
+   * Recursively extracts all document IDs from a folder tree structure.
+   * @param {Folder} folder
+   * @returns {string[]}
+   */
+  static #getDocIds(folder) {
+    if (!folder) return [];
+    const contentIds = folder.contents?.map((c) => c.id) || [];
+    const childIds = (folder.children || []).flatMap((child) =>
+      this.#getDocIds(child.folder || child),
+    );
+    return [...contentIds, ...childIds];
+  }
+
   /**
    * Retrieves the designated CompendiumCollection pack
    * @param {object} [options={}]
@@ -57,6 +75,11 @@ export default class TCRPackManager {
     return parentFolder;
   }
 
+  static getPerUserFolders(folder) {
+    const userNames = game.users.map((u) => u.name);
+    return folder.getSubfolders().filter((f) => userNames.includes(f.name));
+  }
+
   /* -------------------------------------------- */
   /*  Main Methods                                */
   /* -------------------------------------------- */
@@ -65,6 +88,15 @@ export default class TCRPackManager {
    * Register setting and menu.
    */
   static registerSetting() {
+    game.settings.register(MODULE_ID, SETTINGS.AUTO_PACKING, {
+      name: "Enable Auto-Archive on World Startup",
+      hint: "When enabled, automatically archives inactive player actors into the compendium and restores logging-in player actors upon world load.",
+      config: true,
+      scope: "world",
+      default: false,
+      type: Boolean,
+    });
+
     game.settings.register(MODULE_ID, SETTINGS.UNPACKING_FOLDER, {
       name: "Unpacking Destination Folder",
       hint: "Select the world folder where player actors will be unpacked from the compendium.",
@@ -73,6 +105,8 @@ export default class TCRPackManager {
       default: "",
       type: new WorldFolderField({
         required: false,
+        nullable: true,
+        blank: true,
         contentType: Actor.documentName,
       }),
     });
@@ -167,12 +201,7 @@ export default class TCRPackManager {
           updateByName: true,
         });
 
-        const getDocIds = (f) => [
-          ...(f.contents?.map((c) => c.id) || []),
-          ...(f.children || []).flatMap(getDocIds),
-        ];
-
-        actorsToDelete.push(...getDocIds(folder));
+        actorsToDelete.push(...this.#getDocIds(folder));
       }
 
       await Actor.deleteDocuments(actorsToDelete);
@@ -214,13 +243,6 @@ export default class TCRPackManager {
 
       const actorsToDelete = [];
 
-      const getDocIds = (f) => [
-        ...(f.contents?.map((c) => c.id) || []),
-        ...(f.children || []).flatMap((child) =>
-          getDocIds(child.folder || child),
-        ),
-      ];
-
       for (const folder of nonEmptyFolders) {
         console.log(`TCR | Exporting folder "${folder.name}" to compendium...`);
 
@@ -236,7 +258,7 @@ export default class TCRPackManager {
           updateByName: true,
         });
 
-        actorsToDelete.push(...getDocIds(folder));
+        actorsToDelete.push(...this.#getDocIds(folder));
       }
 
       if (actorsToDelete.length > 0) {
@@ -304,14 +326,7 @@ export default class TCRPackManager {
         updateByName: true,
       });
 
-      const getDocIds = (f) => [
-        ...(f.contents?.map((c) => c.id) || []),
-        ...(f.children || []).flatMap((child) =>
-          getDocIds(child.folder || child),
-        ),
-      ];
-
-      const actorsToDelete = getDocIds(targetFolder);
+      const actorsToDelete = this.#getDocIds(targetFolder);
       if (actorsToDelete.length > 0)
         await Actor.deleteDocuments(actorsToDelete);
 

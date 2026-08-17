@@ -22,6 +22,7 @@ export const SETTINGS = {
   INACTIVE_THRESHOLD: "inactiveThreshold",
   TOKEN_API: "tokenApi",
   OVERRIDE_GRID_SIZE: "overrideGridSize",
+  AUTO_PACKING: "autoPackingActors",
   UNPACKING_FOLDER: "unpackingFolder",
   PACKING_COMPENDIUM: "packingCompendium",
 };

@@ -140,8 +140,10 @@ Hooks.once("setup", () => {
 
 Hooks.on("ready", () => {
   settings.LoginTracker.initialize();
-  TCRPackManager.packingProcess();
-  TCRPackManager.unpackingProcess();
+  if (TCRPackManager.startPacking) {
+    TCRPackManager.packingProcess();
+    TCRPackManager.unpackingProcess();
+  }
 
   Hooks.on("renderApplicationV2", (_, element) => {
     /**@type {HTMLButtonElement} */
