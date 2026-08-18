@@ -137,6 +137,173 @@ export default class TCRPackManager {
     return folder.getSubfolders().filter((f) => userNames.includes(f.name));
   }
 
+  /***************************************************************/
+
+  /**
+   * Export all Documents contained in this Folder to a given Compendium pack.
+   * Optionally update existing Documents within the Pack by name, otherwise append all new entries.
+   * @this {Folder}
+   * @param {CompendiumCollection} pack       A Compendium pack to which the documents will be exported
+   * @param {object} [options]                Additional options which customize how content is exported.
+   *                                          See {@link ClientDocumentMixin#toCompendium}
+   * @param {boolean} [options.updateByName=false]    Update existing entries in the Compendium pack, matching by name
+   * @param {boolean} [options.keepId=false]          Retain the original _id attribute when updating an entity
+   * @param {boolean} [options.keepFolders=false]     Retain the existing Folder structure
+   * @param {string} [options.folder]                 A target folder id to which the documents will be exported
+   * @returns {Promise<CompendiumCollection>}  The updated Compendium Collection instance
+   */
+  static async exportToCompendium(pack, options = {}) {
+    const updateByName = options.updateByName ?? false;
+    const index = await pack.getIndex();
+    ui.notifications.info(
+      game.i18n.format("FOLDER.Exporting", {
+        type: game.i18n.localize(
+          getDocumentClass(this.type).metadata.labelPlural,
+        ),
+        compendium: pack.collection,
+      }),
+    );
+    options.folder ||= null;
+
+    // Classify creations and updates
+    const foldersToCreate = [];
+    const foldersToUpdate = [];
+    const documentsToCreate = [];
+    const documentsToUpdate = [];
+
+    // Ensure we do not overflow maximum allowed folder depth
+    const originDepth = this.ancestors.length;
+    const targetDepth = options.folder
+      ? (pack.folders.get(options.folder)?.ancestors.length ?? 0) + 1
+      : 0;
+
+    /**
+     * Recursively extract the contents and subfolders of a Folder into the Pack
+     * @param {Folder} folder       The Folder to extract
+     * @param {number} [_depth]     An internal recursive depth tracker
+     * @private
+     */
+    const _extractFolder = async (folder, _depth = 0) => {
+      const folderData = folder.toCompendium(pack, {
+        ...options,
+        clearSort: false,
+        keepId: true,
+      });
+
+      if (options.keepFolders) {
+        // Ensure that the exported folder is within the maximum allowed folder depth
+        const currentDepth = _depth + targetDepth - originDepth;
+        const exceedsDepth = currentDepth > pack.maxFolderDepth;
+        if (exceedsDepth) {
+          throw new Error(
+            `Folder "${folder.name}" exceeds maximum allowed folder depth of ${pack.maxFolderDepth}`,
+          );
+        }
+
+        // Re-parent child folders into the target folder or into the compendium root
+        if (folderData.folder === this.id) folderData.folder = options.folder;
+
+        // Classify folder data for creation or update
+        if (folder !== this) {
+          const existing = updateByName
+            ? pack.folders.find((f) => f.name === folder.name)
+            : pack.folders.get(folder.id);
+          if (existing) {
+            folderData._id = existing._id;
+            foldersToUpdate.push(folderData);
+          } else foldersToCreate.push(folderData);
+        }
+      }
+
+      // Iterate over Documents in the Folder, preparing each for export
+      for (let doc of folder.contents) {
+        const data = doc.toCompendium(pack, options);
+
+        // Re-parent immediate child documents into the target folder.
+        if (data.folder === this.id) data.folder = options.folder;
+        // Otherwise retain their folder structure if keepFolders is true.
+        else
+          data.folder = options.keepFolders ? folderData._id : options.folder;
+
+        // Generate thumbnails for Scenes
+        if (doc instanceof Scene) {
+          const { thumb } = await doc.createThumbnail({
+            img: data.background.src,
+          });
+          data.thumb = thumb;
+        }
+
+        // Classify document data for creation or update
+        const existing = updateByName
+          ? index.find((i) => i.name === data.name)
+          : index.find((i) => i._id === data._id);
+        if (existing) {
+          data._id = existing._id;
+          documentsToUpdate.push(data);
+        } else documentsToCreate.push(data);
+        console.log(
+          `Prepared "${data.name}" for export to "${pack.collection}"`,
+        );
+      }
+
+      // Iterate over subfolders of the Folder, preparing each for export
+      for (let c of folder.children) await _extractFolder(c.folder, _depth + 1);
+    };
+
+    // Prepare folders for export
+    try {
+      await _extractFolder(this, 0);
+    } catch (err) {
+      const msg = `Cannot export Folder "${this.name}" to Compendium pack "${pack.collection}":\n${err.message}`;
+      return ui.notifications.error(msg, { console: true });
+    }
+
+    // Create and update Folders
+    if (foldersToUpdate.length) {
+      await this.constructor.updateDocuments(foldersToUpdate, {
+        pack: pack.collection,
+        diff: false,
+        recursive: false,
+        render: false,
+      });
+    }
+    if (foldersToCreate.length) {
+      await this.constructor.createDocuments(foldersToCreate, {
+        pack: pack.collection,
+        keepId: true,
+        render: false,
+      });
+    }
+
+    // Create and update Documents
+    const cls = pack.documentClass;
+    if (documentsToUpdate.length)
+      await cls.updateDocuments(documentsToUpdate, {
+        pack: pack.collection,
+        diff: false,
+        recursive: false,
+        render: false,
+      });
+    if (documentsToCreate.length)
+      await cls.createDocuments(documentsToCreate, {
+        pack: pack.collection,
+        keepId: options.keepId,
+        render: false,
+      });
+
+    // Re-render the pack
+    ui.notifications.info(
+      game.i18n.format("FOLDER.ExportDone", {
+        type: game.i18n.localize(
+          getDocumentClass(this.type).metadata.labelPlural,
+        ),
+        compendium: pack.collection,
+      }),
+    );
+    pack.render(false);
+    return pack;
+  }
+
   /* -------------------------------------------- */
   /*  Main Methods                                */
   /* -------------------------------------------- */
@@ -241,8 +408,6 @@ export default class TCRPackManager {
         inactiveUserNames.has(f.name),
       );
 
-      const actorsToDelete = [];
-
       for (const folder of foldersToExport) {
         console.log(`TCR | Exporting folder "${folder.name}" to compendium...`);
 
@@ -251,17 +416,19 @@ export default class TCRPackManager {
           folder.name,
         );
 
-        await folder.exportToCompendium(pack, {
+        await this.exportToCompendium.call(folder, pack, {
           folder: targetCompendiumFolder.id,
           keepFolders: true,
           keepId: true,
           updateByName: true,
         });
 
-        actorsToDelete.push(...this.#getDocIds(folder));
+        const actorsIDs = this.#getDocIds(folder);
+        if (actorsIDs.length) {
+          await Actor.deleteDocuments(actorsIDs);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
       }
-
-      await Actor.deleteDocuments(actorsToDelete);
     } catch (error) {
       console.error("TCR | Auto-Packing encountered an error:", error);
     }
@@ -298,8 +465,6 @@ export default class TCRPackManager {
         return void console.log("TCR | No non-empty folders to pack.");
       }
 
-      const actorsToDelete = [];
-
       for (const folder of nonEmptyFolders) {
         console.log(`TCR | Exporting folder "${folder.name}" to compendium...`);
 
@@ -308,33 +473,23 @@ export default class TCRPackManager {
           folder.name,
         );
 
-        await folder.exportToCompendium(pack, {
+        await this.exportToCompendium.call(folder, pack, {
           folder: targetCompendiumFolder.id,
           keepFolders: true,
           keepId: true,
           updateByName: true,
         });
 
-        actorsToDelete.push(...this.#getDocIds(folder));
-      }
-
-      if (actorsToDelete.length > 0) {
-        await Actor.deleteDocuments(actorsToDelete);
-        console.log(
-          `TCR | Successfully packed and removed ${actorsToDelete.length} actors from the world.`,
-        );
+        const actorsIDs = this.#getDocIds(folder);
+        if (actorsIDs.length) {
+          await Actor.deleteDocuments(actorsIDs);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
       }
 
       ui.notifications.info(
         `Successfully packed ${nonEmptyFolders.length} folder(s) into ${pack.metadata.label}.`,
       );
-
-      if (actorsToDelete.length > 0) {
-        await Actor.deleteDocuments(actorsToDelete);
-        console.log(
-          `TCR | Successfully packed and removed ${actorsToDelete.length} actors from the world.`,
-        );
-      }
     } catch (error) {}
   }
 
@@ -350,6 +505,7 @@ export default class TCRPackManager {
     if (!playersFolder)
       return void console.log("TCR | Destination folder not found.");
 
+    /**@type {Folder} */
     const targetFolder = game.actors.folders.find(
       (f) => f.name === userName && f.folder?.id === playersFolder.id,
     );
@@ -376,7 +532,7 @@ export default class TCRPackManager {
         targetFolder.name,
       );
 
-      await targetFolder.exportToCompendium(pack, {
+      await this.exportToCompendium.call(targetFolder, pack, {
         folder: targetCompendiumFolder.id,
         keepFolders: true,
         keepId: true,
@@ -411,6 +567,7 @@ export default class TCRPackManager {
         "TCR | 'Players' folder not found in world actors.",
       );
 
+    /**@type {Folder} */
     const playerFolder = game.actors.folders.find(
       (f) => f.name === userName && f.folder?.id === playersFolders.id,
     );
