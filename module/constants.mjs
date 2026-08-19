@@ -12,8 +12,8 @@ export const USER_FLAGS = {
 };
 export const ITEM_FLAGS = {
   SPELL_CLASSES: "spellClasses",
-  LINKED_DOCS: "linkedDocuments"
-}
+  LINKED_DOCS: "linkedDocuments",
+};
 export const SETTINGS = {
   TAB_CONFIGURATION: "tabConfiguration",
   SOURCES_CONFIGURATION: "sourcesConfiguration",
@@ -26,7 +26,10 @@ export const SETTINGS = {
   UNPACKING_FOLDER: "unpackingFolder",
   PACKING_COMPENDIUM: "packingCompendium",
   FOLDER_COLORS: "folderPackingColor",
-  MINUTES_THRESHOLD_DISCONNECTED: "disconnectedMinutesThreshold"
+  MINUTES_THRESHOLD_DISCONNECTED: "disconnectedMinutesThreshold",
+  COLOR_ONLINE: "colorOnline",
+  COLOR_OFFLINE: "colorOffline",
+  COLOR_NO_USER: "colorNoUser",
 };
 
 export const ISSUE_TYPES = {

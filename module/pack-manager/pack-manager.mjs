@@ -12,12 +12,14 @@ export default class TCRPackManager {
     return game.actors.folders.get(folderID);
   }
 
-  static COLORS = Object.freeze({
-    online: "#2549be",
-    offline: "#be2549",
-    noUser: "#be9a25",
-  });
-
+  static get COLORS() {
+    return {
+      online: game.settings.get(MODULE_ID, SETTINGS.COLOR_ONLINE) ?? "#2549be",
+      offline:
+        game.settings.get(MODULE_ID, SETTINGS.COLOR_OFFLINE) ?? "#be2549",
+      noUser: game.settings.get(MODULE_ID, SETTINGS.COLOR_NO_USER) ?? "#be9a25",
+    };
+  }
   static #EXPORT_OPTIONS = Object.freeze({
     keepFolders: true,
     keepId: true,
@@ -354,6 +356,39 @@ export default class TCRPackManager {
       scope: "world",
       default: false,
       type: Boolean,
+    });
+
+    game.settings.register(MODULE_ID, SETTINGS.COLOR_ONLINE, {
+      name: "Online Folder Color",
+      hint: "Background color for active/online user folders.",
+      config: true,
+      scope: "world",
+      default: "#2549be",
+      type: new foundry.data.fields.ColorField({
+        initial: "#2549be",
+      }),
+    });
+
+    game.settings.register(MODULE_ID, SETTINGS.COLOR_OFFLINE, {
+      name: "Offline Folder Color",
+      hint: "Background color for inactive/offline user folders.",
+      config: true,
+      scope: "world",
+      default: "#be2549",
+      type: new foundry.data.fields.ColorField({
+        initial: "#be2549",
+      }),
+    });
+
+    game.settings.register(MODULE_ID, SETTINGS.COLOR_NO_USER, {
+      name: "Unmapped Folder Color",
+      hint: "Background color for folders without a matching user name.",
+      config: true,
+      scope: "world",
+      default: "#be9a25",
+      type: new foundry.data.fields.ColorField({
+        initial: "#be9a25",
+      }),
     });
 
     game.settings.register(MODULE_ID, SETTINGS.MINUTES_THRESHOLD_DISCONNECTED, {
@@ -738,7 +773,6 @@ export default class TCRPackManager {
    * @returns {Promise<void>}
    */
   static async unpackingProcess(createMissingFolders = false) {
-    if (game.user.isGM) return;
     console.log("TCR | Initializing PLayer Auto-UnPacking check...");
 
     const playersFolders = this._unpackingFolder;
