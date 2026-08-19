@@ -25,6 +25,8 @@ export const SETTINGS = {
   AUTO_PACKING: "autoPackingActors",
   UNPACKING_FOLDER: "unpackingFolder",
   PACKING_COMPENDIUM: "packingCompendium",
+  FOLDER_COLORS: "folderPackingColor",
+  MINUTES_THRESHOLD_DISCONNECTED: "disconnectedMinutesThreshold"
 };
 
 export const ISSUE_TYPES = {

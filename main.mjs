@@ -154,7 +154,9 @@ Hooks.on("ready", () => {
   });
 });
 
-Hooks.on("renderItemSheet", hooks.onRenderItemSheet);
-Hooks.on("preUpdateUser", hooks.preUpdateUser);
-Hooks.on("updateUser", hooks.onUpdateUser);
 Hooks.on("dropCanvasData", hooks.onDropCanvasData);
+Hooks.on("renderActorDirectory", hooks.onRenderActorDirectory);
+Hooks.on("renderCompendium", hooks.onRenderCompendium);
+Hooks.on("updateUser", hooks.onUpdateUser);
+Hooks.on("preUpdateUser", hooks.preUpdateUser);
+Hooks.on("renderItemSheet", hooks.onRenderItemSheet);

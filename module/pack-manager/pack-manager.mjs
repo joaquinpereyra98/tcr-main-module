@@ -7,10 +7,23 @@ const MS_PER_DAY = 86_400_000;
 
 export default class TCRPackManager {
   /**@returns {Folder|undefined} */
-  static get #unpackingFolder() {
+  static get _unpackingFolder() {
     const folderID = game.settings.get(MODULE_ID, SETTINGS.UNPACKING_FOLDER);
     return game.actors.folders.get(folderID);
   }
+
+  static COLORS = Object.freeze({
+    online: "#2549be",
+    offline: "#be2549",
+    noUser: "#be9a25",
+  });
+
+  static #EXPORT_OPTIONS = Object.freeze({
+    keepFolders: true,
+    keepId: true,
+    updateByName: true,
+    clearOwnership: false,
+  });
 
   /**@returns {boolean} */
   static get startPacking() {
@@ -132,9 +145,32 @@ export default class TCRPackManager {
     return parentFolder;
   }
 
+  /**
+   * Retrieves subfolders that match the name of an existing World user.
+   * @param {Folder} folder - The parent folder to search within.
+   * @returns {Folder[]} An array of subfolders corresponding to registered users.
+   */
   static getPerUserFolders(folder) {
     const userNames = game.users.map((u) => u.name);
     return folder.getSubfolders().filter((f) => userNames.includes(f.name));
+  }
+
+  /**
+   * Deletes actors in batches to prevent UI freeze or API rate-limiting issues.
+   * @param {string[]} actorIDs - Array of document IDs for the actors to be deleted.
+   * @returns {Promise<void>}
+   */
+  static async #deleteActors(actorIDs) {
+    if (actorIDs.length) {
+      const BATCH_SIZE = 20;
+
+      for (let i = 0; i < actorIDs.length; i += BATCH_SIZE) {
+        const batch = actorIDs.slice(i, i + BATCH_SIZE);
+
+        await Actor.deleteDocuments(batch);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
   }
 
   /***************************************************************/
@@ -144,12 +180,11 @@ export default class TCRPackManager {
    * Optionally update existing Documents within the Pack by name, otherwise append all new entries.
    * @this {Folder}
    * @param {CompendiumCollection} pack       A Compendium pack to which the documents will be exported
-   * @param {object} [options]                Additional options which customize how content is exported.
-   *                                          See {@link ClientDocumentMixin#toCompendium}
-   * @param {boolean} [options.updateByName=false]    Update existing entries in the Compendium pack, matching by name
-   * @param {boolean} [options.keepId=false]          Retain the original _id attribute when updating an entity
-   * @param {boolean} [options.keepFolders=false]     Retain the existing Folder structure
-   * @param {string} [options.folder]                 A target folder id to which the documents will be exported
+   * @param {object} [options] - Additional options which customize how content is exported. See {@link ClientDocumentMixin#toCompendium}
+   * @param {boolean} [options.updateByName=false] - Update existing entries in the Compendium pack, matching by name
+   * @param {boolean} [options.keepId=false] - Retain the original _id attribute when updating an entity
+   * @param {boolean} [options.keepFolders=false] - Retain the existing Folder structure
+   * @param {string} [options.folder] - A target folder id to which the documents will be exported
    * @returns {Promise<CompendiumCollection>}  The updated Compendium Collection instance
    */
   static async exportToCompendium(pack, options = {}) {
@@ -312,6 +347,28 @@ export default class TCRPackManager {
    * Register setting and menu.
    */
   static registerSetting() {
+    game.settings.register(MODULE_ID, SETTINGS.FOLDER_COLORS, {
+      name: "Override Player Folder Colors",
+      hint: "When enabled, forces player folders in the compendium and folder to reflect online/offline status colors, overriding any manually assigned folder colors.",
+      config: true,
+      scope: "world",
+      default: false,
+      type: Boolean,
+    });
+
+    game.settings.register(MODULE_ID, SETTINGS.MINUTES_THRESHOLD_DISCONNECTED, {
+      name: "Offline Status Threshold (Minutes)",
+      hint: "The number of minutes a player must be disconnected before their folder is marked as offline.",
+      config: true,
+      scope: "world",
+      default: 5,
+      type: new foundry.data.fields.NumberField({
+        initial: 5,
+        integer: true,
+        positive: true,
+      }),
+    });
+
     game.settings.register(MODULE_ID, SETTINGS.AUTO_PACKING, {
       name: "Enable Auto-Archive on World Startup",
       hint: "When enabled, automatically archives inactive player actors into the compendium and restores logging-in player actors upon world load.",
@@ -363,37 +420,12 @@ export default class TCRPackManager {
    */
   static async packingProcess() {
     if (!game.users.activeGM?.isSelf) return;
-    console.log("TCR | Initializing GM Auto-Packing check...");
-
-    const playersFolder = this.#unpackingFolder;
+    const playersFolder = this._unpackingFolder;
     if (!playersFolder) return;
 
+    console.log("TCR | Initializing GM Auto-Packing check...");
+
     try {
-      const perUserFolders = playersFolder.getSubfolders();
-
-      const nonEmptyFolders = [];
-
-      for (const userFolder of perUserFolders) {
-        if (hasDocumentsInFolder(userFolder)) {
-          nonEmptyFolders.push(userFolder);
-        }
-      }
-
-      const nonEmptyFolderNames = new Set(nonEmptyFolders.map((f) => f.name));
-      const INACTIVE_THRESHOLD = LoginTracker.INACTIVE_THRESHOLD_SETTING;
-
-      const inactiveUsersWithFolder = game.users.filter((u) => {
-        if (u.isGM || !nonEmptyFolderNames.has(u.name)) return false;
-
-        const { lastLogin } = LoginTracker.getLoginData(u);
-        const daysSince = (Date.now() - lastLogin) / MS_PER_DAY;
-        return daysSince > INACTIVE_THRESHOLD;
-      });
-
-      if (!inactiveUsersWithFolder.length)
-        return void console.log("TCR | No inactive player folders to pack.");
-
-      // 6. Execute Packing Process
       const pack = await this.#getCompendium({ unlock: true });
       if (!pack) {
         console.warn(
@@ -401,34 +433,60 @@ export default class TCRPackManager {
         );
         return;
       }
-      const inactiveUserNames = new Set(
-        inactiveUsersWithFolder.map((u) => u.name),
-      );
-      const foldersToExport = nonEmptyFolders.filter((f) =>
-        inactiveUserNames.has(f.name),
-      );
 
-      for (const folder of foldersToExport) {
-        console.log(`TCR | Exporting folder "${folder.name}" to compendium...`);
+      const FIVE_MINUTES =
+        game.settings.get(MODULE_ID, SETTINGS.INACTIVE_THRESHOLD) * 60000;
+      const now = Date.now();
 
-        const targetCompendiumFolder = await this.#getOrCreateCompendiumFolder(
-          pack,
-          folder.name,
-        );
+      for (const userFolder of playersFolder.getSubfolders()) {
+        const user = game.users.getName(userFolder.name);
+        const { lastLogin } = user ? LoginTracker.getLoginData(user) : {};
+        const timeSinceLogin = lastLogin ? now - lastLogin : 0;
 
-        await this.exportToCompendium.call(folder, pack, {
-          folder: targetCompendiumFolder.id,
-          keepFolders: true,
-          keepId: true,
-          updateByName: true,
-        });
+        const isInactive =
+          user &&
+          timeSinceLogin > MS_PER_DAY * LoginTracker.INACTIVE_THRESHOLD_SETTING;
+        const isOffline = user && !isInactive && timeSinceLogin > FIVE_MINUTES;
 
-        const actorsIDs = this.#getDocIds(folder);
-        if (actorsIDs.length) {
-          await Actor.deleteDocuments(actorsIDs);
-          await new Promise((resolve) => setTimeout(resolve, 200));
+        if (!hasDocumentsInFolder(userFolder)) continue;
+
+        if (!user || isOffline || isInactive) {
+          let logMsg = "";
+
+          if (isInactive) {
+            logMsg = `Player "${user.name}" is inactive. Packing and deleting folder.`;
+          } else if (isOffline) {
+            logMsg = `Player "${user.name}" is offline. Packing stuff.`;
+          } else {
+            logMsg = `No player found for folder "${userFolder.name}". Packing and deleting folder.`;
+          }
+
+          console.log(`TCR | ${logMsg}`);
+
+          const targetFolder = await this.#getOrCreateCompendiumFolder(
+            pack,
+            userFolder.name,
+          );
+
+          await this.exportToCompendium.call(userFolder, pack, {
+            ...this.#EXPORT_OPTIONS,
+            folder: targetFolder.id,
+          });
+
+          if (isOffline) {
+            // Remove actors from world, but keep the user folder for returning offline players
+            const actorIDs = this.#getDocIds(userFolder);
+            await this.#deleteActors(actorIDs);
+          } else {
+            // For inactive players (or deleted users), purge the world folder completely
+            await userFolder.delete({
+              deleteSubfolders: true,
+              deleteContents: true,
+            });
+          }
         }
       }
+      console.log("TCR | GM Auto-Packing Finish!");
     } catch (error) {
       console.error("TCR | Auto-Packing encountered an error:", error);
     }
@@ -442,55 +500,58 @@ export default class TCRPackManager {
     if (!game.user.isGM) return;
     console.log("TCR | Initializing Packing...");
 
-    const playersFolder = this.#unpackingFolder;
+    const playersFolder = this._unpackingFolder;
     if (!playersFolder)
       return void console.warn(
         "TCR | Unpacking target folder not found in world actors.",
       );
 
-    const pack = await this.#getCompendium({ unlock: true });
-    if (!pack)
-      return void console.warn(
-        "TCR | Could not open compendium. Aborting packing process.",
-      );
-
     try {
-      const perUserFolders = playersFolder.getSubfolders();
-
-      const nonEmptyFolders = perUserFolders.filter((userFolder) =>
-        hasDocumentsInFolder(userFolder),
-      );
-
-      if (!nonEmptyFolders.length) {
-        return void console.log("TCR | No non-empty folders to pack.");
+      const pack = await this.#getCompendium({ unlock: true });
+      if (!pack) {
+        return void console.warn(
+          "TCR | Could not open compendium. Aborting packing process.",
+        );
       }
 
-      for (const folder of nonEmptyFolders) {
+      for (const userFolder of playersFolder.getSubfolders()) {
         console.log(`TCR | Exporting folder "${folder.name}" to compendium...`);
 
-        const targetCompendiumFolder = await this.#getOrCreateCompendiumFolder(
+        const user = game.users.getName(userFolder.name);
+
+        const logMsg = user
+          ? `Player "${user.name}". Packing stuff.`
+          : `No player found for folder "${userFolder.name}". Packing and deleting folder.`;
+
+        console.log(`TCR | ${logMsg}`);
+
+        const targetFolder = await this.#getOrCreateCompendiumFolder(
           pack,
-          folder.name,
+          userFolder.name,
         );
 
-        await this.exportToCompendium.call(folder, pack, {
-          folder: targetCompendiumFolder.id,
-          keepFolders: true,
-          keepId: true,
-          updateByName: true,
+        await this.exportToCompendium.call(userFolder, pack, {
+          ...this.#EXPORT_OPTIONS,
+          folder: targetFolder.id,
         });
 
-        const actorsIDs = this.#getDocIds(folder);
-        if (actorsIDs.length) {
-          await Actor.deleteDocuments(actorsIDs);
-          await new Promise((resolve) => setTimeout(resolve, 200));
+        if (user) {
+          const actorIDs = this.#getDocIds(userFolder);
+          await this.#deleteActors(actorIDs);
+        } else {
+          await userFolder.delete({
+            deleteSubfolders: true,
+            deleteContents: true,
+          });
         }
       }
 
       ui.notifications.info(
-        `Successfully packed ${nonEmptyFolders.length} folder(s) into ${pack.metadata.label}.`,
+        `Successfully packed all folder(s) into ${pack.metadata.label}.`,
       );
-    } catch (error) {}
+    } catch (error) {
+      console.error("TCR | Packing All encountered an error:", error);
+    }
   }
 
   /**
@@ -501,7 +562,7 @@ export default class TCRPackManager {
   static async packUserFolder(userName) {
     if (!game.user.isGM) return;
 
-    const playersFolder = this.#unpackingFolder;
+    const playersFolder = this._unpackingFolder;
     if (!playersFolder)
       return void console.log("TCR | Destination folder not found.");
 
@@ -515,15 +576,15 @@ export default class TCRPackManager {
         `TCR | No folder found for user "${userName}".`,
       );
 
-    if (!hasDocumentsInFolder(targetFolder))
-      return void ui.notifications.info(
-        `TCR | Folder for "${userName}" is empty. Nothing to pack.`,
-      );
-
-    const pack = await this.#getCompendium({ unlock: true });
-    if (!pack) return;
-
     try {
+      const pack = await this.#getCompendium({ unlock: true });
+      if (!pack) {
+        console.warn(
+          "TCR | Could not open compendium. Aborting packing process.",
+        );
+        return;
+      }
+
       console.log(
         `TCR | Exporting folder "${targetFolder.name}" to compendium...`,
       );
@@ -533,15 +594,21 @@ export default class TCRPackManager {
       );
 
       await this.exportToCompendium.call(targetFolder, pack, {
+        ...this.#EXPORT_OPTIONS,
         folder: targetCompendiumFolder.id,
-        keepFolders: true,
-        keepId: true,
-        updateByName: true,
       });
 
-      const actorsToDelete = this.#getDocIds(targetFolder);
-      if (actorsToDelete.length > 0)
-        await Actor.deleteDocuments(actorsToDelete);
+      const user = game.users.getName(userName);
+
+      if (user) {
+        const actorIDs = this.#getDocIds(targetFolder);
+        await this.#deleteActors(actorIDs);
+      } else {
+        await targetFolder.delete({
+          deleteSubfolders: true,
+          deleteContents: true,
+        });
+      }
 
       ui.notifications.info(
         `Successfully packed folder for user "${userName}".`,
@@ -561,7 +628,7 @@ export default class TCRPackManager {
    * @returns {Promise<void>}
    */
   static async unpackUserFolder(userName, createMissingFolders = false) {
-    const playersFolders = this.#unpackingFolder;
+    const playersFolders = this._unpackingFolder;
     if (!playersFolders)
       return void console.warn(
         "TCR | 'Players' folder not found in world actors.",
@@ -674,7 +741,7 @@ export default class TCRPackManager {
     if (game.user.isGM) return;
     console.log("TCR | Initializing PLayer Auto-UnPacking check...");
 
-    const playersFolders = this.#unpackingFolder;
+    const playersFolders = this._unpackingFolder;
 
     if (!playersFolders)
       return void console.warn(
