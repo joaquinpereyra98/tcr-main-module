@@ -666,51 +666,44 @@ export default class TCRPackManager {
    */
   static async unpackUserFolder(userName, createMissingFolders = false) {
     const playersFolders = this._unpackingFolder;
-    if (!playersFolders)
+    if (!playersFolders) {
       return void console.warn(
         "TCR | 'Players' folder not found in world actors.",
       );
+    }
 
     /**@type {Folder} */
     const playerFolder = game.actors.folders.find(
       (f) => f.name === userName && f.folder?.id === playersFolders.id,
     );
 
-    if (!playerFolder)
+    if (!playerFolder) {
       return void ui.notifications.warn(
         `TCR | Target folder for "${userName}" not found in world actors.`,
       );
+    }
 
     const pack = await this.#getCompendium();
-    if (!pack) return;
+    if (!pack) {
+      return void console.warn(
+        "TCR | Could not open compendium. Aborting unpacking process.",
+      );
+    }
 
     const rootCompFolder = pack.folders?.find(
       (f) => f.name === userName && !f.folder,
     );
 
     if (!rootCompFolder) {
-      ui.notifications.info(
+      return void ui.notifications.info(
         `TCR | No compendium folder found for user "${userName}".`,
       );
-      return;
     }
 
     const subfoldersMap = new Map(
       playerFolder.getSubfolders(true).map((f) => [f.id, f]),
     );
     subfoldersMap.set(playerFolder.id, playerFolder);
-
-    const resolveFolderId = (compFolder) => {
-      if (!compFolder) return null;
-      const match =
-        subfoldersMap.get(compFolder.id) ||
-        Array.from(subfoldersMap.values()).find(
-          (f) => f.name === compFolder.name,
-        );
-
-      if (match) return match.id;
-      return compFolder.folder ? resolveFolderId(compFolder.folder) : null;
-    };
 
     const actorsToCreate = [];
 
@@ -734,6 +727,11 @@ export default class TCRPackManager {
           if (!existingActor) {
             const actorData = doc.toObject();
             actorData.folder = targetWorldFolderId;
+            if (actorData?.flags?.["item-piles"]?.data?.enabled) {
+              actorData.ownership = {
+                [game.user.id]: CONST.DOCUMENT_OWNERSHIP_LEVELS.INHERIT,
+              };
+            }
             actorsToCreate.push(actorData);
           }
         }
@@ -770,120 +768,12 @@ export default class TCRPackManager {
   }
 
   /**
-   * Unpacks Actorsfrom a user-specific compendium folder into the world's.
+   * Unpacks Actors from the active user's compendium folder into the world.
    * @param {boolean} [createMissingFolders=false] - If true, recreates missing subfolder trees in the world.
    * @returns {Promise<void>}
    */
   static async unpackingProcess(createMissingFolders = false) {
-    console.log("TCR | Initializing PLayer Auto-UnPacking check...");
-
-    const playersFolders = this._unpackingFolder;
-
-    if (!playersFolders)
-      return void console.warn(
-        "TCR | 'Players' folder not found in world actors.",
-      );
-
-    // 1. Validate destination folder in World
-    /**@type {Folder} */
-    const playerFolder = game.actors.folders.find(
-      (f) =>
-        f._source.name === game.user.name &&
-        f._source.folder === playersFolders.id,
-    );
-
-    if (!playerFolder)
-      return void console.warn(
-        `TCR | ${game.user.name} folder not found in world actors.`,
-      );
-
-    // 2. Retrieve compendium and root user folder
-    const pack = await this.#getCompendium();
-    if (!pack)
-      return void console.warn(
-        "TCR | Could not open compendium. Aborting packing process.",
-      );
-
-    /**@type {Folder} */
-    const rootCompFolder = pack?.folders?.getName(game.user.name);
-    if (!pack || !rootCompFolder) return;
-
-    const subfoldersMap = new Map(
-      playerFolder.getSubfolders(true).map((f) => [f.id, f]),
-    );
-
-    subfoldersMap.set(playerFolder.id, playerFolder);
-
-    /**
-     * Finds the nearest existing world folder ID by matching either ID or Name.
-     * @param {Folder} compFolder
-     * @returns {string|null} World Folder ID or null
-     */
-    const resolveFolderId = (compFolder) => {
-      if (!compFolder) return null;
-
-      const match =
-        subfoldersMap.get(compFolder.id) ||
-        Array.from(subfoldersMap.values()).find(
-          (f) => f.name === compFolder.name,
-        );
-
-      if (match) return match.id;
-
-      return compFolder.folder ? resolveFolderId(compFolder.folder) : null;
-    };
-
-    const actorsToCreate = [];
-
-    /**
-     * Recursively creates missing world folders and extracts actor documents.
-     * @param {Folder} compFolder - The current compendium folder instance
-     */
-    const extractContent = async (compFolder) => {
-      const docs = await pack.getDocuments({ folder: compFolder.id });
-      const targetWorldFolderId = await this.#resolveOrCreateWorldFolder(
-        compFolder,
-        subfoldersMap,
-        playerFolder,
-        createMissingFolders,
-      );
-      if (!targetWorldFolderId) return;
-      for (const doc of docs) {
-        const existingActor = game.actors.find(
-          (a) =>
-            a.folder?.id === targetWorldFolderId &&
-            (a.id === doc.id || a.name === doc.name),
-        );
-
-        if (!existingActor) {
-          const actorData = doc.toObject();
-          actorData.folder = targetWorldFolderId; // Assign fallback folder ID
-          actorsToCreate.push(actorData);
-        }
-      }
-
-      const children = pack.folders.filter(
-        (f) => f.folder?.id === compFolder.id,
-      );
-      for (const child of children) {
-        await extractContent(child);
-      }
-    };
-
-    await extractContent(rootCompFolder);
-
-    if (actorsToCreate.length === 0) {
-      console.log("TCR | No new folders or actors to unpack.");
-      return;
-    }
-
-    if (actorsToCreate.length > 0) {
-      await Actor.createDocuments(actorsToCreate, { keepId: true });
-      console.log(`TCR | Unpacked ${actorsToCreate.length} actor(s).`);
-    }
-
-    ui.notifications.info(
-      `Successfully unpacked actors for ${game.user.name}.`,
-    );
+    console.log("TCR | Initializing Player Auto-Unpacking check...");
+    await this.unpackUserFolder(game.user.name, createMissingFolders);
   }
 }
