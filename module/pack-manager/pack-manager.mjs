@@ -550,7 +550,9 @@ export default class TCRPackManager {
       }
 
       for (const userFolder of playersFolder.getSubfolders()) {
-        console.log(`TCR | Exporting folder "${folder.name}" to compendium...`);
+        console.log(
+          `TCR | Exporting folder "${userFolder.name}" to compendium...`,
+        );
 
         const user = game.users.getName(userFolder.name);
 
