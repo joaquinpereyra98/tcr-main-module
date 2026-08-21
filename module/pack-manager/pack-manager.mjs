@@ -469,7 +469,7 @@ export default class TCRPackManager {
         return;
       }
 
-      const FIVE_MINUTES =
+      const INACTIVE_THRESHOLD =
         game.settings.get(MODULE_ID, SETTINGS.INACTIVE_THRESHOLD) * 60000;
       const now = Date.now();
 
@@ -481,7 +481,9 @@ export default class TCRPackManager {
         const isInactive =
           user &&
           timeSinceLogin > MS_PER_DAY * LoginTracker.INACTIVE_THRESHOLD_SETTING;
-        const isOffline = user && !isInactive && timeSinceLogin > FIVE_MINUTES;
+
+
+        const isOffline = user && !isInactive && timeSinceLogin > INACTIVE_THRESHOLD && !user.active;
 
         if (!hasDocumentsInFolder(userFolder)) continue;
 
