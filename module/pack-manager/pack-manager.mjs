@@ -272,7 +272,7 @@ export default class TCRPackManager {
 
         // Classify document data for creation or update
         const existing = updateByName
-          ? index.find((i) => i.name === data.name)
+          ? index.find((i) => i.name === data.name && i.img === data.img)
           : index.find((i) => i._id === data._id);
         if (existing) {
           data._id = existing._id;
@@ -482,8 +482,11 @@ export default class TCRPackManager {
           user &&
           timeSinceLogin > MS_PER_DAY * LoginTracker.INACTIVE_THRESHOLD_SETTING;
 
-
-        const isOffline = user && !isInactive && timeSinceLogin > INACTIVE_THRESHOLD && !user.active;
+        const isOffline =
+          user &&
+          !isInactive &&
+          timeSinceLogin > INACTIVE_THRESHOLD &&
+          !user.active;
 
         if (!hasDocumentsInFolder(userFolder)) continue;
 
@@ -723,7 +726,7 @@ export default class TCRPackManager {
           const existingActor = game.actors.find(
             (a) =>
               a.folder?.id === targetWorldFolderId &&
-              (a.id === doc.id || a.name === doc.name),
+              (a.id === doc.id || (a.name === doc.name && a.img === doc.img)),
           );
 
           if (!existingActor) {
