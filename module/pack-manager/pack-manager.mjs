@@ -254,6 +254,7 @@ export default class TCRPackManager {
 
       // Iterate over Documents in the Folder, preparing each for export
       for (let doc of folder.contents) {
+        /**@type {import("../../foundry/resources/app/common/types.mjs").ActorData} */
         const data = doc.toCompendium(pack, options);
 
         // Re-parent immediate child documents into the target folder.
@@ -272,7 +273,12 @@ export default class TCRPackManager {
 
         // Classify document data for creation or update
         const existing = updateByName
-          ? index.find((i) => i.name === data.name && i.img === data.img)
+          ? index.find(
+              (i) =>
+                i.name === data.name &&
+                i.img === data.img &&
+                i.folder === data.folder,
+            )
           : index.find((i) => i._id === data._id);
         if (existing) {
           data._id = existing._id;
@@ -724,19 +730,23 @@ export default class TCRPackManager {
       if (targetWorldFolderId) {
         for (const doc of docs) {
           const existingActor = game.actors.find(
+            /**@param {Actor} a*/
             (a) =>
               a.folder?.id === targetWorldFolderId &&
+              a.isOwner &&
               (a.id === doc.id || (a.name === doc.name && a.img === doc.img)),
           );
 
           if (!existingActor) {
             const actorData = doc.toObject();
             actorData.folder = targetWorldFolderId;
-            if (actorData?.flags?.["item-piles"]?.data?.enabled) {
-              actorData.ownership = {
-                [game.user.id]: CONST.DOCUMENT_OWNERSHIP_LEVELS.INHERIT,
-              };
-            }
+
+            const isItemPile = actorData?.flags?.["item-piles"]?.data?.enabled;
+            const { INHERIT, OWNER } = CONST.DOCUMENT_OWNERSHIP_LEVELS;
+            actorData.ownership = {
+              default: actorData.ownership.default,
+              [game.user.id]: isItemPile ? INHERIT : OWNER,
+            };
             actorsToCreate.push(actorData);
           }
         }

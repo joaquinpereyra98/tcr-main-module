@@ -139,11 +139,15 @@ Hooks.once("setup", () => {
 });
 
 Hooks.on("ready", () => {
-  settings.LoginTracker.initialize();
-  if (TCRPackManager.startPacking) {
-    TCRPackManager.packingProcess();
-    TCRPackManager.unpackingProcess();
-  }
+  settings.LoginTracker.initialize()
+    .then(async () => {
+      if (!TCRPackManager.startPacking) return;
+      await TCRPackManager.packingProcess();
+      await TCRPackManager.unpackingProcess();
+    })
+    .catch((err) =>
+      console.error("TCR | LoginTracker initialization failed:", err),
+    );
 
   Hooks.on("renderApplicationV2", (_, element) => {
     /**@type {HTMLButtonElement} */

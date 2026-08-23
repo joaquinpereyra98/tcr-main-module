@@ -191,9 +191,9 @@ export default class LoginTracker extends HandlebarsApplicationMixin(
   /**
    * Initialize the tracker, start heartbeat, and update current session.
    */
-  static initialize() {
+  static async initialize() {
     if (!game.user) return;
-    this.updateLoginSession();
+    await this.updateLoginSession();
     setInterval(() => this.trackHeartbeat(), this.TIMER_INTERVAL);
   }
 
