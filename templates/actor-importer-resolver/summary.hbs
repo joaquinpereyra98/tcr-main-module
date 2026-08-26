@@ -4,42 +4,8 @@
     </header>
 
     <div class="importer-grid">
-        {{> actorPanel actor=existing title="Existing in Compendium" class="old" group=existingItems}}
-        {{> actorPanel actor=source title="New Imported" class="new" group=sourceItems}}
+        {{#each panels}}
+        {{> (lookup @root "panelPartial")}}
+        {{/each}}
     </div>
 </section>
-
-{{#*inline "actorPanel"}}
-<div class="tcr-actor-panel {{class}}">
-    <h3>{{title}}</h3>
-    <div class="tcr-actor-summary">
-        <div class="tcr-actor-image">
-            <img src="{{actor.img}}" alt="{{actor.name}}">
-        </div>
-        <div class="tcr-actor-header">
-            <div class="tcr-actor-name" data-tooltip="{{actor.name}}">{{actor.name}}</div>
-            <div class="tcr-actor-meta">{{localize (lookup config.Actor.typeLabels actor.type)}}</div>
-            <div class="tcr-actor-meta">{{actor.items.size}} embedded item(s)</div>
-            <div class="tcr-actor-uuid" data-tooltip="{{actor.uuid}}">{{actor.uuid}}</div>
-        </div>
-    </div>
-    <div class="tcr-actor-items-scroll">
-        {{#if group.length}}
-            {{#each group}}
-            <section class="tcr-actor-item-group">
-                <h4>{{localize label}} <span>{{items.length}}</span></h4>
-                <div class="tcr-actor-item-links">
-                    {{#each items as |anchor|}}
-                    {{{anchor.outerHTML}}}
-                    {{/each}}
-                </div>
-            </section>
-            {{/each}}
-        {{else}}
-        <div class="tcr-actor-empty-items">
-            No embedded features or items.
-        </div>
-        {{/if}}
-    </div>
-</div>
-{{/inline}}

@@ -1,5 +1,6 @@
 /**
  * @import { ApplicationConfiguration } from "../../foundry/resources/app/client-esm/applications/_types.mjs";
+ * @typedef {import("../../foundry/resources/app/client/data/collections/compendium-collection.js").default} CompendiumCollection
  */
 
 /**
@@ -22,7 +23,6 @@
  * @property {CompendiumBrowserFilters} locked - Filters that are locked and cannot be changed by the user.
  * @property {CompendiumBrowserFilters} initial - Filters applied at startup that the user can modify.
  */
-
 
 /**
  * Filter definition object for additional filters in the Compendium Browser.
@@ -69,4 +69,16 @@
  * @property {string[]} sources.initial - Initial source selection
  * @property {boolean} hiddenSubtitle - Whether to hide the entries subtitles
  * @property {boolean} hideOnLock - Hide filters when locked
+ */
+
+/**
+ * @typedef _DocumentsImportResolverConfiguration
+ * @property {Actor|Scene} source
+ * @property {Actor|Scene} existing
+ * @property {CompendiumCollection} pack
+ * @property {string} folderId
+ */
+
+/**
+ * @typedef {ApplicationConfiguration & _DocumentsImportResolverConfiguration} DocumentsImportResolverConfiguration
  */
