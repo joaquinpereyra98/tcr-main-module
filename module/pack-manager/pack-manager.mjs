@@ -742,9 +742,9 @@ export default class TCRPackManager {
             actorData.folder = targetWorldFolderId;
 
             const isItemPile = actorData?.flags?.["item-piles"]?.data?.enabled;
-            const { INHERIT, OWNER } = CONST.DOCUMENT_OWNERSHIP_LEVELS;
+            const { INHERIT, OWNER, NONE } = CONST.DOCUMENT_OWNERSHIP_LEVELS;
             actorData.ownership = {
-              default: actorData.ownership.default,
+              default: actorData.ownership.default ?? NONE,
               [game.user.id]: isItemPile ? INHERIT : OWNER,
             };
             actorsToCreate.push(actorData);
