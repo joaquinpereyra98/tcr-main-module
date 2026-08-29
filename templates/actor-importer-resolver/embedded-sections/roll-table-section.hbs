@@ -1,0 +1,37 @@
+<div class="tcr-embedded-section tcr-results-section">
+    {{#if embedded.length}}
+    <section class="tcr-group">
+        <h3 class="tcr-collection-title">
+            <span>{{localize "TABLE.Results"}}</span>
+            <span class="tcr-badge">{{embedded.length}}</span>
+        </h3>
+
+        <div class="tcr-type-block">
+            <div class="tcr-embedded-list-grid results">
+                {{#each embedded as |result|}}
+                <div class="tcr-result-item" data-uuid="{{result.uuid}}" data-tooltip="{{result.name}}">
+                    <div class="tcr-result-details">
+                        <img class="tcr-result-img" src="{{result.img}}" alt="{{result.id}}">
+                        <span class="tcr-result-range">{{result.range}}</span>
+                        <i class="tcr-item-icon {{result.icon}}"></i>
+
+                        {{#if result.anchor}}
+                        <span class="tcr-result-anchor">{{{result.anchor.outerHTML}}}</span>
+                        {{else}}
+                        <span class="tcr-item-name">{{result.name}}</span>
+                        {{/if}}
+
+                        <span class="tcr-item-type">{{result.typeLabel}}</span>
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+    </section>
+    {{else}}
+    <section class="tcr-empty">
+        <i class="fa-solid fa-list-ol"></i>
+        <span>No results found in this table.</span>
+    </section>
+    {{/if}}
+</div>

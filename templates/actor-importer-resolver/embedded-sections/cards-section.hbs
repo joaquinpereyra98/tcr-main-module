@@ -1,0 +1,33 @@
+<div class="tcr-embedded-section tcr-cards-section">
+    {{#if embedded.length}}
+    <section class="tcr-group">
+        <h3 class="tcr-collection-title">
+            <span>Cards</span>
+            <span class="tcr-badge">{{embedded.length}}</span>
+        </h3>
+
+        <div class="tcr-type-block">
+            <div class="tcr-embedded-cards-grid">
+                {{#each embedded}}
+                <div class="tcr-card-item" data-uuid="{{uuid}}" data-tooltip="{{name}}">
+                    <div class="tcr-card-thumbnail">
+                        <img src="{{img}}" alt="{{name}}" data-action="imagePopout">
+                    </div>
+                    <div class="tcr-card-details">
+                        <span class="tcr-card-name">{{name}}</span>
+                        {{#if suit}}
+                        <span class="tcr-card-suit">{{suit}}</span>
+                        {{/if}}
+                    </div>
+                </div>
+                {{/each}}
+            </div>
+        </div>
+    </section>
+    {{else}}
+    <section class="tcr-empty">
+        <i class="fa-solid fa-cards"></i>
+        <span>No cards found in this deck.</span>
+    </section>
+    {{/if}}
+</div>

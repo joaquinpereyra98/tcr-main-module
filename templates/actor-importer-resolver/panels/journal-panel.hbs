@@ -1,0 +1,11 @@
+<div class="tcr-document-panel {{class}}" data-doc-uuid="{{doc.uuid}}">
+    <h3>{{title}}</h3>
+    <div class="tcr-document-summary">
+        <div class="tcr-document-header">
+            {{#each headerFields}}
+            <div class="tcr-document-{{class}}" data-tooltip="{{ifThen tooltip tooltip ""}}">{{value}}</div>
+            {{/each}}
+        </div>
+    </div>
+    {{> (lookup @root.partials "embedded")}}
+</div>

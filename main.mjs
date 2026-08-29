@@ -141,6 +141,12 @@ Hooks.once("setup", () => {
 });
 
 Hooks.on("ready", () => {
+  Object.assign(CONFIG.TableResult.typeLabels, {
+    text: "TABLE.RESULT_TYPES.TEXT.label",
+    document: "TABLE.RESULT_TYPES.DOCUMENT.label",
+    pack: "TABLE.RESULT_TYPES.COMPENDIUM.label",
+  });
+
   settings.LoginTracker.initialize();
   if (TCRPackManager.startPacking) {
     TCRPackManager.packingProcess();

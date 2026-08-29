@@ -1,0 +1,18 @@
+<div class="tcr-document-panel {{class}}" data-doc-uuid="{{doc.uuid}}">
+    <h3>{{title}}</h3>
+    <div class="tcr-document-summary tcr-scene-summary">
+        <div class="tcr-document-image tcr-scene-image" style="aspect-ratio: {{doc.dimensions.ratio}};">
+            {{#if doc.background.src}}
+            <img data-action="imagePopout" src="{{doc.background.src}}" alt="{{doc.name}}">
+            {{else}}
+            <img src="icons/svg/cancel.svg" alt="{{doc.name}}">
+            {{/if}}
+        </div>
+        <div class="tcr-document-header">
+            {{#each headerFields}}
+            <div class="tcr-document-{{class}}" data-tooltip="{{ifThen tooltip tooltip ""}}">{{value}}</div>
+            {{/each}}
+        </div>
+    </div>
+    {{> (lookup @root.partials "embedded")}}
+</div>

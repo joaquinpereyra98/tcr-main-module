@@ -10,7 +10,6 @@ const RESOLVER_TEMPLATE = `modules/${MODULE_ID}/templates/actor-importer-resolve
  * @import { HandlebarsTemplatePart } from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
  * @import { DocumentsImportResolverConfiguration } from "./_types.mjs";
  * @import Document from "../../foundry/resources/app/common/abstract/document.mjs";
- * @import EmbeddedCollection from "../../foundry/resources/app/common/abstract/embedded-collection.mjs";
  */
 
 export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
@@ -39,6 +38,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       width: 980,
     },
     actions: {
+      imagePopout: TCRDocumentsImportResolver.#onImagePopout,
       deleteOriginal: TCRDocumentsImportResolver.#onDeleteOriginal,
       keepBoth: TCRDocumentsImportResolver.#onKeepBoth,
       keepOriginal: TCRDocumentsImportResolver.#onKeepOriginal,
@@ -46,13 +46,19 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     },
   };
 
-  static PARTIALS = {
-    Actor: `${RESOLVER_TEMPLATE}/partials/actor-panel.hbs`,
-    Cards: "",
-    Item: "",
-    JournalEntry: "",
-    RollTable: "",
-    Scene: `${RESOLVER_TEMPLATE}/partials/scene-panel.hbs`,
+  static EMBEDDED_SECTIONS = {
+    base: `${RESOLVER_TEMPLATE}/embedded-sections/base-section.hbs`,
+    Cards: `${RESOLVER_TEMPLATE}/embedded-sections/cards-section.hbs`,
+    JournalEntry: `${RESOLVER_TEMPLATE}/embedded-sections/journal-section.hbs`,
+    RollTable: `${RESOLVER_TEMPLATE}/embedded-sections/roll-table-section.hbs`,
+  };
+
+  static PANELS = {
+    base: `${RESOLVER_TEMPLATE}/panels/base-panel.hbs`,
+    Cards: `${RESOLVER_TEMPLATE}/panels/cards-panel.hbs`,
+    JournalEntry: `${RESOLVER_TEMPLATE}/panels/journal-panel.hbs`,
+    RollTable: `${RESOLVER_TEMPLATE}/panels/roll-table-panel.hbs`,
+    Scene: `${RESOLVER_TEMPLATE}/panels/scene-panel.hbs`,
   };
 
   /**
@@ -62,7 +68,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   static PARTS = {
     summary: {
       template: `${RESOLVER_TEMPLATE}/summary.hbs`,
-      templates: Object.values(this.PARTIALS).filter(Boolean),
+      templates: [
+        ...Object.values(this.PANELS),
+        ...Object.values(this.EMBEDDED_SECTIONS),
+      ],
     },
     actions: {
       template: `${RESOLVER_TEMPLATE}/actions.hbs`,
@@ -79,6 +88,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
    */
   _initializeApplicationOptions(options) {
     options = super._initializeApplicationOptions(options);
+    options.window.title = options.window.title.replace(
+      "documentName",
+      options.pack.documentName,
+    );
     options.position.height ??= window.innerHeight * 0.9;
     return options;
   }
@@ -100,12 +113,6 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     return this.#resolvers.promise;
   }
 
-  /**@inheritdoc */
-  get title() {
-    const title = this.options.window.title;
-    return title.replace("documentName", this.documentName);
-  }
-
   /**
    * The canonical name of this Document type, for example "Actor".
    * @type {string}
@@ -124,21 +131,21 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
 
     return {
       ...context,
-      panelPartial: this.getPanelPartial(),
+      partials: this.getPartials(),
       panels: [
         {
           doc: this.source,
           title: "New Imported",
           class: "new",
-          embedded: this._prepareEmbeddedDocuments(this.source),
-          ...this._prepareDocumentTypeContext(this.source),
+          embedded: await this._prepareEmbeddedDocuments(this.source),
+          headerFields: this._prepareHeadersFields(this.source),
         },
         {
           doc: this.existing,
           title: "Existing in Compendium",
           class: "old",
-          embedded: this._prepareEmbeddedDocuments(this.existing),
-          ...this._prepareDocumentTypeContext(this.existing),
+          embedded: await this._prepareEmbeddedDocuments(this.existing),
+          headerFields: this._prepareHeadersFields(this.existing),
         },
       ],
       config: CONFIG,
@@ -147,65 +154,222 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   }
 
   /**
-   * Executes a document-specific context preparation method based on the document's type.
-   * @param {Document} doc - The primary document being prepared.
-   * @returns {Record<string, any>}
+   * Prepares header visual field data for a specific Document panel.
+   * @param {Document} doc - The Document being evaluated in the panel.
+   * @returns {Promise<Array<Object>>} An array of header metadata objects.
+   * @protected
    */
-  _prepareDocumentTypeContext(doc) {
-    const methodName = `_prepare${this.documentName}Context`;
-    const fn = this[methodName];
+  async _prepareHeadersFields(doc) {
+    const headerFields = [
+      {
+        class: "name",
+        value: doc.name,
+        tooltip: doc.name,
+      },
+    ];
 
-    if (typeof fn === "function") return fn.call(this, doc);
-    return {};
+    if (doc.type) {
+      headerFields.push({
+        class: "meta",
+        value: game.i18n.localize(
+          CONFIG[this.documentName].typeLabels[doc.type],
+        ),
+      });
+    }
+
+    headerFields.push({ class: "uuid", value: doc.uuid, tooltip: doc.uuid });
+
+    switch (this.documentName) {
+      case "Actor":
+        headerFields.push({
+          class: "meta",
+          value: `${doc.items.size} embedded item(s)`,
+        });
+        break;
+      case "Item":
+        headerFields.push({
+          class: "desccription",
+          value: `${doc.items.size} embedded item(s)`,
+        });
+        break;
+      case "Scene":
+        headerFields.push({
+          class: "bg",
+          value: doc.background.src ?? "No background source",
+          tooltip: doc.background.src,
+        });
+        break;
+    }
+
+    return headerFields;
   }
 
-  _prepareSceneContext(doc) {
-    return {};
+  /**
+   * Retrieves the partial template path configuration for the current application Document type.
+   * @returns {{panel: string, embedded: string}} The panel and embedded template file paths.
+   */
+  getPartials() {
+    const { PANELS, EMBEDDED_SECTIONS } = TCRDocumentsImportResolver;
+
+    return {
+      panel: PANELS[this.documentName] || PANELS.base,
+      embedded: EMBEDDED_SECTIONS[this.documentName] || EMBEDDED_SECTIONS.base,
+    };
   }
 
+  /**
+   * Retrieves the specific panel template path for the current application Document type.
+   * @returns {string} The panel template path.
+   */
   getPanelPartial() {
-    const partials = TCRDocumentsImportResolver.PARTIALS;
-    return partials[this.documentName] || partials.Actor;
+    return (
+      partials[this.documentName] ||
+      `${RESOLVER_TEMPLATE}/partials/base-panel.hbs`
+    );
   }
 
   /**
    * Prepares and groups embedded documents across all sub-collections by document type.
    * @param {Document} doc - The primary parent document containing embedded collections.
-   * @returns {Array<Array<{ type: string, label: string, items: HTMLAnchorElement[] }>>} Array of grouped embedded document lists.
+   * @returns {Promise<Object[]>} Array of grouped embedded document lists.
    */
-  _prepareEmbeddedDocuments(doc) {
-    return Object.values(doc?.collections ?? {})
-      .filter((col) => col?.size)
-      .map((col) => {
-        const { documentName, metadata } = col.documentClass;
-        const typeLabels = CONFIG[documentName]?.typeLabels ?? {};
+  async _prepareEmbeddedDocuments(doc) {
+    switch (this.documentName) {
+      case "Cards":
+        return this._prepareEmbeddedCardDocuments(doc);
+      case "JournalEntry":
+        return this._prepareEmbeddedJournalDocuments(doc);
+      case "RollTable":
+        return this._prepareEmbeddedRollTableDocuments(doc);
+      default:
+        return Object.values(doc?.collections ?? {})
+          .filter((col) => col?.size)
+          .map((col) => {
+            const { documentName, metadata } = col.documentClass;
+            const typeLabels = CONFIG[documentName]?.typeLabels ?? {};
 
-        const grouped = col.reduce((acc, embeddedDoc) => {
-          const type = embeddedDoc.type ?? "base";
-          (acc[type] ??= []).push(embeddedDoc.toAnchor().outerHTML);
-          return acc;
-        }, {});
+            const grouped = col.reduce((acc, embeddedDoc) => {
+              const type = embeddedDoc.type ?? "base";
+              (acc[type] ??= []).push(embeddedDoc.toAnchor().outerHTML);
+              return acc;
+            }, {});
 
-        const types = Object.entries(grouped)
-          .sort(([a], [b]) =>
-            a === "base" ? -1 : b === "base" ? 1 : a.localeCompare(b),
-          )
-          .map(([type, items]) => ({
-            type,
-            label:
-              type === "base"
-                ? ""
-                : typeLabels[type]
-                  ? game.i18n.localize(typeLabels[type])
-                  : type,
-            items,
-          }));
+            const types = Object.entries(grouped)
+              .sort(([a], [b]) =>
+                a === "base" ? -1 : b === "base" ? 1 : a.localeCompare(b),
+              )
+              .map(([type, items]) => ({
+                type,
+                label:
+                  type === "base"
+                    ? ""
+                    : typeLabels[type]
+                      ? game.i18n.localize(typeLabels[type])
+                      : type,
+                items,
+              }));
+
+            return {
+              label: game.i18n.localize(metadata.labelPlural),
+              types,
+            };
+          });
+    }
+  }
+
+  /**
+   * Prepares embedded Card documents from a parent Cards stack document.
+   * @param {Document} doc - The parent Cards Document containing the cards collection.
+   * @returns {Promise<Card[]>} A list of embedded Card documents sorted by standard order.
+   */
+  async _prepareEmbeddedCardDocuments(doc) {
+    /**@type {Card[]} */
+    const cards = doc.cards.contents;
+    cards.sort(doc.sortStandard.bind(this));
+    return cards;
+  }
+
+  /**
+   * Prepares structured render data for embedded JournalEntryPage documents.
+   * @param {Document} doc - The parent JournalEntry Document.
+   * @returns {Promise<Array<{uuid: string, name: string, typeLabel: string, icon: string}>>} Array of formatted page objects.
+   */
+  async _prepareEmbeddedJournalDocuments(doc) {
+    /**@type {JournalEntryPage[]} */
+    const pages = doc.pages.contents;
+
+    const iconMap = {
+      text: "fa-solid fa-file-lines",
+      image: "fa-solid fa-file-image",
+      video: "fa-solid fa-file-video",
+      pdf: "fa-solid fa-file-pdf",
+    };
+
+    return pages
+      .map((p) => ({
+        uuid: p.uuid,
+        name: p.name,
+        typeLabel: game.i18n.localize(
+          CONFIG.JournalEntryPage.typeLabels[p.type],
+        ),
+        icon: iconMap[p.type] ?? "fa-solid fa-file",
+      }))
+      .sort((a, b) => a.sort - b.sort);
+  }
+
+  /**
+   * Prepares structured render data for embedded TableResult entries within a RollTable.
+   * @param {Document} doc - The parent RollTable Document.
+   * @returns {Promise<Array<{uuid: string, name: string, anchor: HTMLElement|null, img: string, typeLabel: string, icon: string, range: string|number, drawn: boolean}>>} Array of formatted table result render objects.
+   */
+  async _prepareEmbeddedRollTableDocuments(doc) {
+    /**@type {TableResult[]} */
+    const results = doc.results.contents;
+
+    const iconMap = {
+      text: "fa-solid fa-align-left",
+      document: "fa-solid fa-file",
+      pack: "fa-solid fa-book-atlas",
+    };
+
+    const { DOCUMENT, TEXT } = CONST.TABLE_RESULT_TYPES;
+
+    const promises = results
+      .map(async (r) => {
+        const data = {
+          uuid: r.uuid,
+          name: r.text,
+          anchor: null,
+          img: r.img,
+        };
+
+        if (r.type !== TEXT) {
+          const targetUuid =
+            r.type === DOCUMENT
+              ? `${r.documentCollection}.${r.documentId}`
+              : `Compendium.${r.documentCollection}.${r.documentId}`;
+
+          const doc = await fromUuid(targetUuid);
+          if (doc) {
+            data.uuid = doc.uuid;
+            data.name = doc.name;
+            data.anchor = doc.toAnchor();
+            data.img = doc.img;
+          }
+        }
 
         return {
-          label: game.i18n.localize(metadata.labelPlural),
-          types,
+          ...data,
+          typeLabel: game.i18n.localize(CONFIG.TableResult.typeLabels[r.type]),
+          icon: iconMap[r.type] ?? iconMap[TEXT],
+          range: r.range[0] === r.range[1] ? r.range[0] : r.range.join(" - "),
+          img: r.img,
+          drawn: r.drawn,
         };
-      });
+      })
+      .sort((a, b) => a.sort - b.sort);
+
+    return await Promise.all(promises);
   }
 
   /** @override */
@@ -220,8 +384,13 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
 
   /**
    * Replacement launcher function to instantiate and render the ApplicationV2 Dialog
+   * @param {Partial<DocumentsImportResolverConfiguration>} options
    */
-  static async showDialog(options = {}) {
+  static async showDialog(options) {
+    if (typeof options.pack === "string") options.pack = game.packs.get(options.pack);
+    if (typeof options.source === "string") options.source = await fromUuid(options.source);
+    if (typeof options.existing === "string") options.existing = await fromUuid(options.existing);
+
     const app = new this(options);
     app.render({ force: true });
     return app.promise;
@@ -298,6 +467,20 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   /* -------------------------------------------- */
   /*  Event Handlers                              */
   /* -------------------------------------------- */
+
+  /**
+   * Action handler to delete the existing compendium document and replace it with the imported source document.
+   * @this {TCRDocumentsImportResolver}
+   * @type {ApplicationClickAction}
+   */
+  static async #onImagePopout(_event, target) {
+    const uuid = target.closest(".tcr-document-panel")?.dataset.docUuid;
+    const { name } = fromUuidSync(uuid);
+    new ImagePopout(target.src, {
+      title: name,
+      uuid: uuid,
+    }).render(true);
+  }
 
   /**
    *
