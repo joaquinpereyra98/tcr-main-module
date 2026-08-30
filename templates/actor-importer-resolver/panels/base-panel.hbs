@@ -6,9 +6,17 @@
         </div>
         <div class="tcr-document-header">
             {{#each headerFields}}
-            <div class="tcr-document-{{class}}" data-tooltip="{{ifThen tooltip tooltip ""}}">{{value}}</div>
+            {{> (lookup @root.partials "docField")}}
             {{/each}}
         </div>
     </div>
+    {{#if additionalFields.length}}
+    <div class="tcr-additional-fields">
+        {{#each additionalFields}}
+        {{log this}}
+        {{> (lookup @root.partials "docField")}}
+        {{/each}}
+    </div>
+    {{/if}}
     {{> (lookup @root.partials "embedded")}}
 </div>

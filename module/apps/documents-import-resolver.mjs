@@ -55,9 +55,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
 
   static PANELS = {
     base: `${RESOLVER_TEMPLATE}/panels/base-panel.hbs`,
-    Cards: `${RESOLVER_TEMPLATE}/panels/cards-panel.hbs`,
     JournalEntry: `${RESOLVER_TEMPLATE}/panels/journal-panel.hbs`,
-    RollTable: `${RESOLVER_TEMPLATE}/panels/roll-table-panel.hbs`,
     Scene: `${RESOLVER_TEMPLATE}/panels/scene-panel.hbs`,
   };
 
@@ -71,6 +69,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       templates: [
         ...Object.values(this.PANELS),
         ...Object.values(this.EMBEDDED_SECTIONS),
+        `${RESOLVER_TEMPLATE}/partials/doc-field.hbs`,
       ],
     },
     actions: {
@@ -95,6 +94,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     options.position.height ??= window.innerHeight * 0.9;
     return options;
   }
+
   /* -------------------------------------------- */
   /*  Application Properties                      */
   /* -------------------------------------------- */
@@ -138,14 +138,16 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
           title: "New Imported",
           class: "new",
           embedded: await this._prepareEmbeddedDocuments(this.source),
-          headerFields: this._prepareHeadersFields(this.source),
+          headerFields: await this._prepareHeadersFields(this.source),
+          additionalFields: await this._prepareAdditionalFields(this.source),
         },
         {
           doc: this.existing,
           title: "Existing in Compendium",
           class: "old",
           embedded: await this._prepareEmbeddedDocuments(this.existing),
-          headerFields: this._prepareHeadersFields(this.existing),
+          headerFields: await this._prepareHeadersFields(this.existing),
+          additionalFields: await this._prepareAdditionalFields(this.existing),
         },
       ],
       config: CONFIG,
@@ -162,46 +164,78 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   async _prepareHeadersFields(doc) {
     const headerFields = [
       {
-        class: "name",
+        class: "field-name truncate-text",
         value: doc.name,
         tooltip: doc.name,
       },
     ];
 
     if (doc.type) {
+      const config = CONFIG[this.documentName];
       headerFields.push({
-        class: "meta",
-        value: game.i18n.localize(
-          CONFIG[this.documentName].typeLabels[doc.type],
-        ),
+        class: "field-meta",
+        value: game.i18n.localize(config.typeLabels[doc.type]),
+        icon: config.sidebarIcon,
       });
     }
 
-    headerFields.push({ class: "uuid", value: doc.uuid, tooltip: doc.uuid });
+    headerFields.push({
+      class: "field-uuid truncate-text",
+      value: doc.uuid,
+      tooltip: doc.uuid,
+      icon: "fa-solid fa-passport",
+    });
+
+    if (doc.pack && doc.folder) {
+      const folderPath = [doc.folder, ...doc.folder.ancestors]
+        .reverse()
+        .map((f) => `<span>${f.name}</span>`)
+        .join('<span class="divisor"> &gt; </span>');
+
+      headerFields.push({
+        class: "field-folder-path truncate-text",
+        value: folderPath,
+        tooltip: folderPath,
+        icon: "fa-solid fa-folder",
+      });
+    }
 
     switch (this.documentName) {
       case "Actor":
         headerFields.push({
-          class: "meta",
-          value: `${doc.items.size} embedded item(s)`,
-        });
-        break;
-      case "Item":
-        headerFields.push({
-          class: "desccription",
+          class: "field-meta",
           value: `${doc.items.size} embedded item(s)`,
         });
         break;
       case "Scene":
         headerFields.push({
-          class: "bg",
+          class: "field-bg truncate-text",
           value: doc.background.src ?? "No background source",
           tooltip: doc.background.src,
+          icon: "fa-solid fa-suitcase",
         });
         break;
     }
 
     return headerFields;
+  }
+
+  async _prepareAdditionalFields(doc) {
+    const additionalFields = [];
+    switch (this.documentName) {
+      case "Item":
+        const raw = doc?.system?.description?.value ?? "";
+        additionalFields.push({
+          class: "field-description",
+          value: await TextEditor.enrichHTML(raw, {
+            secrets: doc.isOwner,
+            relativeTo: doc.item,
+            rollData: doc.getRollData(),
+          }),
+        });
+        break;
+    }
+    return additionalFields;
   }
 
   /**
@@ -214,6 +248,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     return {
       panel: PANELS[this.documentName] || PANELS.base,
       embedded: EMBEDDED_SECTIONS[this.documentName] || EMBEDDED_SECTIONS.base,
+      docField: `${RESOLVER_TEMPLATE}/partials/doc-field.hbs`,
     };
   }
 
@@ -387,9 +422,12 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
    * @param {Partial<DocumentsImportResolverConfiguration>} options
    */
   static async showDialog(options) {
-    if (typeof options.pack === "string") options.pack = game.packs.get(options.pack);
-    if (typeof options.source === "string") options.source = await fromUuid(options.source);
-    if (typeof options.existing === "string") options.existing = await fromUuid(options.existing);
+    if (typeof options.pack === "string")
+      options.pack = game.packs.get(options.pack);
+    if (typeof options.source === "string")
+      options.source = await fromUuid(options.source);
+    if (typeof options.existing === "string")
+      options.existing = await fromUuid(options.existing);
 
     const app = new this(options);
     app.render({ force: true });

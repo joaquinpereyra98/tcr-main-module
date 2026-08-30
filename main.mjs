@@ -31,6 +31,7 @@ Hooks.on("init", () => {
       apps.AvailabilityTracker.renderAvailabilityTracker,
     renderAvailabilityViewer: apps.AvailabilityViewer.renderAvailabilityViewer,
     TCRPackManager,
+    ImportResolver: apps.TCRDocumentsImportResolver,
   };
 
   CONFIG.ui[MAIN_HUD_KEY] = module.api.apps.MainHud;
