@@ -227,6 +227,8 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
         const raw = doc?.system?.description?.value ?? "";
         additionalFields.push({
           class: "field-description",
+          title: "Description",
+          icon: "fa-solid fa-feather-pointed",
           value: await TextEditor.enrichHTML(raw, {
             secrets: doc.isOwner,
             relativeTo: doc.item,

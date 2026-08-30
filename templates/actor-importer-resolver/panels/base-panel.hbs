@@ -13,8 +13,19 @@
     {{#if additionalFields.length}}
     <div class="tcr-additional-fields">
         {{#each additionalFields}}
-        {{log this}}
-        {{> (lookup @root.partials "docField")}}
+        <div class="tcr-additional-field {{class}}">
+            {{#if title}}
+            <div class="field-header">
+                {{#if icon}}
+                <i class="icon {{icon}}"></i>
+                {{/if}}
+                <span class="field-title">{{title}}</span>
+            </div>
+            {{/if}}
+            <div class="field-content">
+                {{{value}}}
+            </div>
+        </div>
         {{/each}}
     </div>
     {{/if}}
