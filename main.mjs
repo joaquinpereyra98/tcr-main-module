@@ -46,7 +46,6 @@ Hooks.on("init", () => {
   TCRPackManager.registerSetting();
 
   JiraIssueManager.registerTokenSetting();
-  canvas.CanvasDropManager.initialize();
 
   window.customElements.define(
     apps.elements.HTMLDocumentTagsElementV2.tagName,

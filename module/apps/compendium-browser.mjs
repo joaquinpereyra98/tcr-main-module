@@ -1152,8 +1152,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
           const initial = this.initialFitler?.additional?.[key] ?? {};
 
           for (const k of Object.keys(choices)) {
-            if (initial?.[k] || locked[k] !== undefined)
-              continue;
+            if (initial?.[k] || locked[k] !== undefined) continue;
             this.#filters.additional[key] ??= {};
             this.#filters.additional[key][k] = defaultValue;
           }
@@ -1464,10 +1463,18 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
     if (!card.draggable) return;
     try {
       const { type } = foundry.utils.parseUuid(uuid);
-      event.dataTransfer.setData(
-        "text/plain",
-        JSON.stringify({ type, uuid, isFromCompendiumBrowser: true }),
-      );
+
+      const dragData = {
+        type,
+        uuid,
+        isFromCompendiumBrowser: true,
+        event: {
+          altKey: event.altKey,
+          shiftKey: event.shiftKey,
+        },
+      };
+      
+      event.dataTransfer.setData("text/plain", JSON.stringify(dragData));
     } catch (e) {
       console.error(e);
     }
@@ -1853,12 +1860,15 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
           if (i.type === "feat") {
             /**@type {String[]} */
-            const uuids = foundry.utils.getProperty(
-              i,
-              `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`,
-            ) || [];
+            const uuids =
+              foundry.utils.getProperty(
+                i,
+                `flags.${MODULE_ID}.${ITEM_FLAGS.LINKED_DOCS}`,
+              ) || [];
 
-            i._linkedDocUuid = !!uuids.length ? CompendiumBrowser.parseUUIDFilter(uuids) : [""];
+            i._linkedDocUuid = !!uuids.length
+              ? CompendiumBrowser.parseUUIDFilter(uuids)
+              : [""];
           }
 
           const matchesFilters =

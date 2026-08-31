@@ -131,7 +131,7 @@ export default class TCRPackManager {
     );
 
     if (!parentFolder) {
-      const created = await Folder.createDocuments(
+      parentFolder = await Folder.create(
         [
           {
             name: folderName,
@@ -141,7 +141,6 @@ export default class TCRPackManager {
         ],
         { pack: pack.collection },
       );
-      parentFolder = created[0];
     }
 
     return parentFolder;
@@ -170,6 +169,24 @@ export default class TCRPackManager {
         const batch = actorIDs.slice(i, i + BATCH_SIZE);
 
         await Actor.deleteDocuments(batch);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
+  }
+
+  /**
+   *
+   * @param {Partial<import("../../foundry/resources/app/common/types.mjs").ActorData>[]} actorsData - Array of
+   * @param {Partial<Omit<import("../../foundry/resources/app/common/abstract/_types.mjs").DatabaseCreateOperation, "data">>} [operation={}]
+   * @returns {Promise<void>}
+   */
+  static async #createActors(actorsData, operation = {}) {
+    if (actorsData.length) {
+      const BATCH_SIZE = 10;
+
+      for (let i = 0; i < actorsData.length; i += BATCH_SIZE) {
+        const batch = actorsData.slice(i, i + BATCH_SIZE);
+        await Actor.createDocuments(batch, operation);
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
     }
@@ -770,7 +787,7 @@ export default class TCRPackManager {
         return;
       }
 
-      await Actor.createDocuments(actorsToCreate, { keepId: true });
+      await this.#createActors(actorsToCreate, { keepId: true });
       ui.notifications.info(
         `Successfully unpacked ${actorsToCreate.length} actor(s) for "${userName}".`,
       );
