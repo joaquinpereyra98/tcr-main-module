@@ -1,0 +1,11 @@
+<div class="tcr-document-panel {{class}}" data-doc-uuid="{{doc.uuid}}">
+    <h3>{{title}}</h3>
+    <div class="tcr-document-summary">
+        <div class="tcr-document-header">
+            {{#each headerFields}}
+            {{> (lookup @root.partials "docField")}}
+            {{/each}}
+        </div>
+    </div>
+    {{> (lookup @root.partials "embedded")}}
+</div>

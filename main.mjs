@@ -31,6 +31,7 @@ Hooks.on("init", () => {
       apps.AvailabilityTracker.renderAvailabilityTracker,
     renderAvailabilityViewer: apps.AvailabilityViewer.renderAvailabilityViewer,
     TCRPackManager,
+    ImportResolver: apps.TCRDocumentsImportResolver,
   };
 
   CONFIG.ui[MAIN_HUD_KEY] = module.api.apps.MainHud;
@@ -44,6 +45,9 @@ Hooks.on("init", () => {
   settings.registerMetricsSetting();
   settings.registerGridSizeSetting();
   TCRPackManager.registerSetting();
+
+  apps.TCRDocumentsImportResolver.patchDropHandlers();
+  apps.TCRDocumentsImportResolver.patchFolderDropHandlers();
 
   JiraIssueManager.registerTokenSetting();
 
@@ -147,6 +151,17 @@ Hooks.on("ready", () => {
     .catch((err) =>
       console.error("TCR | LoginTracker initialization failed:", err),
     );
+  Object.assign(CONFIG.TableResult.typeLabels, {
+    text: "TABLE.RESULT_TYPES.TEXT.label",
+    document: "TABLE.RESULT_TYPES.DOCUMENT.label",
+    pack: "TABLE.RESULT_TYPES.COMPENDIUM.label",
+  });
+
+  settings.LoginTracker.initialize();
+  if (TCRPackManager.startPacking) {
+    TCRPackManager.packingProcess();
+    TCRPackManager.unpackingProcess();
+  }
 
   Hooks.on("renderApplicationV2", (_, element) => {
     /**@type {HTMLButtonElement} */

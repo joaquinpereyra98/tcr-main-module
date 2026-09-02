@@ -1,0 +1,34 @@
+<div class="tcr-document-panel {{class}}" data-doc-uuid="{{doc.uuid}}">
+    <h3>{{title}}</h3>
+    <div class="tcr-document-summary">
+        <div class="tcr-document-image">
+            <img data-action="imagePopout" src="{{doc.img}}" alt="{{doc.name}}">
+        </div>
+        <div class="tcr-document-header">
+            {{#each headerFields}}
+            {{> (lookup @root.partials "docField")}}
+            {{/each}}
+        </div>
+    </div>
+    {{#if additionalFields.length}}
+    <div class="tcr-additional-fields">
+        {{#each additionalFields}}
+        {{log this}}
+        <div class="tcr-additional-field {{class}}">
+            {{#if title}}
+            <div class="field-header">
+                {{#if icon}}
+                <i class="icon {{icon}}"></i>
+                {{/if}}
+                <span class="field-title">{{title}}</span>
+            </div>
+            {{/if}}
+            <div class="field-content">
+                {{{value}}}
+            </div>
+        </div>
+        {{/each}}
+    </div>
+    {{/if}}
+    {{> (lookup @root.partials "embedded")}}
+</div>

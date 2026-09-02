@@ -1,6 +1,7 @@
-export { default as MainHud } from "./main-hud.mjs";
-export { default as CompendiumBrowser } from "./compendium-browser.mjs";
-export { default as IssueSheet } from "./issue-sheet.mjs";
 export { default as AvailabilityTracker } from "./availability-tracker.mjs";
 export { default as AvailabilityViewer } from "./availability-viewer.mjs";
+export { default as CompendiumBrowser } from "./compendium-browser.mjs";
+export { default as TCRDocumentsImportResolver } from "./documents-import-resolver.mjs";
+export { default as IssueSheet } from "./issue-sheet.mjs";
+export { default as MainHud } from "./main-hud.mjs";
 export * as elements from "./elements/_module.mjs";

@@ -1,0 +1,27 @@
+<div class="tcr-embedded-section">
+    {{#each embedded}}
+    <section class="tcr-group">
+        <h3 class="tcr-collection-title">{{label}}</h3>
+
+        {{#each types}}
+        <div class="tcr-type-block">
+            <h4 class="tcr-type-title">
+                <span> {{#if label}} {{label}} {{/if}} </span>
+                <span class="tcr-badge">{{items.length}}</span>
+            </h4>
+
+            <div class="tcr-embedded-links">
+                {{#each items}}
+                {{{this}}}
+                {{/each}}
+            </div>
+        </div>
+        {{/each}}
+    </section>
+    {{else}}
+    <section class="tcr-empty">
+        <i class="fa-solid fa-folder-open"></i>
+        <span>No embedded items found.</span>
+    </section>
+    {{/each}}
+</div>

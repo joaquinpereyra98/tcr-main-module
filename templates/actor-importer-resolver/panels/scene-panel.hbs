@@ -1,0 +1,18 @@
+<div class="tcr-document-panel {{class}}" data-doc-uuid="{{doc.uuid}}">
+    <h3>{{title}}</h3>
+    <div class="tcr-document-image tcr-scene-image">
+        {{#if doc.background.src}}
+        <img data-action="imagePopout" src="{{doc.background.src}}" alt="{{doc.name}}" style="aspect-ratio: {{doc.dimensions.ratio}};">
+        {{else}}
+        <img src="icons/svg/cancel.svg" alt="{{doc.name}}" style="aspect-ratio: {{doc.dimensions.ratio}};">
+        {{/if}}
+    </div>
+    <div class="tcr-document-summary tcr-scene-summary">
+        <div class="tcr-document-header">
+            {{#each headerFields}}
+            {{> (lookup @root.partials "docField")}}
+            {{/each}}
+        </div>
+    </div>
+    {{> (lookup @root.partials "embedded")}}
+</div>

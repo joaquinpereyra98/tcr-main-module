@@ -1,0 +1,13 @@
+<section class="summary-part">
+    <header class="importer-header">
+        <h3 class="collection-name">{{collectionsNames.source}}</h3>
+        <i class="fa-solid fa-arrow-right-long"></i>
+        <h3 class="collection-name">{{collectionsNames.target}}</h3>
+    </header>
+
+    <div class="importer-grid">
+        {{#each panels}}
+        {{> (lookup ../partials "panel")}}
+        {{/each}}
+    </div>
+</section>
