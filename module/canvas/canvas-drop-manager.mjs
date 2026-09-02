@@ -4,13 +4,6 @@ import { MODULE_ID } from "../constants.mjs";
  * Manages all drop interactions on the canvas for the TCR Main Module.
  */
 export default class CanvasDropManager {
-  /**
-   * Initialize and register all drop-related handlers and overrides.
-   */
-  static initialize() {
-    this._patchCanvasOnDrop();
-  }
-
   static SOCKET_KEY = `${MODULE_ID}.createTokenFromBrowser`;
 
   static socket;
@@ -29,7 +22,7 @@ export default class CanvasDropManager {
    * @param {Object} socketData - The data packet received from the client
    * @private
    */
-  static async _handleSocketCreateToken({ data, event, user }) {
+  static async _handleSocketCreateToken({ data, event = {}, user }) {
     console.log(`${MODULE_ID} | GM processing socketed token drop request:`);
     let actor = await Actor.implementation.fromDropData(data);
     if (actor.compendium) {
@@ -61,42 +54,6 @@ export default class CanvasDropManager {
 
     canvas.tokens.activate();
     return td.constructor.create(td, { parent: canvas.scene });
-  }
-
-  /**
-   * Monkeypatches the base canvas._onDrop method to intercept data before Core processes it.
-   * @private
-   */
-  static _patchCanvasOnDrop() {
-    const originalOnDrop = canvas._onDrop;
-    canvas._onDrop =
-      /** @param {DragEvent} event */
-      async function (event) {
-        const rawData = event.dataTransfer.getData("text/plain");
-        const data = JSON.parse(rawData);
-
-        if (
-          data?.isFromCompendiumBrowser &&
-          !game.user.isGM &&
-          data.type === "Actor"
-        ) {
-          data.event = {
-            altKey: event.altKey,
-            shiftKey: event.shiftKey,
-          };
-        }
-        Object.defineProperty(event, "dataTransfer", {
-          value: {
-            ...event.dataTransfer,
-            getData: (type) =>
-              type === "text/plain"
-                ? JSON.stringify(data)
-                : event.dataTransfer.getData(type),
-          },
-          writable: true,
-        });
-        return await originalOnDrop.call(this, event);
-      };
   }
 
   /**

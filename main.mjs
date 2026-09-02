@@ -50,7 +50,6 @@ Hooks.on("init", () => {
   apps.TCRDocumentsImportResolver.patchFolderDropHandlers();
 
   JiraIssueManager.registerTokenSetting();
-  canvas.CanvasDropManager.initialize();
 
   window.customElements.define(
     apps.elements.HTMLDocumentTagsElementV2.tagName,
@@ -143,6 +142,15 @@ Hooks.once("setup", () => {
 });
 
 Hooks.on("ready", () => {
+  settings.LoginTracker.initialize()
+    .then(async () => {
+      if (!TCRPackManager.startPacking) return;
+      await TCRPackManager.packingProcess();
+      await TCRPackManager.unpackingProcess();
+    })
+    .catch((err) =>
+      console.error("TCR | LoginTracker initialization failed:", err),
+    );
   Object.assign(CONFIG.TableResult.typeLabels, {
     text: "TABLE.RESULT_TYPES.TEXT.label",
     document: "TABLE.RESULT_TYPES.DOCUMENT.label",
