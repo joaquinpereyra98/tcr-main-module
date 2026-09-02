@@ -73,9 +73,8 @@
 
 /**
  * @typedef _DocumentsImportResolverConfiguration
- * @property {Actor|Scene} source
- * @property {Actor|Scene} existing
- * @property {CompendiumCollection} pack
+ * @property {Document} source
+ * @property {Document} existing
  * @property {string} folderId
  */
 

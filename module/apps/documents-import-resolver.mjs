@@ -8,18 +8,36 @@ const RESOLVER_TEMPLATE = `modules/${MODULE_ID}/templates/actor-importer-resolve
 /**
  * @import { ApplicationClickAction } from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  * @import { HandlebarsTemplatePart } from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
- * @import { DocumentsImportResolverConfiguration } from "./_types.mjs";
+ * @import { CompendiumCollection, DocumentsImportResolverConfiguration } from "./_types.mjs";
  * @import Document from "../../foundry/resources/app/common/abstract/document.mjs";
  */
 
+/**
+ * @callback createDroppedEntryFn
+ * @param {Document} entry - The Entry being dropped
+ * @param {string} [folderId] - The ID of the Folder to which the Entry should be added
+ * @returns {Promise<Document>} - The created Entry
+ */
+
 export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
-  /** @param {Partial<DocumentsImportResolverConfiguration>} options*/
+  /** @param {DocumentsImportResolverConfiguration} options*/
   constructor(options = {}) {
     super(options);
     this.source = options.source;
     this.existing = options.existing;
-    this.pack = options.pack;
     this.folderId = options.folderId;
+
+    if (!this.source || !this.existing) {
+      throw new Error(
+        "Both 'source' and 'existing' documents are required options.",
+      );
+    }
+
+    if (this.source?.documentName !== this.existing?.documentName) {
+      throw new Error(
+        `Document name mismatch: source ("${this.source?.documentName}") does not match existing ("${this.existing?.documentName}").`,
+      );
+    }
   }
 
   /**
@@ -46,6 +64,9 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     },
   };
 
+  /**
+   * @type {Record<string, String>}
+   */
   static EMBEDDED_SECTIONS = {
     base: `${RESOLVER_TEMPLATE}/embedded-sections/base-section.hbs`,
     Cards: `${RESOLVER_TEMPLATE}/embedded-sections/cards-section.hbs`,
@@ -53,6 +74,9 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     RollTable: `${RESOLVER_TEMPLATE}/embedded-sections/roll-table-section.hbs`,
   };
 
+  /**
+   * @type {Record<string, String>}
+   */
   static PANELS = {
     base: `${RESOLVER_TEMPLATE}/panels/base-panel.hbs`,
     JournalEntry: `${RESOLVER_TEMPLATE}/panels/journal-panel.hbs`,
@@ -89,7 +113,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     options = super._initializeApplicationOptions(options);
     options.window.title = options.window.title.replace(
       "documentName",
-      options.pack.documentName,
+      options.source.documentName,
     );
     options.position.height ??= window.innerHeight * 0.9;
     return options;
@@ -118,7 +142,17 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
    * @type {string}
    */
   get documentName() {
-    return this.pack.documentName;
+    return this.source?.documentName;
+  }
+
+  /** @type {CompendiumCollection|WorldCollection} */
+  get sourceCollection() {
+    return this.source.compendium ?? this.source.collection;
+  }
+
+  /** @type {CompendiumCollection|WorldCollection} */
+  get targetCollection() {
+    return this.existing.compendium ?? this.existing.collection;
   }
 
   /* -------------------------------------------- */
@@ -151,8 +185,22 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
         },
       ],
       config: CONFIG,
-      packName: this.pack.title,
+      collectionsNames: {
+        source: this.getCollectionsName(this.sourceCollection),
+        target: this.getCollectionsName(this.targetCollection),
+      },
     };
+  }
+
+  /**
+   * Gets the localized plural label or title for a given collection.
+   * @param {WorldCollection|CompendiumCollection} collection - The collection to get the name from.
+   * @returns {string} The localized plural label or title.
+   */
+  getCollectionsName(collection) {
+    return collection instanceof WorldCollection
+      ? game.i18n.localize(collection.documentClass.metadata.labelPlural)
+      : collection.title;
   }
 
   /**
@@ -212,7 +260,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
           class: "field-bg truncate-text",
           value: doc.background.src ?? "No background source",
           tooltip: doc.background.src,
-          icon: "fa-solid fa-suitcase",
+          icon: "fa-solid fa-map",
         });
         break;
     }
@@ -220,6 +268,11 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     return headerFields;
   }
 
+  /**
+   * @param {Document} doc - The Document being evaluated in the panel.
+   * @returns {Promise<Array<Object>>}
+   * @protected
+   */
   async _prepareAdditionalFields(doc) {
     const additionalFields = [];
     switch (this.documentName) {
@@ -422,10 +475,9 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   /**
    * Replacement launcher function to instantiate and render the ApplicationV2 Dialog
    * @param {Partial<DocumentsImportResolverConfiguration>} options
+   * @returns {Promise<Document>}
    */
   static async showDialog(options) {
-    if (typeof options.pack === "string")
-      options.pack = game.packs.get(options.pack);
     if (typeof options.source === "string")
       options.source = await fromUuid(options.source);
     if (typeof options.existing === "string")
@@ -437,33 +489,42 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   }
 
   /**
-   * Monkey-patches `Collection.prototype._createDroppedEntry`
+   * Monkey-patches `DocumentDirectory.prototype._createDroppedEntry` and `Compendium.prototype._createDroppedEntry`
    */
-  static patchCollectionMethod() {
-    const originalMethod = Compendium.prototype._createDroppedEntry;
-    if (typeof originalMethod !== "function") return;
+  static patchDropHandlers() {
+    const targets = [
+      {
+        proto: Compendium.prototype,
+        handler: TCRDocumentsImportResolver._createDroppedEntryCompendium,
+      },
+      {
+        proto: DocumentDirectory.prototype,
+        handler: TCRDocumentsImportResolver._createDroppedEntryDirectory,
+      },
+    ];
 
-    Compendium.prototype._createDroppedEntry = function (...args) {
-      const callOriginal = (...overrideArgs) =>
-        originalMethod.apply(this, overrideArgs.length ? overrideArgs : args);
+    for (const { proto, handler } of targets) {
+      const originalMethod = proto._createDroppedEntry;
+      if (typeof originalMethod !== "function") continue;
 
-      return TCRDocumentsImportResolver._createDroppedEntry.call(
-        this,
-        callOriginal,
-        ...args,
-      );
-    };
+      proto._createDroppedEntry = function (...args) {
+        const callOriginal = (...overrideArgs) =>
+          originalMethod.apply(this, overrideArgs.length ? overrideArgs : args);
+
+        return handler.call(this, callOriginal, ...args);
+      };
+    }
   }
 
   /**
    * Create a dropped Entry in this Compendium
-   * @param {Function} callOriginal
-   * @param {DirectoryMixinEntry} entry       The Entry being dropped
-   * @param {string} [folderId]               The ID of the Folder to which the Entry should be added
+   * @param {createDroppedEntryFn} callOriginal
+   * @param {DirectoryMixinEntry} entry - The Entry being dropped
+   * @param {string} [folderId] - The ID of the Folder to which the Entry should be added
    * @returns {Promise<DirectoryMixinEntry>}  The created Entry
    * @this {Compendium}
    */
-  static async _createDroppedEntry(callOriginal, entry, folderId) {
+  static async _createDroppedEntryCompendium(callOriginal, entry, folderId) {
     const collection = this.collection;
     const isGM = game.user.isGM;
     const isSupportedType = !["Macro", "Playlist", "Adventure"].includes(
@@ -484,24 +545,113 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       const match = index.find(
         (i) =>
           i.name === document.name ||
-          i.background?.src === document.background?.src,
+          (i.background?.src && i.background.src === document.background?.src),
       );
       if (match) existing = await collection.getDocument(match._id);
     } else {
       [existing] = await collection.getDocuments({ name: document.name });
     }
 
-    if (existing) {
-      entry = await TCRDocumentsImportResolver.showDialog({
-        source: document,
-        existing,
-        folderId,
-        pack: collection,
-      });
-      if (!entry) return;
+    if (!existing) {
+      const created = callOriginal(entry, folderId);
+      if (created) {
+        await TCRDocumentsImportResolver.#deleteSourceDocument.call(
+          this,
+          entry,
+        );
+      }
+      return created;
     }
 
-    return callOriginal(entry, folderId);
+    if (existing.folder) folderId = existing.folder._id;
+
+    const resolvedEntry = await TCRDocumentsImportResolver.showDialog({
+      source: document,
+      existing,
+      folderId,
+      pack: collection,
+    });
+
+    if (!resolvedEntry) return;
+
+    const created = await callOriginal(resolvedEntry, folderId);
+    if (created) {
+      await TCRDocumentsImportResolver.#deleteSourceDocument.call(this, entry);
+    }
+    return created;
+  }
+
+  /**
+   * Create a dropped Entry in this Compendium
+   * @param {createDroppedEntryFn} callOriginal
+   * @param {DirectoryMixinEntry} entry - The Entry being dropped
+   * @param {string} [folderId] - The ID of the Folder to which the Entry should be added
+   * @returns {Promise<DirectoryMixinEntry>}  The created Entry
+   * @this {DocumentDirectory}
+   */
+  static async _createDroppedEntryDirectory(callOriginal, entry, folderId) {
+    const collection = this.collection;
+    const isGM = game.user.isGM;
+    const isSupportedType = !["Macro", "Playlist", "Adventure"].includes(
+      collection.documentName,
+    );
+
+    if (!isGM || !isSupportedType) return callOriginal(entry, folderId);
+
+    const document = entry.clone(
+      { folder: folderId || null },
+      { keepId: true },
+    );
+
+    let existing = null;
+
+    // World collections are loaded in memory, allowing synchronous lookups
+    if (collection.documentName === "Scene") {
+      existing = collection.find(
+        (s) =>
+          s.name === document.name ||
+          (s.background?.src && s.background.src === document.background?.src),
+      );
+    } else {
+      existing = collection.getName(document.name);
+    }
+
+    if (!existing) return callOriginal(entry, folderId);
+
+    if (existing.folder) folderId = existing.folder._id;
+
+    const resolvedEntry = await TCRDocumentsImportResolver.showDialog({
+      source: document,
+      existing,
+      folderId,
+      collection,
+    });
+
+    if (!resolvedEntry) return;
+
+    const created = await callOriginal(resolvedEntry, folderId);
+    return created;
+  }
+
+  /**
+   * Delete the original source document from World Directory or Compendium A
+   * @param {Document} entry
+   * @this {Compendium}
+   */
+  static async #deleteSourceDocument(entry) {
+    if (!entry) return;
+    try {
+      // Source is in another Compendium
+      if (entry.pack && entry.pack !== this.collection.metadata.id) {
+        const sourcePack = game.packs.get(entry.pack);
+        const sourceDoc = await sourcePack?.getDocument(entry.id);
+        await sourceDoc?.delete();
+      } else if (!entry.pack) {
+        await entry.delete();
+      }
+    } catch (err) {
+      console.error("Failed to delete original source document:", err);
+    }
   }
 
   /* -------------------------------------------- */
@@ -564,7 +714,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       `^${RegExp.escape(baseName)}(?: \\((\\d+)\\))?$`,
     );
 
-    const indexes = this.pack?.index.filter((i) => i.folder === this.folderId);
+    const collection = this.targetCollection.index ?? this.targetCollection;
+    const indexes = collection.filter(
+      (i) => i.folder === this.folderId || i.folder?.id === this.folderId,
+    );
 
     let maxCopyIndex = 0;
     for (const doc of indexes) {

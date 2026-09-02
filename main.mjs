@@ -46,7 +46,7 @@ Hooks.on("init", () => {
   settings.registerGridSizeSetting();
   TCRPackManager.registerSetting();
 
-  apps.TCRDocumentsImportResolver.patchCollectionMethod();
+  apps.TCRDocumentsImportResolver.patchDropHandlers();
 
   JiraIssueManager.registerTokenSetting();
   canvas.CanvasDropManager.initialize();
