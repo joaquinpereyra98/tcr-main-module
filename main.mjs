@@ -47,6 +47,7 @@ Hooks.on("init", () => {
   TCRPackManager.registerSetting();
 
   apps.TCRDocumentsImportResolver.patchDropHandlers();
+  apps.TCRDocumentsImportResolver.patchFolderDropHandlers();
 
   JiraIssueManager.registerTokenSetting();
   canvas.CanvasDropManager.initialize();

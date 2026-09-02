@@ -19,6 +19,16 @@ const RESOLVER_TEMPLATE = `modules/${MODULE_ID}/templates/actor-importer-resolve
  * @returns {Promise<Document>} - The created Entry
  */
 
+/**
+ * @callback handleDroppedForeignFolderFn
+ * @param {Folder} folder - The Folder being dropped
+ * @param {string} closestFolderId - The closest Folder _id to the drop target
+ * @param {object} sortData - The sort data for the Folder
+ * @param {string} sortData.sortKey - The sort key to use for sorting
+ * @param {boolean} sortData.sortBefore - Sort before the target?
+ * @returns {Promise<{folder: Folder, sortNeeded: boolean}|null>} - The created Entry
+ */
+
 export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   /** @param {DocumentsImportResolverConfiguration} options*/
   constructor(options = {}) {
@@ -177,7 +187,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
         },
         {
           doc: this.existing,
-          title: "Existing in Compendium",
+          title: "Existing in Collection",
           class: "old",
           embedded: await this._prepareEmbeddedDocuments(this.existing),
           headerFields: await this._prepareHeadersFields(this.existing),
@@ -538,19 +548,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       { keepId: true },
     );
 
-    let existing = null;
-
-    if (collection.documentName === "Scene") {
-      const index = await collection.getIndex({ fields: ["background.src"] });
-      const match = index.find(
-        (i) =>
-          i.name === document.name ||
-          (i.background?.src && i.background.src === document.background?.src),
-      );
-      if (match) existing = await collection.getDocument(match._id);
-    } else {
-      [existing] = await collection.getDocuments({ name: document.name });
-    }
+    const existing = await TCRDocumentsImportResolver.findExistingDocument(
+      collection,
+      document,
+    );
 
     if (!existing) {
       const created = callOriginal(entry, folderId);
@@ -575,9 +576,9 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     if (!resolvedEntry) return;
 
     const created = await callOriginal(resolvedEntry, folderId);
-    if (created) {
+    if (created)
       await TCRDocumentsImportResolver.#deleteSourceDocument.call(this, entry);
-    }
+
     return created;
   }
 
@@ -603,19 +604,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       { keepId: true },
     );
 
-    let existing = null;
-
-    // World collections are loaded in memory, allowing synchronous lookups
-    if (collection.documentName === "Scene") {
-      existing = collection.find(
-        (s) =>
-          s.name === document.name ||
-          (s.background?.src && s.background.src === document.background?.src),
-      );
-    } else {
-      existing = collection.getName(document.name);
-    }
-
+    const existing = TCRDocumentsImportResolver.findExistingDocument(
+      collection,
+      document,
+    );
     if (!existing) return callOriginal(entry, folderId);
 
     if (existing.folder) folderId = existing.folder._id;
@@ -631,6 +623,170 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
 
     const created = await callOriginal(resolvedEntry, folderId);
     return created;
+  }
+
+  /**
+   * Monkey-patches folder drop handlers in DocumentDirectory and Compendium
+   */
+  static patchFolderDropHandlers() {
+    const targets = [
+      {
+        proto: DocumentDirectory.prototype,
+        handler:
+          TCRDocumentsImportResolver._handleDroppedForeignFolderDirectory,
+      },
+    ];
+
+    for (const { proto, handler } of targets) {
+      const originalMethod = proto._handleDroppedForeignFolder;
+      if (typeof originalMethod !== "function") continue;
+
+      proto._handleDroppedForeignFolder = function (...args) {
+        const callOriginal = (...overrideArgs) =>
+          originalMethod.apply(this, overrideArgs.length ? overrideArgs : args);
+
+        return handler.call(this, callOriginal, ...args);
+      };
+    }
+  }
+
+  /**
+   * Compares documents within a dropped folder hierarchy against existing collection documents
+   * and opens the import resolver for duplicates before proceeding.
+   * @param {handleDroppedForeignFolderFn} callOriginal - Reference to the original _handleDroppedForeignFolder method
+   * @param {Folder} folder - The Folder being dropped
+   * @param {string} closestFolderId - Target parent folder ID
+   * @param {object} sortData - Sorting metadata
+   * @param {object} sortData - The sort data for the Folder
+   * @param {string} sortData.sortKey - The sort key to use for sorting
+   * @param {boolean} sortData.sortBefore - Sort before the target?
+   * @returns {Promise<{folder: Folder, sortNeeded: boolean}|null>}
+   * @this {DocumentDirectory}
+   */
+  static async _handleDroppedForeignFolderDirectory(
+    callOriginal,
+    folder,
+    closestFolderId,
+    sortData,
+  ) {
+    const collection = this.collection;
+    if (!game.user.isGM) return callOriginal(folder, closestFolderId, sortData);
+
+    const targetFolder = collection.folders.get(closestFolderId);
+
+    let { foldersToCreate, documentsToCreate } =
+      await this._organizeDroppedFoldersAndDocuments(folder, targetFolder);
+
+    if (!foldersToCreate.length && !documentsToCreate.length) return;
+
+    // Hydrate document indexes if dropped from a compendium
+    if (folder.compendium) {
+      const ids = documentsToCreate.map((i) => i._id);
+      const docs = await folder.compendium.getDocuments({ _id__in: ids });
+      const docsMap = new Map(docs.map((d) => [d._id, d]));
+
+      documentsToCreate = documentsToCreate.map((item) => {
+        const doc = docsMap.get(item._id);
+        const itemData = item.toObject ? item.toObject() : item;
+        return foundry.utils.mergeObject(doc?.toObject() ?? {}, itemData, {
+          inplace: false,
+        });
+      });
+    }
+
+    const finalDocumentsToCreate = [];
+
+    for (const docData of documentsToCreate) {
+      const sourceDoc = new collection.documentClass(docData);
+
+      const existing = await TCRDocumentsImportResolver.findExistingDocument(
+        collection,
+        sourceDoc,
+      );
+
+      if (existing) {
+        const resolvedEntry = await TCRDocumentsImportResolver.showDialog({
+          source: sourceDoc,
+          existing,
+          folderId: sourceDoc.folder || closestFolderId,
+          collection,
+        });
+
+        if (!resolvedEntry) continue;
+        const updatedData = resolvedEntry.toObject();
+        if (updatedData._id === existing.id)
+          updatedData._id = foundry.utils.randomID();
+
+        finalDocumentsToCreate.push(updatedData);
+      } else {
+        finalDocumentsToCreate.push(docData);
+      }
+    }
+
+    let createdFolders = [];
+    try {
+      createdFolders = await Folder.createDocuments(foldersToCreate, {
+        pack: collection.collection,
+        keepId: true,
+      });
+    } catch (err) {
+      ui.notifications.error(err.message);
+      throw err;
+    }
+
+    try {
+      await this.collection.documentClass.createDocuments(
+        finalDocumentsToCreate,
+        {
+          pack: this.collection.collection,
+          keepId: true,
+        },
+      );
+    } catch (err) {
+      ui.notifications.error(err.message);
+      throw err;
+    }
+
+    const resultFolder = createdFolders.length ? createdFolders[0] : folder;
+
+    return {
+      sortNeeded: true,
+      folder: resultFolder,
+    };
+  }
+
+  /**
+   * Helper to locate an existing document in a target collection or compendium index.
+   * @param {WorldCollection|CompendiumCollection} collection - Target collection
+   * @param {Document|Object} sourceDoc - Source document or object to look up
+   * @returns {Promise<Document|null>} Matching existing document, or null if none
+   */
+  static async findExistingDocument(collection, sourceDoc) {
+    const isScene = collection.documentName === "Scene";
+    if (collection instanceof WorldCollection) {
+      if (isScene) {
+        return (
+          collection.find(
+            (s) =>
+              s.name === sourceDoc.name ||
+              (s.background?.src &&
+                s.background.src === sourceDoc.background?.src),
+          ) ?? null
+        );
+      }
+      return collection.getName(sourceDoc.name) ?? null;
+    }
+    if (isScene) {
+      const index = await collection.getIndex({ fields: ["background.src"] });
+      const match = index.find(
+        (i) =>
+          i.name === sourceDoc.name ||
+          (i.background?.src && i.background.src === sourceDoc.background?.src),
+      );
+      return match ? collection.getDocument(match._id) : null;
+    }
+    const [existing] = await collection.getDocuments({ name: sourceDoc.name });
+    return existing ?? null;
   }
 
   /**
