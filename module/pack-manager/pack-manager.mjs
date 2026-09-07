@@ -762,7 +762,6 @@ export default class TCRPackManager {
             /**@param {Actor} a*/
             (a) =>
               a.folder?.id === targetWorldFolderId &&
-              a.isOwner &&
               (a.id === doc.id || (a.name === doc.name && a.img === doc.img)),
           );
 
