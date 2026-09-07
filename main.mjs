@@ -141,27 +141,25 @@ Hooks.once("setup", () => {
   });
 });
 
-Hooks.on("ready", () => {
-  settings.LoginTracker.initialize()
-    .then(async () => {
-      if (!TCRPackManager.startPacking) return;
+Hooks.on("ready", async () => {
+  try {
+    await settings.LoginTracker.initialize();
+
+    if (TCRPackManager.startPacking) {
       await TCRPackManager.packingProcess();
       await TCRPackManager.unpackingProcess();
-    })
-    .catch((err) =>
-      console.error("TCR | LoginTracker initialization failed:", err),
-    );
+    }
+  } catch (err) {
+    console.error("TCR | LoginTracker initialization failed:", err);
+  }
+});
+
+Hooks.on("ready", () => {
   Object.assign(CONFIG.TableResult.typeLabels, {
     text: "TABLE.RESULT_TYPES.TEXT.label",
     document: "TABLE.RESULT_TYPES.DOCUMENT.label",
     pack: "TABLE.RESULT_TYPES.COMPENDIUM.label",
   });
-
-  settings.LoginTracker.initialize();
-  if (TCRPackManager.startPacking) {
-    TCRPackManager.packingProcess();
-    TCRPackManager.unpackingProcess();
-  }
 
   Hooks.on("renderApplicationV2", (_, element) => {
     /**@type {HTMLButtonElement} */

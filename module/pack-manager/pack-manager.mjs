@@ -5,6 +5,22 @@ import WorldFolderField from "../data/fields/world-folder-field.mjs";
 
 const MS_PER_DAY = 86_400_000;
 
+/**
+ * @import {ActorData, FolderData} from "../../foundry/resources/app/common/types.mjs"
+ * @import EmbeddedCollection from "../../foundry/resources/app/common/abstract/embedded-collection.mjs";
+ */
+
+/**
+ * @typedef {Object} ActorIndex
+ * @property {string} folder - The unique identifier of the folder containing the entry.
+ * @property {string} img - The URL or path to the image asset.
+ * @property {string} name - The display name of the index item.
+ * @property {number} sort - The sort order integer for list positioning.
+ * @property {string} type - The document type (e.g., "character").
+ * @property {string} uuid - The full universal unique identifier path.
+ * @property {string} _id - The database unique identifier.
+ */
+
 export default class TCRPackManager {
   /**@returns {Folder|undefined} */
   static get _unpackingFolder() {
@@ -20,12 +36,6 @@ export default class TCRPackManager {
       noUser: game.settings.get(MODULE_ID, SETTINGS.COLOR_NO_USER) ?? "#be9a25",
     };
   }
-  static #EXPORT_OPTIONS = Object.freeze({
-    keepFolders: true,
-    keepId: true,
-    updateByName: true,
-    clearOwnership: false,
-  });
 
   /**@returns {boolean} */
   static get startPacking() {
@@ -157,39 +167,151 @@ export default class TCRPackManager {
   }
 
   /**
-   * Deletes actors in batches to prevent UI freeze or API rate-limiting issues.
-   * @param {string[]} actorIDs - Array of document IDs for the actors to be deleted.
+   * Processes an array in chunks, invoking an async callback for each batch
+   * @template T
+   * @param {(batch: T[]) => Promise<void>} callback - Function executed per batch.
+   * @param {T[]} array - Items to process.
+   * @param {Object} [options]
+   * @param {number} [options.batchSize=20] - Number of items per batch.
+   * @param {number} [options.delayMs=200] - Delay between batches in milliseconds.
    * @returns {Promise<void>}
    */
-  static async #deleteActors(actorIDs) {
-    if (actorIDs.length) {
-      const BATCH_SIZE = 20;
+  static async #resolveBatch(
+    callback,
+    array,
+    { batchSize = 20, delayMs = 200 } = {},
+  ) {
+    if (!Array.isArray(array)) return;
 
-      for (let i = 0; i < actorIDs.length; i += BATCH_SIZE) {
-        const batch = actorIDs.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < array.length; i += batchSize) {
+      const batch = array.slice(i, i + batchSize);
+      await callback(batch);
 
-        await Actor.deleteDocuments(batch);
-        await new Promise((resolve) => setTimeout(resolve, 200));
+      const isLastBatch = i + batchSize >= array.length;
+      if (!isLastBatch && delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
   }
 
   /**
-   *
-   * @param {Partial<import("../../foundry/resources/app/common/types.mjs").ActorData>[]} actorsData - Array of
-   * @param {Partial<Omit<import("../../foundry/resources/app/common/abstract/_types.mjs").DatabaseCreateOperation, "data">>} [operation={}]
-   * @returns {Promise<void>}
+   * Handles the export of a world folder to a compendium and cleans up world state.
+   * @param {Folder} userFolder - The world folder to pack.
+   * @param {CompendiumCollection} pack - Target compendium.
+   * @param {object} [options={}]
+   * @param {boolean} [options.preserveFolder=true] - Keep the world folder structure intact (delete actors only).
+   * @returns {Promise<boolean>} Success indicator.
    */
-  static async #createActors(actorsData, operation = {}) {
-    if (actorsData.length) {
-      const BATCH_SIZE = 10;
-
-      for (let i = 0; i < actorsData.length; i += BATCH_SIZE) {
-        const batch = actorsData.slice(i, i + BATCH_SIZE);
-        await Actor.createDocuments(batch, operation);
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
+  static async #packFolder(userFolder, pack, { preserveFolder = true } = {}) {
+    if (userFolder.compendium) {
+      console.warn(
+        `TCR | Export failed for folder "${userFolder.name}". The folder need be a world folder.`,
+      );
+      return false;
     }
+    console.log(`TCR | Exporting folder "${userFolder.name}" to compendium...`);
+    const targetCompendiumFolder = await this.#getOrCreateCompendiumFolder(
+      pack,
+      userFolder.name,
+    );
+
+    const result = await this.exportToCompendium(
+      pack,
+      userFolder,
+      targetCompendiumFolder,
+    );
+
+    if (!result) {
+      console.warn(
+        `TCR | Export failed for folder "${userFolder.name}". Aborting deletion.`,
+      );
+      return false;
+    }
+
+    /**
+     * Syncs embedded documents from a world actor to a target compendium document.
+     * @param {Actor} targetDoc - Compendium actor document
+     * @param {Actor} sourceActor - World actor document source
+     */
+    const syncEmbeddedDocuments = async (targetDoc, sourceActor) => {
+      for (const [key, collection] of Object.entries(targetDoc.collections)) {
+        const toCreate = [];
+        const toUpdate = [];
+
+        for (const item of sourceActor[key] ?? []) {
+          //existed item in the target
+          const existed = collection.get(item.id);
+
+          if (existed) {
+            const diff = foundry.utils.diffObject(
+              existed.toObject(),
+              item.toObject(),
+            );
+            if (!foundry.utils.isEmpty(diff))
+              toUpdate.push({ _id: item.id, ...diff });
+          } else {
+            toCreate.push(item.toObject());
+          }
+        }
+
+        const docName = collection.documentClass.documentName;
+
+        // Batch create missing embedded documents
+        if (toCreate.length) {
+          await targetDoc.createEmbeddedDocuments(docName, toCreate, {
+            keepId: true,
+          });
+        }
+
+        // Batch update existing embedded documents
+        if (toUpdate.length) {
+          await targetDoc.updateEmbeddedDocuments(docName, toUpdate);
+        }
+      }
+    };
+
+    /**
+     * Updates or creates documents in the compendium batch-wise, then cleans up world counterparts.
+     * @param {Partial<ActorData>[]} items
+     * @param {'updateDocuments' | 'createDocuments'} method
+     */
+    const processBatchOperation = async (items, method) => {
+      if (!items?.length) return;
+
+      await this.#resolveBatch(async (batch) => {
+        const compendiumDocs = await Actor[method](batch, {
+          pack: pack.collection,
+          keepId: true,
+        });
+
+        const actorsToDelete = [];
+        for (const compDoc of compendiumDocs) {
+          const { _id, name, img } = compDoc;
+
+          const worldActor = game.actors.find(
+            (a) => a._id === _id || (a.name === name && a.img === img),
+          );
+
+          if (!worldActor) continue;
+          actorsToDelete.push(worldActor._id);
+          await syncEmbeddedDocuments(compDoc, worldActor);
+        }
+
+        if (actorsToDelete.length) {
+          await Actor.deleteDocuments(actorsToDelete);
+        }
+      }, items);
+    };
+
+    await processBatchOperation(result.documentsToUpdate, "updateDocuments");
+    await processBatchOperation(result.documentsToCreate, "createDocuments");
+
+    if (!preserveFolder && !hasDocumentsInFolder(userFolder)) {
+      await userFolder.delete({
+        deleteSubfolders: true,
+      });
+    }
+    return true;
   }
 
   /***************************************************************/
@@ -197,39 +319,37 @@ export default class TCRPackManager {
   /**
    * Export all Documents contained in this Folder to a given Compendium pack.
    * Optionally update existing Documents within the Pack by name, otherwise append all new entries.
-   * @this {Folder}
    * @param {CompendiumCollection} pack       A Compendium pack to which the documents will be exported
-   * @param {object} [options] - Additional options which customize how content is exported. See {@link ClientDocumentMixin#toCompendium}
-   * @param {boolean} [options.updateByName=false] - Update existing entries in the Compendium pack, matching by name
-   * @param {boolean} [options.keepId=false] - Retain the original _id attribute when updating an entity
-   * @param {boolean} [options.keepFolders=false] - Retain the existing Folder structure
-   * @param {string} [options.folder] - A target folder id to which the documents will be exported
-   * @returns {Promise<CompendiumCollection>}  The updated Compendium Collection instance
+   * @param {Folder} origin -
+   * @param {Folder} target - A target folder  to which the documents will be exported
+   * @returns {Promise<Boolean|{ documentsToCreate: Partial<ActorData>[], documentsToUpdate: Partial<ActorData>[] }>}
    */
-  static async exportToCompendium(pack, options = {}) {
-    const updateByName = options.updateByName ?? false;
+  static async exportToCompendium(pack, origin, target) {
+    /**@type {ActorIndex} */
     const index = await pack.getIndex();
-    ui.notifications.info(
-      game.i18n.format("FOLDER.Exporting", {
-        type: game.i18n.localize(
-          getDocumentClass(this.type).metadata.labelPlural,
-        ),
-        compendium: pack.collection,
-      }),
-    );
-    options.folder ||= null;
 
     // Classify creations and updates
+    /**@type {Partial<FolderData>[]} */
     const foldersToCreate = [];
+    /**@type {Partial<FolderData>[]} */
     const foldersToUpdate = [];
+    /**@type {Partial<ActorData>[]} */
     const documentsToCreate = [];
+    /**@type {Partial<ActorData>[]} */
     const documentsToUpdate = [];
 
     // Ensure we do not overflow maximum allowed folder depth
-    const originDepth = this.ancestors.length;
-    const targetDepth = options.folder
-      ? (pack.folders.get(options.folder)?.ancestors.length ?? 0) + 1
-      : 0;
+    const originDepth = origin.ancestors.length;
+    const targetDepth =
+      (pack.folders.get(target.id)?.ancestors.length ?? 0) + 1;
+
+    const exportOptions = {
+      keepFolders: true,
+      keepId: true,
+      updateByName: true,
+      clearOwnership: false,
+      folder: target.id,
+    };
 
     /**
      * Recursively extract the contents and subfolders of a Folder into the Pack
@@ -239,68 +359,54 @@ export default class TCRPackManager {
      */
     const _extractFolder = async (folder, _depth = 0) => {
       const folderData = folder.toCompendium(pack, {
-        ...options,
+        ...exportOptions,
         clearSort: false,
-        keepId: true,
       });
 
-      if (options.keepFolders) {
-        // Ensure that the exported folder is within the maximum allowed folder depth
-        const currentDepth = _depth + targetDepth - originDepth;
-        const exceedsDepth = currentDepth > pack.maxFolderDepth;
-        if (exceedsDepth) {
-          throw new Error(
-            `Folder "${folder.name}" exceeds maximum allowed folder depth of ${pack.maxFolderDepth}`,
-          );
-        }
+      const currentDepth = _depth + targetDepth - originDepth;
+      if (currentDepth > pack.maxFolderDepth) {
+        throw new Error(
+          `Folder "${folder.name}" exceeds maximum allowed folder depth of ${pack.maxFolderDepth}`,
+        );
+      }
 
-        // Re-parent child folders into the target folder or into the compendium root
-        if (folderData.folder === this.id) folderData.folder = options.folder;
+      if (folderData.folder === origin.id) folderData.folder = target.id;
 
-        // Classify folder data for creation or update
-        if (folder !== this) {
-          const existing = updateByName
-            ? pack.folders.find((f) => f.name === folder.name)
-            : pack.folders.get(folder.id);
-          if (existing) {
-            folderData._id = existing._id;
-            foldersToUpdate.push(folderData);
-          } else foldersToCreate.push(folderData);
+      if (folder !== origin) {
+        const existingFolder = pack.folders.find(
+          (f) =>
+            f.name === folder.name &&
+            (f.folder?.id === target.id || f.ancestors.includes(target.id)),
+        );
+        if (existingFolder) {
+          folderData._id = existingFolder._id;
+          foldersToUpdate.push(folderData);
+        } else {
+          foldersToCreate.push(folderData);
         }
       }
 
-      // Iterate over Documents in the Folder, preparing each for export
-      for (let doc of folder.contents) {
-        /**@type {import("../../foundry/resources/app/common/types.mjs").ActorData} */
-        const data = doc.toCompendium(pack, options);
+      for (const doc of folder.contents) {
+        const data = doc.toCompendium(pack, exportOptions);
 
-        // Re-parent immediate child documents into the target folder.
-        if (data.folder === this.id) data.folder = options.folder;
-        // Otherwise retain their folder structure if keepFolders is true.
-        else
-          data.folder = options.keepFolders ? folderData._id : options.folder;
+        // Re-parent folder reference
+        data.folder = data.folder === origin.id ? target.id : folderData._id;
 
-        // Generate thumbnails for Scenes
-        if (doc instanceof Scene) {
-          const { thumb } = await doc.createThumbnail({
-            img: data.background.src,
-          });
-          data.thumb = thumb;
+        // Match documents by name, image, and folder
+        const existingDoc = index.find(
+          (i) =>
+            i.name === data.name &&
+            i.img === data.img &&
+            i.folder === data.folder,
+        );
+
+        if (existingDoc) {
+          data._id = existingDoc._id;
+          documentsToUpdate.push(data);
+        } else {
+          documentsToCreate.push(data);
         }
 
-        // Classify document data for creation or update
-        const existing = updateByName
-          ? index.find(
-              (i) =>
-                i.name === data.name &&
-                i.img === data.img &&
-                i.folder === data.folder,
-            )
-          : index.find((i) => i._id === data._id);
-        if (existing) {
-          data._id = existing._id;
-          documentsToUpdate.push(data);
-        } else documentsToCreate.push(data);
         console.log(
           `Prepared "${data.name}" for export to "${pack.collection}"`,
         );
@@ -312,15 +418,16 @@ export default class TCRPackManager {
 
     // Prepare folders for export
     try {
-      await _extractFolder(this, 0);
+      await _extractFolder(origin);
     } catch (err) {
-      const msg = `Cannot export Folder "${this.name}" to Compendium pack "${pack.collection}":\n${err.message}`;
-      return ui.notifications.error(msg, { console: true });
+      const msg = `Cannot export Folder "${origin.name}" to Compendium pack "${pack.collection}":\n${err.message}`;
+      ui.notifications.error(msg, { console: true });
+      return false;
     }
 
     // Create and update Folders
     if (foldersToUpdate.length) {
-      await this.constructor.updateDocuments(foldersToUpdate, {
+      await Folder.updateDocuments(foldersToUpdate, {
         pack: pack.collection,
         diff: false,
         recursive: false,
@@ -328,40 +435,15 @@ export default class TCRPackManager {
       });
     }
     if (foldersToCreate.length) {
-      await this.constructor.createDocuments(foldersToCreate, {
+      await Folder.createDocuments(foldersToCreate, {
         pack: pack.collection,
         keepId: true,
         render: false,
       });
     }
 
-    // Create and update Documents
-    const cls = pack.documentClass;
-    if (documentsToUpdate.length)
-      await cls.updateDocuments(documentsToUpdate, {
-        pack: pack.collection,
-        diff: false,
-        recursive: false,
-        render: false,
-      });
-    if (documentsToCreate.length)
-      await cls.createDocuments(documentsToCreate, {
-        pack: pack.collection,
-        keepId: options.keepId,
-        render: false,
-      });
-
-    // Re-render the pack
-    ui.notifications.info(
-      game.i18n.format("FOLDER.ExportDone", {
-        type: game.i18n.localize(
-          getDocumentClass(this.type).metadata.labelPlural,
-        ),
-        compendium: pack.collection,
-      }),
-    );
     pack.render(false);
-    return pack;
+    return { documentsToCreate, documentsToUpdate };
   }
 
   /* -------------------------------------------- */
@@ -485,18 +567,17 @@ export default class TCRPackManager {
 
     try {
       const pack = await this.#getCompendium({ unlock: true });
-      if (!pack) {
-        console.warn(
-          "TCR | Could not open compendium. Aborting packing process.",
-        );
-        return;
-      }
+
+      if (!pack)
+        return void console.warn("TCR | Could not open compendium. Aborting.");
 
       const INACTIVE_THRESHOLD =
         game.settings.get(MODULE_ID, SETTINGS.INACTIVE_THRESHOLD) * 60000;
       const now = Date.now();
 
       for (const userFolder of playersFolder.getSubfolders()) {
+        if (!hasDocumentsInFolder(userFolder)) continue;
+
         const user = game.users.getName(userFolder.name);
         const { lastLogin } = user ? LoginTracker.getLoginData(user) : {};
         const timeSinceLogin = lastLogin ? now - lastLogin : 0;
@@ -511,42 +592,18 @@ export default class TCRPackManager {
           timeSinceLogin > INACTIVE_THRESHOLD &&
           !user.active;
 
-        if (!hasDocumentsInFolder(userFolder)) continue;
-
         if (!user || isOffline || isInactive) {
-          let logMsg = "";
-
-          if (isInactive) {
-            logMsg = `Player "${user.name}" is inactive. Packing and deleting folder.`;
-          } else if (isOffline) {
-            logMsg = `Player "${user.name}" is offline. Packing stuff.`;
-          } else {
-            logMsg = `No player found for folder "${userFolder.name}". Packing and deleting folder.`;
-          }
+          const logMsg = isInactive
+            ? `Player "${user.name}" is inactive. Packing and deleting folder.`
+            : isOffline
+              ? `Player "${user.name}" is offline. Packing stuff.`
+              : `No player found for folder "${userFolder.name}". Packing and deleting folder.`;
 
           console.log(`TCR | ${logMsg}`);
 
-          const targetFolder = await this.#getOrCreateCompendiumFolder(
-            pack,
-            userFolder.name,
-          );
-
-          await this.exportToCompendium.call(userFolder, pack, {
-            ...this.#EXPORT_OPTIONS,
-            folder: targetFolder.id,
+          await this.#packFolder(userFolder, pack, {
+            preserveFolder: isOffline,
           });
-
-          if (isOffline) {
-            // Remove actors from world, but keep the user folder for returning offline players
-            const actorIDs = this.#getDocIds(userFolder);
-            await this.#deleteActors(actorIDs);
-          } else {
-            // For inactive players (or deleted users), purge the world folder completely
-            await userFolder.delete({
-              deleteSubfolders: true,
-              deleteContents: true,
-            });
-          }
         }
       }
       console.log("TCR | GM Auto-Packing Finish!");
@@ -571,44 +628,23 @@ export default class TCRPackManager {
 
     try {
       const pack = await this.#getCompendium({ unlock: true });
-      if (!pack) {
-        return void console.warn(
-          "TCR | Could not open compendium. Aborting packing process.",
-        );
-      }
+      if (!pack)
+        return void console.warn("TCR | Could not open compendium. Aborting.");
 
       for (const userFolder of playersFolder.getSubfolders()) {
-        console.log(
-          `TCR | Exporting folder "${userFolder.name}" to compendium...`,
-        );
-
         const user = game.users.getName(userFolder.name);
 
-        const logMsg = user
-          ? `Player "${user.name}". Packing stuff.`
-          : `No player found for folder "${userFolder.name}". Packing and deleting folder.`;
-
-        console.log(`TCR | ${logMsg}`);
-
-        const targetFolder = await this.#getOrCreateCompendiumFolder(
-          pack,
-          userFolder.name,
+        console.log(
+          `TCR | ${
+            user
+              ? `Player "${user.name}". Packing stuff.`
+              : `No player found for folder "${userFolder.name}". Packing and deleting folder.`
+          }`,
         );
 
-        await this.exportToCompendium.call(userFolder, pack, {
-          ...this.#EXPORT_OPTIONS,
-          folder: targetFolder.id,
+        await this.#packFolder(userFolder, pack, {
+          preserveFolder: Boolean(user),
         });
-
-        if (user) {
-          const actorIDs = this.#getDocIds(userFolder);
-          await this.#deleteActors(actorIDs);
-        } else {
-          await userFolder.delete({
-            deleteSubfolders: true,
-            deleteContents: true,
-          });
-        }
       }
 
       ui.notifications.info(
@@ -643,37 +679,13 @@ export default class TCRPackManager {
 
     try {
       const pack = await this.#getCompendium({ unlock: true });
-      if (!pack) {
-        console.warn(
-          "TCR | Could not open compendium. Aborting packing process.",
-        );
-        return;
-      }
-
-      console.log(
-        `TCR | Exporting folder "${targetFolder.name}" to compendium...`,
-      );
-      const targetCompendiumFolder = await this.#getOrCreateCompendiumFolder(
-        pack,
-        targetFolder.name,
-      );
-
-      await this.exportToCompendium.call(targetFolder, pack, {
-        ...this.#EXPORT_OPTIONS,
-        folder: targetCompendiumFolder.id,
-      });
+      if (!pack)
+        return void console.warn("TCR | Could not open compendium. Aborting.");
 
       const user = game.users.getName(userName);
-
-      if (user) {
-        const actorIDs = this.#getDocIds(targetFolder);
-        await this.#deleteActors(actorIDs);
-      } else {
-        await targetFolder.delete({
-          deleteSubfolders: true,
-          deleteContents: true,
-        });
-      }
+      await this.#packFolder(targetFolder, pack, {
+        preserveFolder: Boolean(user),
+      });
 
       ui.notifications.info(
         `Successfully packed folder for user "${userName}".`,
@@ -787,7 +799,10 @@ export default class TCRPackManager {
         return;
       }
 
-      await this.#createActors(actorsToCreate, { keepId: true });
+      this.#resolveBatch(async (batch) => {
+        await Actor.createDocuments(batch, { keepId: true });
+      }, actorsToCreate);
+
       ui.notifications.info(
         `Successfully unpacked ${actorsToCreate.length} actor(s) for "${userName}".`,
       );
