@@ -475,7 +475,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   /** @override */
   _onClose(options = {}) {
     super._onClose(options);
-    this.#resolvers.resolve(null);
+    this.#resolvers.resolve(false);
   }
 
   /* -------------------------------------------- */
@@ -575,6 +575,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       { keepId: true },
     );
     const excludedIds = new Set();
+    let currentFolderId = folderId;
 
     let existing = await TCRDocumentsImportResolver.findExistingDocument(
       collection,
@@ -584,13 +585,13 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
 
     while (existing) {
       if (existing.folder) {
-        folderId = existing.folder._id ?? existing.folder;
+        currentFolderId = existing.folder._id ?? existing.folder;
       }
 
       resolvedEntry = await TCRDocumentsImportResolver.showDialog({
         source: document,
         existing,
-        folderId,
+        folderId: currentFolderId,
         pack: collection,
       });
 
@@ -688,7 +689,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     }
 
     const collection = this.collection;
-    const folderId =
+    let folderId =
       target?.closest("[data-folder-id]")?.dataset.folderId || null;
 
     /**@type {Document} */
@@ -885,8 +886,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     closestFolderId,
     sortData,
   ) {
-    const collection = this.collection;
     if (!game.user.isGM) return callOriginal(folder, closestFolderId, sortData);
+
+    const collection = this.collection;
+    const documentClass = collection.documentClass;
 
     const targetFolder = collection.folders.get(closestFolderId);
 
@@ -901,19 +904,20 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       const docs = await folder.compendium.getDocuments({ _id__in: ids });
       const docsMap = new Map(docs.map((d) => [d._id, d]));
 
-      documentsToCreate = documentsToCreate.map((item) => {
-        const doc = docsMap.get(item._id);
-        const itemData = item.toObject ? item.toObject() : item;
-        return foundry.utils.mergeObject(doc?.toObject() ?? {}, itemData, {
+      documentsToCreate = documentsToCreate.map((d) => {
+        const doc = docsMap.get(d._id);
+        const docData = d.toObject ? d.toObject() : d;
+        return foundry.utils.mergeObject(doc?.toObject() ?? {}, docData, {
           inplace: false,
         });
       });
     }
 
     const finalDocumentsToCreate = [];
+    const documentsToDelete = [];
 
     for (const docData of documentsToCreate) {
-      const sourceDoc = new collection.documentClass(docData);
+      const sourceDoc = new documentClass(docData);
       const excludedIds = new Set();
 
       let existing = await TCRDocumentsImportResolver.findExistingDocument(
@@ -960,6 +964,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       }
 
       finalDocumentsToCreate.push(updatedData);
+
+      if (!folder.compendium && collection instanceof CompendiumCollection) {
+        documentsToDelete.push(docData._id);
+      }
     }
 
     let createdFolders = [];
@@ -974,13 +982,21 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     }
 
     try {
-      await this.collection.documentClass.createDocuments(
-        finalDocumentsToCreate,
-        {
-          pack: this.collection.collection,
-          keepId: true,
-        },
-      );
+      await documentClass.createDocuments(finalDocumentsToCreate, {
+        pack: this.collection.collection,
+        keepId: true,
+      });
+
+      if (documentsToDelete.length) {
+        await documentClass.deleteDocuments(documentsToDelete);
+        const foldersToDelete = folder
+          .getSubfolders(true)
+          .filter((f) => f.contents.length)
+          .flatMap((f) => f.contents.map((c) => c._id));
+
+        if (foldersToDelete.length)
+          await Folder.deleteDocuments(foldersToDelete);
+      }
     } catch (err) {
       ui.notifications.error(err.message);
       throw err;
