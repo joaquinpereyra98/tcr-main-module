@@ -245,7 +245,7 @@ export default class TCRPackManager {
           (sourceActor[key] ?? []).map((i) => i.id),
         );
 
-        for (const {id} of collection) {
+        for (const { id } of collection) {
           if (!sourceItemIds.has(id)) {
             toDelete.push(id);
           }
@@ -299,21 +299,28 @@ export default class TCRPackManager {
           keepId: true,
         });
 
-        const actorsToDelete = [];
+        const userFolderActors = [
+          ...userFolder.contents,
+          ...userFolder.getSubfolders().flatMap((f) => f.contents),
+        ];
+
+        const actorsToDelete = new Set();
         for (const compDoc of compendiumDocs) {
           const { _id, name, img } = compDoc;
 
-          const worldActor = game.actors.find(
-            (a) => a._id === _id || (a.name === name && a.img === img),
+          const worldActor = userFolderActors.find(
+            (a) =>
+              !actorsToDelete.has(a._id) &&
+              (a._id === _id || (a.name === name && a.img === img)),
           );
 
           if (!worldActor) continue;
-          actorsToDelete.push(worldActor._id);
+          actorsToDelete.add(worldActor._id);
           await syncEmbeddedDocuments(compDoc, worldActor);
         }
 
-        if (actorsToDelete.length) {
-          await Actor.deleteDocuments(actorsToDelete);
+        if (actorsToDelete.size) {
+          await Actor.deleteDocuments(Array.from(actorsToDelete));
         }
       }, items);
     };
