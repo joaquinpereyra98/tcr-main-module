@@ -136,24 +136,17 @@ export default class TCRPackManager {
    * @returns {Promise<Folder>}
    */
   static async #getOrCreateCompendiumFolder(pack, folderName) {
-    let parentFolder = pack.folders.find(
+    const existingFolder = pack.folders.find(
       (f) => f.name === folderName && !f.folder,
     );
 
-    if (!parentFolder) {
-      parentFolder = await Folder.create(
-        [
-          {
-            name: folderName,
-            type: pack.documentName,
-            folder: null,
-          },
-        ],
+    return (
+      existingFolder ??
+      Folder.create(
+        { name: folderName, type: pack.documentName, folder: null },
         { pack: pack.collection },
-      );
-    }
-
-    return parentFolder;
+      )
+    );
   }
 
   /**
