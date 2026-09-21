@@ -1,3 +1,4 @@
 node_modules/
 /foundry
 /dist
+/storage/trash-store
