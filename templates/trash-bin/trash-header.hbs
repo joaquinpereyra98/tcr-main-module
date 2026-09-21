@@ -1,0 +1,14 @@
+<section class="trash-header flexcol">
+    <nav class="doc-type-grid" aria-role="{{localize 'SHEETS.FormNavLabel'}}">
+        {{#each store}}
+        <button type="button" class="doc-type-btn {{ifThen active " active" "" }}" data-action="selectDocType"
+            data-doc-type="{{name}}">
+            <i class="{{icon}}" inert></i>
+            <span class="btn-label">{{label}}</span>
+        </button>
+        {{/each}}
+    </nav>
+    <search class="trash-search" aria-label="{{localize 'DND5E.CompendiumBrowser.Filters.SearchResults'}}">
+        <input type="search" placeholder="{{localize 'DND5E.CompendiumBrowser.Filters.SearchResults'}}">
+    </search>
+</section>

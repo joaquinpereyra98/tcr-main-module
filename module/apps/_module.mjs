@@ -4,4 +4,5 @@ export { default as CompendiumBrowser } from "./compendium-browser.mjs";
 export { default as TCRDocumentsImportResolver } from "./documents-import-resolver.mjs";
 export { default as IssueSheet } from "./issue-sheet.mjs";
 export { default as MainHud } from "./main-hud.mjs";
+export { default as TrashBin } from "./trash-bin.mjs";
 export * as elements from "./elements/_module.mjs";

@@ -18,6 +18,7 @@ import {
 
 Hooks.on("init", () => {
   const module = game.modules.get("tcr-main-module");
+  CONFIG.compatibility.mode = CONST.COMPATIBILITY_MODES.SILENT;
 
   module.api = {
     apps: moduleToObject(apps),
@@ -32,12 +33,16 @@ Hooks.on("init", () => {
     renderAvailabilityViewer: apps.AvailabilityViewer.renderAvailabilityViewer,
     TCRPackManager,
     ImportResolver: apps.TCRDocumentsImportResolver,
+    TrashBin: apps.TrashBin,
   };
 
   CONFIG.ui[MAIN_HUD_KEY] = module.api.apps.MainHud;
   CONFIG.ui[LOGIN_TRACKER_KEY] = module.api.settings.LoginTracker;
   CONFIG.ui[AVAILABILITY_TRACKER_KEY] = apps.AvailabilityTracker;
   CONFIG.ui[AVAILABILITY_VIEWER_KEY] = apps.AvailabilityViewer;
+
+  apps.TrashBin.getStorePaths();
+  CONFIG.ui[apps.TrashBin.KEY] = apps.TrashBin;
 
   settings.HUDConfig.registerSetting();
   settings.SourcesConfig.registerSetting();
@@ -48,6 +53,8 @@ Hooks.on("init", () => {
 
   apps.TCRDocumentsImportResolver.patchDropHandlers();
   apps.TCRDocumentsImportResolver.patchFolderDropHandlers();
+
+  apps.TrashBin.registerPatch();
 
   JiraIssueManager.registerTokenSetting();
 
@@ -63,7 +70,10 @@ Hooks.on("init", () => {
 });
 
 Hooks.once("socketlib.ready", () => {
+  const module = game.modules.get(MODULE_ID);
+  module.socket = socketlib.registerModule(MODULE_ID);
   canvas.CanvasDropManager._registerSocketListeners();
+  apps.TrashBin._registerSocketListeners();
 });
 
 Hooks.once("setup", () => {
@@ -144,7 +154,7 @@ Hooks.once("setup", () => {
 Hooks.on("ready", async () => {
   try {
     await settings.LoginTracker.initialize();
-
+    
     if (TCRPackManager.startPacking) {
       await TCRPackManager.packingProcess();
       await TCRPackManager.unpackingProcess();
@@ -155,6 +165,8 @@ Hooks.on("ready", async () => {
 });
 
 Hooks.on("ready", () => {
+  apps.TrashBin.pruneExpiredStore();
+
   Object.assign(CONFIG.TableResult.typeLabels, {
     text: "TABLE.RESULT_TYPES.TEXT.label",
     document: "TABLE.RESULT_TYPES.DOCUMENT.label",
@@ -168,6 +180,7 @@ Hooks.on("ready", () => {
     );
     if (btn && btn.type === "submit") btn.type = "button";
   });
+
 });
 
 Hooks.on("dropCanvasData", hooks.onDropCanvasData);

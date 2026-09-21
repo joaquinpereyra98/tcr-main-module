@@ -3,6 +3,7 @@ export const MAIN_HUD_KEY = `${MODULE_ID}.MainHud`;
 export const LOGIN_TRACKER_KEY = `${MODULE_ID}.LoginTracker`;
 export const AVAILABILITY_TRACKER_KEY = `${MODULE_ID}.AvailabilityTracker`;
 export const AVAILABILITY_VIEWER_KEY = `${MODULE_ID}.AvailabilityViewer`;
+
 export const USER_FLAGS = {
   LOGIN_DATA: "loginData",
   AVAILABILITY: "availabilityGrid",
@@ -30,6 +31,7 @@ export const SETTINGS = {
   COLOR_ONLINE: "colorOnline",
   COLOR_OFFLINE: "colorOffline",
   COLOR_NO_USER: "colorNoUser",
+  TRASH_RETENTION_DAYS: "retentionDays",
 };
 
 export const ISSUE_TYPES = {
