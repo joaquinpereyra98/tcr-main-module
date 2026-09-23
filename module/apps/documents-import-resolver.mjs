@@ -1,4 +1,5 @@
 import { MODULE_ID } from "../constants.mjs";
+import { hasDocumentsInFolder } from "../utils.mjs";
 
 const { HandlebarsApplicationMixin: HAM, ApplicationV2 } =
   foundry.applications.api;
@@ -244,7 +245,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       icon: "fa-solid fa-passport",
     });
 
-    if (doc.pack && doc.folder) {
+    if (doc.folder) {
       const folderPath = [doc.folder, ...doc.folder.ancestors]
         .reverse()
         .map((f) => `<span>${f.name}</span>`)
@@ -532,7 +533,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       },
       {
         proto: dnd5e.applications.item.ItemCompendium5e.prototype,
-        handler: TCRDocumentsImportResolver._handleDroppedCompendiumDirectory,
+        handler: TCRDocumentsImportResolver._handleDroppedItemCompendium,
       },
     ];
 
@@ -553,22 +554,20 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   }
 
   /**
-   * Create a dropped Entry in this Compendium
-   * @param {createDroppedEntryFn} callOriginal
+   * Helper method to handle the duplicate checking and resolution workflow for dropped entries.
+   * @param {WorldCollection|CompendiumCollection} collection - Target collection
    * @param {DirectoryMixinEntry} entry - The Entry being dropped
-   * @param {string} [folderId] - The ID of the Folder to which the Entry should be added
-   * @returns {Promise<DirectoryMixinEntry>}  The created Entry
-   * @this {Compendium}
+   * @param {string} [folderId] - Target folder ID
+   * @returns {Promise<{resolvedEntry: DirectoryMixinEntry, targetFolderId: string}|null>} Resolved entry data or null if canceled
    */
-  static async _createDroppedEntryCompendium(callOriginal, entry, folderId) {
-    const collection = this.collection;
-
+  static async _resolveDroppedEntry(collection, entry, folderId) {
     const isGM = game.user.isGM;
     const isSupportedType = !["Macro", "Playlist", "Adventure"].includes(
       collection.documentName,
     );
 
-    if (!isGM || !isSupportedType) return callOriginal(entry, folderId);
+    if (!isGM || !isSupportedType)
+      return { resolvedEntry: entry, targetFolderId: folderId };
 
     const document = entry.clone(
       { folder: folderId || null },
@@ -589,10 +588,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       }
 
       resolvedEntry = await TCRDocumentsImportResolver.showDialog({
-        source: document,
+        source: resolvedEntry,
         existing,
         folderId: currentFolderId,
-        pack: collection,
+        collection,
       });
 
       if (!resolvedEntry) return null;
@@ -606,7 +605,35 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       );
     }
 
-    const created = await callOriginal(resolvedEntry, folderId);
+    return { resolvedEntry, targetFolderId: currentFolderId };
+  }
+
+  /**
+   * Create a dropped Entry in this Compendium
+   * @param {createDroppedEntryFn} callOriginal
+   * @param {DirectoryMixinEntry} entry - The Entry being dropped
+   * @param {string} [folderId] - The ID of the Folder to which the Entry should be added
+   * @returns {Promise<DirectoryMixinEntry>}  The created Entry
+   * @this {Compendium}
+   */
+  static async _createDroppedEntryCompendium(callOriginal, entry, folderId) {
+    const unsortedFolder = folderId
+      ? null
+      : await TCRDocumentsImportResolver.getOrCreateUnsortedFolder(
+          this.collection,
+        );
+
+    const resolution = await TCRDocumentsImportResolver._resolveDroppedEntry(
+      this.collection,
+      entry,
+      folderId ?? unsortedFolder.id,
+    );
+
+    if (!resolution) return null;
+
+    const { resolvedEntry, targetFolderId } = resolution;
+    const created = await callOriginal(resolvedEntry, targetFolderId);
+
     if (created)
       await TCRDocumentsImportResolver.#deleteSourceDocument.call(this, entry);
 
@@ -622,51 +649,14 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
    * @this {DocumentDirectory}
    */
   static async _createDroppedEntryDirectory(callOriginal, entry, folderId) {
-    const collection = this.collection;
-    const isGM = game.user.isGM;
-    const isSupportedType = !["Macro", "Playlist", "Adventure"].includes(
-      collection.documentName,
-    );
-
-    if (!isGM || !isSupportedType) return callOriginal(entry, folderId);
-
-    const document = entry.clone(
-      { folder: folderId || null },
-      { keepId: true },
-    );
-
-    const excludedIds = new Set();
-
-    let existing = await TCRDocumentsImportResolver.findExistingDocument(
-      collection,
-      document,
-    );
-    let resolvedEntry = document;
-
-    while (existing) {
-      if (existing.folder) {
-        folderId = existing.folder._id ?? existing.folder;
-      }
-
-      resolvedEntry = await TCRDocumentsImportResolver.showDialog({
-        source: document,
-        existing,
+    const { resolvedEntry, targetFolderId } =
+      await TCRDocumentsImportResolver._resolveDroppedEntry(
+        this.collection,
+        entry,
         folderId,
-        collection,
-      });
-
-      if (!resolvedEntry) return null;
-
-      excludedIds.add(existing._id);
-
-      existing = await TCRDocumentsImportResolver.findExistingDocument(
-        collection,
-        resolvedEntry,
-        Array.from(excludedIds),
       );
-    }
 
-    const created = await callOriginal(resolvedEntry, folderId);
+    const created = await callOriginal(resolvedEntry, targetFolderId);
     return created;
   }
 
@@ -677,8 +667,8 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
    * @this {ItemDirectory}
    */
   static async _handleDroppedItemDirectory(callSuper, target, data) {
-    /**@type {Item} */
-    let item = await this._getDroppedEntryFromData(data);
+    /** @type {Item} */
+    const item = await this._getDroppedEntryFromData(data);
     if (!item) return;
 
     if (this._entryAlreadyExists(item)) {
@@ -688,45 +678,24 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       return callSuper(target, item.toDragData());
     }
 
-    const collection = this.collection;
-    let folderId =
+    const folderId =
       target?.closest("[data-folder-id]")?.dataset.folderId || null;
 
-    /**@type {Document} */
-    const document = item.clone({ folder: folderId }, { keepId: true });
-    const excludedIds = new Set();
-
-    let existing = await TCRDocumentsImportResolver.findExistingDocument(
-      collection,
-      document,
+    const resolution = await TCRDocumentsImportResolver._resolveDroppedEntry(
+      this.collection,
+      item,
+      folderId,
     );
-    let resolvedEntry = document;
 
-    while (existing) {
-      if (existing.folder) {
-        folderId = existing.folder._id ?? existing.folder;
-      }
+    if (!resolution) return null; // User cancelled import
 
-      resolvedEntry = await TCRDocumentsImportResolver.showDialog({
-        source: document,
-        existing,
-        folderId,
-        collection,
-      });
-
-      if (!resolvedEntry) return null; // User cancelled import
-
-      excludedIds.add(existing._id);
-      existing = await TCRDocumentsImportResolver.findExistingDocument(
-        collection,
-        resolvedEntry,
-        Array.from(excludedIds),
-      );
-    }
+    const { resolvedEntry, targetFolderId } = resolution;
 
     const rootData = resolvedEntry.toObject();
     const toCreate = await CONFIG.Item.documentClass.createWithContents([item]);
-    if (folderId) toCreate.map((d) => (d.folder = folderId));
+
+    if (targetFolderId) toCreate.forEach((d) => (d.folder = targetFolderId));
+
     const createdItems = await CONFIG.Item.documentClass.createDocuments(
       toCreate,
       {
@@ -737,9 +706,8 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     // 6. Complete standard drag-and-drop workflow
     const rootCreatedItem =
       createdItems.find((i) => i.id === rootData._id) ?? createdItems[0];
-    if (rootCreatedItem) {
-      callSuper(target, rootCreatedItem.toDragData());
-    }
+
+    if (rootCreatedItem) callSuper(target, rootCreatedItem.toDragData());
 
     return createdItems;
   }
@@ -751,8 +719,9 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
    * @param {object} data - Drag event payload data.
    * @this {Compendium}
    */
-  static async _handleDroppedCompendiumDirectory(callSuper, target, data) {
-    let item = await Item.fromDropData(data);
+  static async _handleDroppedItemCompendium(callSuper, target, data) {
+    /** @type {Item} */
+    const item = await this._getDroppedEntryFromData(data);
     if (!item) return;
 
     // If entry already exists in compendium: extract from container if needed
@@ -763,45 +732,28 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       return callSuper(target, item.toDragData());
     }
 
-    const collection = this.collection;
-    let folderId =
+    const folderId =
       target?.closest("[data-folder-id]")?.dataset.folderId || null;
 
-    const document = item.clone({ folder: folderId }, { keepId: true });
-    const excludedIds = new Set();
+    const unsortedFolder = folderId
+      ? null
+      : await TCRDocumentsImportResolver.getOrCreateUnsortedFolder(
+          this.collection,
+        );
 
-    let existing = await TCRDocumentsImportResolver.findExistingDocument(
-      collection,
-      document,
+    const resolution = await TCRDocumentsImportResolver._resolveDroppedEntry(
+      this.collection,
+      item,
+      folderId ?? unsortedFolder.id,
     );
-    let resolvedEntry = document;
 
-    while (existing) {
-      if (existing.folder) {
-        folderId = existing.folder._id ?? existing.folder;
-      }
-
-      resolvedEntry = await TCRDocumentsImportResolver.showDialog({
-        source: document,
-        existing,
-        folderId,
-        collection,
-      });
-
-      if (!resolvedEntry) return null; // User cancelled import
-
-      excludedIds.add(existing._id);
-      existing = await TCRDocumentsImportResolver.findExistingDocument(
-        collection,
-        resolvedEntry,
-        Array.from(excludedIds),
-      );
-    }
+    if (!resolution) return null;
+    const { resolvedEntry, targetFolderId } = resolution;
 
     let toCreate = [];
     const contents = await item.system?.contents;
 
-    if (contents?.size || contents?.length) {
+    if (contents?.size) {
       toCreate = await CONFIG.Item.documentClass.createWithContents([item], {
         transformAll: (i) => i.toCompendium(i),
       });
@@ -820,22 +772,30 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       toCreate = [resolvedEntry.toCompendium(resolvedEntry)];
     }
 
-    if (folderId) {
-      toCreate.forEach((d) => (d.folder = folderId));
-    }
+    if (targetFolderId) toCreate.forEach((d) => (d.folder = targetFolderId));
 
     const createdItems = await CONFIG.Item.documentClass.createDocuments(
       toCreate,
       {
-        pack: collection.collection,
+        pack: this.collection.collection,
         keepId: true,
       },
     );
+
+    if (createdItems.length) {
+      await TCRDocumentsImportResolver.#deleteSourceDocument.call(this, item);
+    }
 
     const rootCreatedItem =
       createdItems.find((i) => i.id === resolvedEntry._id) ?? createdItems[0];
 
     if (rootCreatedItem) {
+      if (rootCreatedItem.folder.id !== folderId) {
+        const folderElement = this.element[0].querySelector(
+          `[data-folder-id="${rootCreatedItem.folder.id}"]`,
+        );
+        target = folderElement.firstElementChild;
+      }
       callSuper(target, rootCreatedItem.toDragData());
     }
 
@@ -886,9 +846,17 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     closestFolderId,
     sortData,
   ) {
+    const collection = this.collection;
     if (!game.user.isGM) return callOriginal(folder, closestFolderId, sortData);
 
-    const collection = this.collection;
+    if (collection instanceof CompendiumCollection) {
+      return TCRDocumentsImportResolver._handleDroppedForeignFolderInCompenidum.call(
+        this,
+        folder,
+        closestFolderId,
+      );
+    }
+
     const documentClass = collection.documentClass;
 
     const targetFolder = collection.folders.get(closestFolderId);
@@ -918,56 +886,25 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
 
     for (const docData of documentsToCreate) {
       const sourceDoc = new documentClass(docData);
-      const excludedIds = new Set();
 
-      let existing = await TCRDocumentsImportResolver.findExistingDocument(
+      const resolution = await TCRDocumentsImportResolver._resolveDroppedEntry(
         collection,
         sourceDoc,
+        docData.folder || closestFolderId,
       );
 
-      let resolvedEntry = sourceDoc;
-      let isCanceled = false;
+      // Skip document if user canceled dialog
+      if (!resolution) continue;
 
-      while (existing) {
-        let folderId = resolvedEntry.folder || closestFolderId;
-        if (existing.folder) {
-          folderId = existing.folder._id ?? existing.folder;
-        }
-
-        resolvedEntry = await TCRDocumentsImportResolver.showDialog({
-          source: sourceDoc,
-          existing,
-          folderId,
-          collection,
-        });
-
-        if (!resolvedEntry) {
-          isCanceled = true;
-          break;
-        }
-
-        excludedIds.add(existing._id);
-
-        existing = await TCRDocumentsImportResolver.findExistingDocument(
-          collection,
-          resolvedEntry,
-          Array.from(excludedIds),
-        );
-      }
-
-      if (isCanceled) continue;
-
+      const { resolvedEntry } = resolution;
       const updatedData = resolvedEntry.toObject();
 
-      if (excludedIds.has(updatedData._id)) {
+      // Ensure duplicate resolution generates a new ID if kept alongside existing
+      if (sourceDoc._id !== updatedData._id) {
         updatedData._id = foundry.utils.randomID();
       }
 
       finalDocumentsToCreate.push(updatedData);
-
-      if (!folder.compendium && collection instanceof CompendiumCollection) {
-        documentsToDelete.push(docData._id);
-      }
     }
 
     let createdFolders = [];
@@ -989,13 +926,10 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
 
       if (documentsToDelete.length) {
         await documentClass.deleteDocuments(documentsToDelete);
-        const foldersToDelete = folder
-          .getSubfolders(true)
-          .filter((f) => f.contents.length)
-          .flatMap((f) => f.contents.map((c) => c._id));
-
-        if (foldersToDelete.length)
-          await Folder.deleteDocuments(foldersToDelete);
+        TCRDocumentsImportResolver.#deleteSourceFolders(
+          folder,
+          documentsToDelete,
+        );
       }
     } catch (err) {
       ui.notifications.error(err.message);
@@ -1006,6 +940,201 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       sortNeeded: true,
       folder: createdFolders.length ? createdFolders[0] : folder,
     };
+  }
+
+  /**
+   * @param {Folder} folder - The Folder being dropped
+   * @param {string} closestFolderId - Target parent folder ID
+   * @returns {Promise<{folder: Folder|null, sortNeeded: boolean}>}
+   * @this {CompendiumDirectory|Compendium}
+   */
+  static async _handleDroppedForeignFolderInCompenidum(
+    folder,
+    closestFolderId,
+  ) {
+    const collection = this.collection;
+
+    let targetFolderId = closestFolderId;
+    if (!targetFolderId) {
+      const unsortedFolder =
+        await TCRDocumentsImportResolver.getOrCreateUnsortedFolder(collection);
+      targetFolderId = unsortedFolder.id;
+    }
+
+    function getDocuments(folderNode) {
+      const documents = (folderNode.contents || []).map((doc) =>
+        doc.toObject ? doc.toObject() : foundry.utils.deepClone(doc),
+      );
+
+      const childDocuments = (folderNode.children || []).flatMap((child) =>
+        getDocuments(child),
+      );
+
+      return [...documents, ...childDocuments];
+    }
+
+    const rawDocuments = getDocuments(folder);
+    if (!rawDocuments.length) return null;
+
+    const documentClass = collection.documentClass;
+    const isItem = collection.documentName === "Item";
+    const processedSourceDocs = [];
+
+    for (const docData of rawDocuments) {
+      const entry = new documentClass(docData);
+
+      if (isItem) {
+        // --- Logic from _handleDroppedItemCompendium ---
+        const resolution =
+          await TCRDocumentsImportResolver._resolveDroppedEntry(
+            collection,
+            entry,
+            targetFolderId,
+          );
+
+        if (!resolution) continue;
+        const { resolvedEntry, targetFolderId: finalFolderId } = resolution;
+
+        let toCreate = [];
+        const contents = await entry.system?.contents;
+
+        if (contents?.size) {
+          toCreate = await CONFIG.Item.documentClass.createWithContents(
+            [entry],
+            { transformAll: (i) => i.toCompendium(i) },
+          );
+
+          const resolvedData = resolvedEntry.toCompendium(resolvedEntry);
+          const rootIndex = toCreate.findIndex((d) => d._id === entry.id) ?? 0;
+
+          if (rootIndex !== -1) {
+            toCreate[rootIndex] = foundry.utils.mergeObject(
+              toCreate[rootIndex],
+              resolvedData,
+            );
+            toCreate[rootIndex]._id = resolvedEntry._id;
+          }
+        } else {
+          toCreate = [resolvedEntry.toCompendium(resolvedEntry)];
+        }
+
+        if (finalFolderId) {
+          toCreate.forEach((d) => (d.folder = finalFolderId));
+        }
+
+        const createdItems = await CONFIG.Item.documentClass.createDocuments(
+          toCreate,
+          {
+            pack: collection.collection,
+            keepId: true,
+          },
+        );
+
+        if (createdItems.length) {
+          await TCRDocumentsImportResolver.#deleteSourceDocument.call(
+            this,
+            entry,
+          );
+          processedSourceDocs.push(entry);
+        }
+      } else {
+        // --- Logic from _createDroppedEntryCompendium ---
+        const resolution =
+          await TCRDocumentsImportResolver._resolveDroppedEntry(
+            collection,
+            entry,
+            targetFolderId,
+          );
+
+        if (!resolution) continue; // Skip if cancelled by user
+        const { resolvedEntry, targetFolderId: finalFolderId } = resolution;
+
+        const dataToCreate = resolvedEntry.toCompendium(resolvedEntry);
+        if (finalFolderId) dataToCreate.folder = finalFolderId;
+
+        const createdDocs = await documentClass.createDocuments(
+          [dataToCreate],
+          {
+            pack: collection.collection,
+            keepId: true,
+          },
+        );
+
+        if (createdDocs.length) {
+          await TCRDocumentsImportResolver.#deleteSourceDocument.call(
+            this,
+            entry,
+          );
+          processedSourceDocs.push(entry);
+        }
+      }
+    }
+
+    if (processedSourceDocs.length) {
+      await TCRDocumentsImportResolver.#deleteSourceFolders(
+        folder,
+        processedSourceDocs,
+      );
+    }
+
+    return {
+      folder: collection.folders.get(targetFolderId) ?? null,
+      sortNeeded: false,
+    };
+  }
+
+  /**
+   * Helper to clean up empty source folders after moving documents.
+   * @param {Folder} rootFolder - The root folder being dropped
+   * @param {Document[]} movedDocuments - Array of documents successfully imported
+   */
+  static async #deleteSourceFolders(rootFolder, movedDocuments) {
+    const allFolders = [rootFolder, ...rootFolder.getSubfolders(true)].sort(
+      (a, b) => (b.ancestors?.length ?? 0) - (a.ancestors?.length ?? 0),
+    );
+
+    const movedDocIds = new Set(movedDocuments.map((d) => d._id ?? d.id));
+    const foldersToDelete = [];
+
+    for (const f of allFolders) {
+      const remainingContents =
+        f.contents?.filter((c) => !movedDocIds.has(c._id ?? c.id)) ?? [];
+
+      const remainingSubfolders =
+        f.children?.filter(
+          (child) =>
+            !foldersToDelete.includes(child?.folder?._id ?? child?._id),
+        ) ?? [];
+
+      if (!remainingContents.length && !remainingSubfolders.length) {
+        foldersToDelete.push(f._id);
+      }
+    }
+
+    if (foldersToDelete.length) {
+      try {
+        await CONFIG.Folder.documentClass.deleteDocuments(foldersToDelete, {
+          pack: rootFolder.pack,
+        });
+      } catch (err) {
+        console.error("Failed to delete source folders:", err);
+      }
+    }
+  }
+
+  /**
+   * Retrieves the "[unsorted]" Folder in the given compendium collection, creating it if it does not already exist.
+   * @param {CompendiumCollection} collection - Target compendium collection
+   * @returns {Promise<Folder>}
+   */
+  static async getOrCreateUnsortedFolder(collection) {
+    return (
+      collection.folders.getName("[unsorted]") ??
+      (await Folder.create(
+        { name: "[unsorted]", type: collection.documentName },
+        { pack: collection.collection },
+      ))
+    );
   }
 
   /**
@@ -1055,9 +1184,13 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
       if (entry.pack && entry.pack !== this.collection.metadata.id) {
         const sourcePack = game.packs.get(entry.pack);
         const sourceDoc = await sourcePack?.getDocument(entry.id);
-        await sourceDoc?.delete();
+        await sourceDoc?.delete({
+          deleteContents: !!sourceDoc?.system?.contentsCount,
+        });
       } else if (!entry.pack) {
-        await entry.delete();
+        await entry.delete({
+          deleteContents: !!entry?.system?.contentsCount,
+        });
       }
     } catch (err) {
       console.error("Failed to delete original source document:", err);
@@ -1115,7 +1248,7 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
   }
 
   /**
-   *
+   * Action handler triggered when the user chooses to rename both documents during resolution.
    * @this {TCRDocumentsImportResolver}
    * @type {ApplicationClickAction}
    */
@@ -1126,16 +1259,17 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     );
 
     const collection = this.targetCollection.index ?? this.targetCollection;
+    const folderId = this.existing.folder?._id ?? this.existing.folder;
     const indexes = collection.filter(
-      (i) => i.folder === this.folderId || i.folder?.id === this.folderId,
+      (i) => (i.folder?._id ?? i.folder) === folderId,
     );
 
     let maxCopyIndex = 0;
     for (const doc of indexes) {
-      const match = doc.name.match(pattern);
+      const match = doc.name?.match(pattern);
       if (match) {
-        const index = match[1] ? parseInt(match[1], 10) : 1;
-        if (index > maxCopyIndex) maxCopyIndex = index;
+        const copyIndex = match[1] ? parseInt(match[1], 10) : 1;
+        if (copyIndex > maxCopyIndex) maxCopyIndex = copyIndex;
       }
     }
 
