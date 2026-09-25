@@ -24,6 +24,7 @@
     "requires": [],
     "recommends": []
   },
+  "persistentStorage": true,
   "scripts": ["lib/chart.umd.min.js", "lib/chartjs-plugin-annotation.min.js"],
   "esmodules": ["main.mjs"],
   "styles": ["styles/main.css"],

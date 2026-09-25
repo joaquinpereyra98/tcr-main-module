@@ -6,11 +6,12 @@ import { MODULE_ID } from "../constants.mjs";
 export default class CanvasDropManager {
   static SOCKET_KEY = `${MODULE_ID}.createTokenFromBrowser`;
 
-  static socket;
+  static get socket() {
+    const module = game.modules.get(MODULE_ID);
+    return module.socket;
+  }
 
   static _registerSocketListeners() {
-    this.socket = socketlib.registerModule(MODULE_ID);
-
     this.socket.register(this.SOCKET_KEY, (socketData) => {
       if (!game.users.activeGM.isSelf) return;
       this._handleSocketCreateToken(socketData);
