@@ -47,7 +47,6 @@ jobs:
             LICENSE \
             styles/ \
             templates/ \
-            storage/ \
             lib/
 
       - name: Update Release With Files
