@@ -29,6 +29,23 @@ const { HandlebarsApplicationMixin, ApplicationV2 } = foundry.applications.api;
  * @property {object} data - Complete serialized document source object.
  */
 
+/**
+ * @typedef {Object} ItemDelta
+ * @property {Record<string, any>} item The cloned item data object, with updated quantity and flag attributes.
+ * @property {number} quantity The net change in quantity applied to the item during this transaction.
+ * @property {string} [type] The type classification of the item change (e.g., "item", "currency", "attribute").
+ */
+
+/**
+ * @typedef {Object} PreparedTransaction
+ * @property {Record<string, *>} documentChanges Key-value map of document attribute paths and their new target values.
+ * @property {Array} itemsToCreate Array of raw item data objects staged for creation.
+ * @property {string[]} itemsToDelete Array of item IDs scheduled to be removed from the document.
+ * @property {Array} itemsToUpdate Array of partial item update objects (each containing an `_id`).
+ * @property {Record<string, number>} attributeDeltas Key-value map of attribute paths to their net numerical change.
+ * @property {ItemDelta[]} itemDeltas Array summarizing item quantity changes made during this transaction.
+ */
+
 const TRASH_TEMPLATE_PATH = `modules/${MODULE_ID}/templates/trash-bin`;
 const TRASH_STORE_PATH = `modules/${MODULE_ID}/storage/trash-store`;
 
@@ -169,6 +186,10 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       label: "DOCUMENT.Cards",
       icon: "fa-solid fa-cards",
     },
+    Compendium: {
+      label: "SIDEBAR.TabCompendium",
+      icon: "fa-solid fa-atlas",
+    },
     Folder: {
       label: "DOCUMENT.Folder",
       icon: "fa-solid fa-folder",
@@ -246,6 +267,9 @@ export default class TrashBin extends HandlebarsApplicationMixin(
 
   #contentScroll = {};
 
+  /** @type {number|null} Store the timer ID for interval updates */
+  #timeUpdateInterval = null;
+
   /**
    * Debounced search function.
    * @type {Function}
@@ -307,6 +331,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    */
   static registerPatch() {
     for (const docName of Object.keys(TrashBin.DOC_TYPES)) {
+      if (docName === "Compendium") continue;
       const CLS = getDocumentClass(docName);
       if (!CLS) continue;
 
@@ -325,6 +350,16 @@ export default class TrashBin extends HandlebarsApplicationMixin(
         "WRAPPER",
       );
     }
+
+    libWrapper.register(
+      MODULE_ID,
+      `CompendiumCollection.prototype.deleteCompendium`,
+      async function (wrapped) {
+        await TrashBin._onDeleteCompendium.call(this);
+        return await wrapped();
+      },
+      "WRAPPER",
+    );
   }
 
   /* -------------------------------------------- */
@@ -361,6 +396,13 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     if (options.parts?.includes("store") || !options.parts) {
       this._debouncedResizeResults();
     }
+
+    this._startTimeSinceInterval();
+  }
+
+  _onClose(options = {}) {
+    this._stopTimeSinceInterval();
+    super._onClose(options);
   }
 
   /** @inheritDoc */
@@ -437,13 +479,14 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       ? user.toAnchor().outerHTML
       : (entry.deletedBy ?? "");
 
-    const isCompendium = !!entry.pack;
-    const isEmbedded = !!entry?.parent;
+    const inCompendium = !!entry.pack;
+    const isPack = this.#currentType === "Compendium";
+    const inEmbedded = !!entry?.parent;
 
     let canRestore = true;
     let restoreTooltip = "Restore Document";
 
-    if (isCompendium) {
+    if (inCompendium) {
       const compendium = game.packs.get(entry.pack);
       if (!compendium) {
         canRestore = false;
@@ -455,7 +498,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       }
     }
 
-    if (canRestore && isEmbedded) {
+    if (canRestore && inEmbedded) {
       const parentDoc = await fromUuid(entry.parent.uuid).catch(() => null);
       if (!parentDoc) {
         canRestore = false;
@@ -472,11 +515,27 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     const context = {
       ...entry,
       userAnchor,
-      isCompendium,
-      isEmbedded,
+      inCompendium,
+      inEmbedded,
+      isPack,
       canRestore,
       restoreTooltip,
+      timeSinceDeleted: foundry.utils.timeSince(entry.deletedAt),
+      fullDeletedDate: new Date(entry.deletedAt).toLocaleString(),
     };
+
+    if (isPack) {
+      context.folders = entry.data.folders ?? 0;
+      context.documents = entry.data.documents ?? 0;
+      context.packType = TrashBin.DOC_TYPES[entry.data.type];
+      const map = { world: World, system: System, module: Module };
+      const pkg = map[entry.data.packageType];
+
+      context.sourceType = {
+        icon: pkg?.icon,
+        label: pkg?.name,
+      };
+    }
 
     const path = `${TRASH_TEMPLATE_PATH}/store-entry.hbs`;
     const html = await renderTemplate(path, context);
@@ -562,6 +621,50 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /* -------------------------------------------- */
+  /*  Timestamp Interval Management               */
+  /* -------------------------------------------- */
+
+  /**
+   * Starts a periodic timer to update time-since-deleted timestamps in place.
+   */
+  _startTimeSinceInterval() {
+    this._stopTimeSinceInterval(); // Ensure any existing interval is cleared first
+
+    // Updates every 20 seconds
+    this.#timeUpdateInterval = setInterval(() => {
+      this._updateRelativeTimestamps();
+    }, 20 * 1000);
+  }
+
+  /**
+   * Stops the active relative time update timer.
+   */
+  _stopTimeSinceInterval() {
+    if (this.#timeUpdateInterval) {
+      clearInterval(this.#timeUpdateInterval);
+      this.#timeUpdateInterval = null;
+    }
+  }
+
+  /**
+   * Iterates through rendered item elements and updates relative timestamps.
+   * @protected
+   */
+  _updateRelativeTimestamps() {
+    const storeSection = this.element?.querySelector(".store-section");
+    if (!storeSection) return;
+
+    const timeNodes = storeSection.querySelectorAll(
+      ".item-deleted-time[data-timestamp]",
+    );
+    for (const node of timeNodes) {
+      const span = node.querySelector("span");
+      const timestamp = Number(node.dataset.timestamp);
+      if (span) span.textContent = foundry.utils.timeSince(timestamp);
+    }
+  }
+
+  /* -------------------------------------------- */
   /*  Event Handlers & Actions                     */
   /* -------------------------------------------- */
 
@@ -594,7 +697,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     const { entryId } = target.closest("[data-entry-id]")?.dataset ?? {};
     const entries = await this.#trashStores[this.#currentType];
     const entry = entries?.find((e) => e.id === entryId);
-    if (!entry) return;
+    if (!entry || this.#currentType === "Compendium") return;
 
     let parent = null;
     if (entry.parent) {
@@ -634,7 +737,37 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     const entry = entries[entryIndex];
 
     try {
-      if (entry.parent) {
+      if (this.#currentType === "Compendium") {
+        const metadata = entry.data;
+        const contentStore = await TrashBin.loadCompendiumContentStore(
+          entry.id,
+        );
+
+        if (!contentStore) {
+          throw new Error(
+            `Could not find compendium details file for "${entry.id}".`,
+          );
+        }
+
+        const { folders, documents } = contentStore;
+        const pack = await CompendiumCollection.createCompendium(metadata);
+
+        if (folders?.length) {
+          await Folder.createDocuments(folders, {
+            pack: pack.collection,
+            keepId: true,
+          });
+        }
+
+        if (documents?.length) {
+          await pack.documentClass.createDocuments(documents, {
+            pack: pack.collection,
+            keepId: true,
+          });
+        }
+
+        await TrashBin.deleteCompendiumContentStore(entry.id);
+      } else if (entry.parent) {
         const parentDoc = await fromUuid(entry.parent.uuid);
         if (!parentDoc) throw new Error("Parent document no longer exists.");
 
@@ -697,6 +830,10 @@ export default class TrashBin extends HandlebarsApplicationMixin(
 
     if (!confirmed) return;
 
+    if (this.#currentType === "Compendium") {
+      await TrashBin.deleteCompendiumContentStore(pack.id);
+    }
+
     entries.splice(entryIndex, 1);
     await TrashBin.saveTrashStore(this.#currentType, entries);
 
@@ -750,6 +887,53 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     await TrashBin.saveTrashStore(this.documentName, store);
     TrashBin.#storeNames.add(this.documentName);
     TrashBin.instance.render({ parts: ["store"] });
+  }
+
+  /**
+   * Intercepts compendium deletion, extracts metadata, folders, and contents, and stores them in trash.
+   * @this {CompendiumCollection}
+   */
+  static async _onDeleteCompendium() {
+    if (!game.user.isGM) return;
+
+    await TrashBin.getStorePaths();
+
+    const folders = this.folders._source;
+    const documents = (await this.getDocuments()).map((d) => d.toObject());
+
+    const metadata = foundry.utils.mergeObject(
+      this.metadata,
+      {
+        folders: folders.length,
+        documents: documents.length,
+      },
+      { inplace: false },
+    );
+
+    await TrashBin.saveCompendiumContentStore(this.collection, {
+      key: this.collection,
+      folders,
+      documents,
+    });
+
+    const store = TrashBin.#storeNames.has("Compendium")
+      ? await TrashBin.loadTrashStore("Compendium")
+      : [];
+
+    store.push({
+      id: this.collection,
+      name: this.title ?? metadata.label,
+      deletedAt: Date.now(),
+      deletedBy: game.user.id,
+      data: metadata,
+    });
+
+    await TrashBin.saveTrashStore("Compendium", store);
+    TrashBin.#storeNames.add("Compendium");
+
+    if (TrashBin.instance) {
+      TrashBin.instance.render({ parts: ["store"] });
+    }
   }
 
   /**
@@ -857,6 +1041,65 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /**
+   * Saves compendium contents files
+   * @param {string} packKey - E.g. "world.my-pack"
+   * @param {object} contentData
+   */
+  static async saveCompendiumContentStore(packKey, contentData) {
+    const file = new File(
+      [JSON.stringify(contentData, null, 2)],
+      `${packKey}.json`,
+      { type: "application/json" },
+    );
+    try {
+      await FilePicker.uploadPersistent(
+        MODULE_ID,
+        "trash-store/compendium-store",
+        file,
+        {},
+        { notify: false },
+      );
+    } catch (err) {
+      console.error(
+        `${MODULE_ID} | Failed to upload compendium store file for ${packKey}:`,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Loads full compendium contents
+   * @param {string} packKey
+   * @returns {Promise<object|null>}
+   */
+  static async loadCompendiumContentStore(packKey) {
+    try {
+      return await foundry.utils.fetchJsonWithTimeout(
+        `${TRASH_STORE_PATH}/compendium-store/${packKey}.json?t=${Date.now()}`,
+        {},
+        { timeoutMs: 5000 },
+      );
+    } catch (err) {
+      console.warn(
+        `${MODULE_ID} | Failed to load compendium details for ${packKey}:`,
+        err.message,
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Deletes a compendium contents file.
+   * @param {string} packKey
+   */
+  static async deleteCompendiumContentStore(packKey) {
+    const filePath = `${TRASH_STORE_PATH}/compendium-store/${packKey}.json`;
+    try {
+      await FilePicker.deleteFile(filePath, { storage: "data" });
+    } catch (err) {}
+  }
+
+  /**
    * Auto-prunes entries that exceed the retention period set in settings across all stores.
    * @returns {Promise<void>}
    */
@@ -895,20 +1138,3 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     }
   }
 }
-
-/**
- * @typedef {Object} ItemDelta
- * @property {Record<string, any>} item The cloned item data object, with updated quantity and flag attributes.
- * @property {number} quantity The net change in quantity applied to the item during this transaction.
- * @property {string} [type] The type classification of the item change (e.g., "item", "currency", "attribute").
- */
-
-/**
- * @typedef {Object} PreparedTransaction
- * @property {Record<string, *>} documentChanges Key-value map of document attribute paths and their new target values.
- * @property {Array} itemsToCreate Array of raw item data objects staged for creation.
- * @property {string[]} itemsToDelete Array of item IDs scheduled to be removed from the document.
- * @property {Array} itemsToUpdate Array of partial item update objects (each containing an `_id`).
- * @property {Record<string, number>} attributeDeltas Key-value map of attribute paths to their net numerical change.
- * @property {ItemDelta[]} itemDeltas Array summarizing item quantity changes made during this transaction.
- */

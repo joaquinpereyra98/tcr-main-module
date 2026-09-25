@@ -47,6 +47,7 @@ Hooks.on("init", () => {
   settings.HUDConfig.registerSetting();
   settings.SourcesConfig.registerSetting();
   settings.LoginTracker.registerSetting();
+  apps.TrashBin.registerSettings();
   settings.registerMetricsSetting();
   settings.registerGridSizeSetting();
   TCRPackManager.registerSetting();

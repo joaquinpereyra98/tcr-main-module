@@ -1,4 +1,5 @@
-<li class="item grid-card" data-entry-id="{{id}}" data-document-type="{{documentName}}">
+<li class="item grid-card {{ifThen data.img " img-grid" "" }}" data-entry-id="{{id}}"
+    data-document-type="{{documentName}}">
     {{#if data.img}}
     <div class="card-image-wrapper">
         <img class="item-image gold-icon" loading="lazy" src="{{data.img}}" alt="{{name}}" draggable="false">
@@ -7,31 +8,34 @@
 
     <div class="card-content">
         <div class="name name-stacked" data-action="openEntry">
+            {{#if isPack}}
+            <i class="icon {{packType.icon}}" data-tooltip="{{packType.label}}"></i>
+            {{/if}}
             <span class="title">{{name}}</span>
         </div>
 
         {{#if userAnchor}}
         <div class="item-source">
-            <i class="fa-solid fa-user"></i>
+            Deleted by:
             {{{userAnchor}}}
         </div>
         {{/if}}
 
+        {{#if (not isPack)}}
         <div class="card-tags">
-            {{#if isCompendium}}
+            {{#if inCompendium}}
             <span class="badge compendium fa-solid fa-atlas" data-tooltip="Compendium Item"></span>
             {{/if}}
 
-            {{#if isEmbedded}}
+            {{#if inEmbedded}}
             <span class="badge embedded fa-solid fa-sitemap" data-tooltip="Embedded Document"></span>
             {{/if}}
 
-            {{#unless isCompendium}}
-            {{#unless isEmbedded}}
+            {{#unless (and inCompendium inEmbedded)}}
             <span class="badge world fa-solid fa-globe" data-tooltip="World Document"></span>
             {{/unless}}
-            {{/unless}}
         </div>
+        {{/if}}
     </div>
 
     <div class="card-controls">
@@ -40,5 +44,17 @@
         </a>
         <a class="icon-button danger fa-solid fa-trash" data-action="deleteEntry" data-tooltip="Permanently Delete">
         </a>
+    </div>
+    <div class="card-footer">
+        {{#if isPack}}
+        <div class="pack-source" data-tooltip="{{sourceType.label}} Pack">
+            <i class="fa-regular {{sourceType.icon}}"></i>
+            <span>{{data.name}}</span>
+        </div>
+        {{/if}}
+        <div class="item-deleted-time" data-tooltip="{{fullDeletedDate}}" data-timestamp="{{deletedAt}}" >
+            <i class="fa-regular fa-calendar-clock"></i>
+            <span>{{timeSinceDeleted}}</span>
+        </div>
     </div>
 </li>
