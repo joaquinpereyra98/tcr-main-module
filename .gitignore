@@ -1,4 +1,6 @@
 node_modules/
 /foundry
 /dist
-/storage/trash-store
+!storage/**/.gitkeep
+storage/trash-store/*.json
+storage/trash-store/**/*.json
