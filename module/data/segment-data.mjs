@@ -213,8 +213,10 @@ export default class SegmentData extends foundry.abstract.DataModel {
     const isContext = event.button === 2;
     if (isContext && !game.user.isGM) return;
 
+    const { docContextMenu, docClick, contextMenu, click } = this.actions;
+    
     try {
-      const uuid = isContext ? this.docContextMenu : this.docClick;
+      const uuid = isContext ? docContextMenu : docClick;
       if (uuid) {
         const doc = await fromUuid(uuid);
         if (!doc) throw new Error(`Document not found for UUID: ${uuid}`);
@@ -224,7 +226,7 @@ export default class SegmentData extends foundry.abstract.DataModel {
           : doc.sheet?.render(true);
       }
 
-      const command = isContext ? this.actions.contextMenu : this.actions.click;
+      const command = isContext ? contextMenu : click;
       if (command) {
         const fn = new foundry.utils.AsyncFunction("event", command);
         return await fn.call(this, event);

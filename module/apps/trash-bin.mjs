@@ -124,9 +124,10 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     const instance = TrashBin.instance;
     if (!instance) return;
 
-    instance.#reloadFlag[docType] = true;
+    const formattedType = docType.capitalize();
+    instance.#reloadFlag[formattedType] = true;
 
-    if (instance.rendered && instance.#currentType === docType) {
+    if (instance.rendered && instance.#currentType === formattedType) {
       instance.render({ parts: ["store"] });
     }
   }
@@ -684,7 +685,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    * @this {TrashBin}
    */
   static #selectDocType(_, target) {
-    this.#currentType = target.dataset.docType;
+    this.#currentType = target.dataset.docType.capitalize() ?? "Actor";
     this.#searchQuery = "";
     this.render({ parts: ["header", "store"] });
   }
@@ -884,8 +885,9 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       });
     }
 
-    await TrashBin.saveTrashStore(this.documentName, store);
-    TrashBin.#storeNames.add(this.documentName);
+    const docType = this.documentName.capitalize();
+    await TrashBin.saveTrashStore(docType, store);
+    TrashBin.#storeNames.add(docType);
     TrashBin.instance.render({ parts: ["store"] });
   }
 
@@ -973,9 +975,12 @@ export default class TrashBin extends HandlebarsApplicationMixin(
         const { files } = await FilePicker.browse("data", TRASH_STORE_PATH, {
           extensions: [".json"],
         });
-        this.#storeNames = new Set(
-          files.map((path) => path.split("/").pop().replace(".json", "")),
-        );
+
+        const storeNames = files
+          .map((path) => path.split("/").pop().replace(".json", ""))
+          .filter((fileName) => fileName && fileName === fileName.capitalize());
+
+        this.#storeNames = new Set(storeNames);
       } catch {
         this.#storeNames.clear();
       } finally {
@@ -996,7 +1001,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   static async loadTrashStore(docType) {
     if (!docType) return [];
 
-    const filePath = `${TRASH_STORE_PATH}/${docType}.json`;
+    const filePath = `${TRASH_STORE_PATH}/${docType.capitalize()}.json`;
 
     try {
       return await foundry.utils.fetchJsonWithTimeout(
@@ -1020,9 +1025,13 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    * @returns {Promise<void>}
    */
   static async saveTrashStore(docType, store) {
-    const file = new File([JSON.stringify(store, null, 2)], `${docType}.json`, {
-      type: "application/json",
-    });
+    const file = new File(
+      [JSON.stringify(store, null, 2)],
+      `${docType.capitalize()}.json`,
+      {
+        type: "application/json",
+      },
+    );
     try {
       await FilePicker.uploadPersistent(
         MODULE_ID,
@@ -1031,7 +1040,10 @@ export default class TrashBin extends HandlebarsApplicationMixin(
         {},
         { notify: false },
       );
-      TrashBin.socket.executeForOthers(TrashBin.SOCKET_KEY, docType);
+      TrashBin.socket.executeForOthers(
+        TrashBin.SOCKET_KEY,
+        docType.capitalize(),
+      );
     } catch (err) {
       console.error(
         `${MODULE_ID} | Failed to upload JSON store for ${docType}:`,
