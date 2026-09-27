@@ -49,9 +49,7 @@ const { HandlebarsApplicationMixin, ApplicationV2 } = foundry.applications.api;
 const TRASH_TEMPLATE_PATH = `modules/${MODULE_ID}/templates/trash-bin`;
 const TRASH_STORE_PATH = `modules/${MODULE_ID}/storage/trash-store`;
 
-export default class TrashBin extends HandlebarsApplicationMixin(
-  ApplicationV2,
-) {
+export default class TrashBin extends HandlebarsApplicationMixin(ApplicationV2) {
   /**
    * Default configuration options assigned to every instance of this Application class.
    * @type {Partial<ApplicationConfiguration>}
@@ -80,7 +78,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     },
     store: {
       template: `${TRASH_TEMPLATE_PATH}/trash-store.hbs`,
-      scrollable: [""],
+      scrollable: [".store-section"],
     },
   };
 
@@ -285,11 +283,9 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    * @type {Function}
    */
   _debouncedResizeResults = foundry.utils.debounce(() => {
-    const storeEl = this.element?.querySelector(
-      '[data-application-part="store"]',
-    );
+    const storeEl = this.element?.querySelector(".store-section");
     if (storeEl) {
-      this._onScrollResults({ target: storeEl.closest(".window-content") });
+      this._onScrollResults({ target: storeEl });
     }
   }, 100);
 
@@ -566,7 +562,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
 
     if (loadingEl) loadingEl.hidden = true;
 
-    const scrollContainer = this.element.querySelector(".window-content");
+    const scrollContainer = this.element.querySelector(".store-section");
     if (scrollContainer) {
       Object.assign(scrollContainer, this.#contentScroll);
       await this._onScrollResults({ target: scrollContainer });
@@ -579,7 +575,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    */
   async _onScrollResults(event) {
     const target = event.target ?? event;
-    if (this.#renderThrottle || !target?.matches?.(".window-content")) return;
+    if (this.#renderThrottle || !target?.matches?.(".store-section")) return;
 
     if (
       this.#results instanceof Promise ||
@@ -607,9 +603,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
         if (entry) rendered.push(this._renderItem(entry));
       }
 
-      const container = this.element.querySelector(
-        '[data-application-part="store"] .bin-list, [data-application-part="store"] .item-list',
-      );
+      const container = this.element.querySelector(".bin-list");
       if (container) {
         container.append(...(await Promise.all(rendered)));
       }
