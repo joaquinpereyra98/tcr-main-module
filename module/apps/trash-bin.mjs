@@ -49,7 +49,9 @@ const { HandlebarsApplicationMixin, ApplicationV2 } = foundry.applications.api;
 const TRASH_TEMPLATE_PATH = `modules/${MODULE_ID}/templates/trash-bin`;
 const TRASH_STORE_PATH = `modules/${MODULE_ID}/storage/trash-store`;
 
-export default class TrashBin extends HandlebarsApplicationMixin(ApplicationV2) {
+export default class TrashBin extends HandlebarsApplicationMixin(
+  ApplicationV2,
+) {
   /**
    * Default configuration options assigned to every instance of this Application class.
    * @type {Partial<ApplicationConfiguration>}
@@ -336,11 +338,11 @@ export default class TrashBin extends HandlebarsApplicationMixin(ApplicationV2) 
         MODULE_ID,
         `CONFIG.${docName}.documentClass._onDeleteOperation`,
         async function (wrapped, documents, operation, user) {
-          await TrashBin._onDeleteOperation.call(
+          TrashBin._onDeleteOperation.call(
             this,
-            documents,
-            operation,
-            user,
+            foundry.utils.deepClone(documents),
+            foundry.utils.deepClone(operation),
+            foundry.utils.deepClone(user),
           );
           return await wrapped(documents, operation, user);
         },
