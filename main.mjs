@@ -190,3 +190,4 @@ Hooks.on("renderCompendium", hooks.onRenderCompendium);
 Hooks.on("updateUser", hooks.onUpdateUser);
 Hooks.on("preUpdateUser", hooks.preUpdateUser);
 Hooks.on("renderItemSheet", hooks.onRenderItemSheet);
+Hooks.on("item-piles-preTransferItems", apps.TrashBin.preTransferItems);

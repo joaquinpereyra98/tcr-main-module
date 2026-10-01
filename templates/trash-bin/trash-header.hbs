@@ -11,4 +11,8 @@
     <search class="trash-search" aria-label="{{localize 'DND5E.CompendiumBrowser.Filters.SearchResults'}}">
         <input type="search" placeholder="{{localize 'DND5E.CompendiumBrowser.Filters.SearchResults'}}">
     </search>
+    <div class="slider-section">
+        <label class="flex0">Grid Size</label>
+        <range-picker class="size-range-picker" name="size" min="0" value="{{gridSize}}" max="100" step="1"></range-picker>
+    </div>
 </section>

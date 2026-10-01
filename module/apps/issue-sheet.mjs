@@ -656,7 +656,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
     span.classList.add("fa-solid", "fa-spinner", "fa-spin");
     span.style.opacity = 0.5;
     await this.issue.update({ voters: newVoters });
-    this.render()
+    this.render();
   }
 
   /**
@@ -664,7 +664,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
    * @this IssueSheet
    */
   static #onCopyJiraLink() {
-    const link = `https://tcrvtt.atlassian.net/browse/${this.issue.key}`
+    const link = `https://tcrvtt.atlassian.net/browse/${this.issue.key}`;
     game.clipboard.copyPlainText(link);
     ui.notifications.info(`Issue ${this.issue.key} link copied to clipboard.`);
   }

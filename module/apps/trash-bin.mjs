@@ -289,7 +289,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     if (storeEl) {
       this._onScrollResults({ target: storeEl });
     }
-  }, 100);
+  }, 50);
 
   /**
    * Extracted document type names from cached store file paths.
@@ -304,6 +304,17 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    */
   get trashStores() {
     return this.#trashStores;
+  }
+
+  #gridSize = 100;
+
+  get _gridSize() {
+    const userFlag = game.user.getFlag(MODULE_ID, "tashBinGridSize");
+    return Number.isNumeric(userFlag) ? Number(userFlag) : this.#gridSize;
+  }
+
+  set _gridSize(val) {
+    this.#gridSize = val;
   }
 
   /* -------------------------------------------- */
@@ -380,11 +391,15 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   /** @inheritDoc */
   _attachFrameListeners() {
     super._attachFrameListeners();
-    this.element.addEventListener("scroll", this._onScrollResults.bind(this), {
-      capture: true,
-      passive: true,
-    });
-    this.element.addEventListener("keydown", this._debouncedSearch, {
+    this.element.addEventListener(
+      "scroll",
+      this._debouncedResizeResults.bind(this),
+      {
+        capture: true,
+        passive: true,
+      },
+    );
+    this.element.addEventListener("keydown", this._debouncedSearch.bind(this), {
       passive: true,
     });
   }
@@ -393,8 +408,14 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   _onRender(context, options) {
     super._onRender(context, options);
     if (options.parts?.includes("store") || !options.parts) {
-      this._debouncedResizeResults();
+      const storeEl = this.element?.querySelector(".store-section");
+      if (storeEl) this._onScrollResults({ target: storeEl });
     }
+
+    /**@type {HTMLInputElement} */
+    const rangeInput = this.element.querySelector(".size-range-picker");
+    rangeInput.addEventListener("input", this.onSliderChange.bind(this));
+    this.updateGridSizeCSS();
 
     this._startTimeSinceInterval();
   }
@@ -421,6 +442,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       ...context,
       rootId: this.id,
       store,
+      gridSize: this._gridSize,
     };
   }
 
@@ -473,10 +495,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    * @protected
    */
   async _renderItem(entry) {
-    const user = game.users.get(entry.deletedBy);
-    const userAnchor = user
-      ? user.toAnchor().outerHTML
-      : (entry.deletedBy ?? "");
+    const user = game.users.get(entry.deletedBy) ?? entry.deletedBy;
 
     const inCompendium = !!entry.pack;
     const isPack = this.#currentType === "Compendium";
@@ -513,7 +532,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
 
     const context = {
       ...entry,
-      userAnchor,
+      user,
       inCompendium,
       inEmbedded,
       isPack,
@@ -617,6 +636,10 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     this.#renderThrottle = false;
   }
 
+  updateGridSizeCSS() {
+    this.element.style.setProperty("--grid-size", `${this._gridSize + 140}px`);
+  }
+
   /* -------------------------------------------- */
   /*  Timestamp Interval Management               */
   /* -------------------------------------------- */
@@ -673,6 +696,15 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     if (!event.target.matches('input[type="search"]')) return;
     this.#searchQuery = event.target.value;
     this.render({ parts: ["store"] });
+  }
+
+  onSliderChange(event) {
+    const val = Number(event.target.value ?? 0);
+    this._gridSize = val;
+
+    this.updateGridSizeCSS();
+    game.user.setFlag(MODULE_ID, "tashBinGridSize", val);
+    this._debouncedResizeResults();
   }
 
   /**
@@ -935,12 +967,13 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /**
-   *
-   * @param {Actor|TokenDocument} _source
-   * @param {PreparedTransaction} sourceUpdates
-   * @param {Actor|TokenDocument} _target
-   * @param {PreparedTransaction} _targetUpdates
-   * @param {string|boolean} _interactionId
+   * Hook callback triggered before items are transferred between two actors/tokens.
+   * @param {Actor|TokenDocument} sourceActor - The source actor or token document losing items.
+   * @param {PreparedTransaction} sourceUpdates - The prepared transaction data for the source actor, containing item changes and removals (`itemsToDelete`, `itemDeltas`, etc.).
+   * @param {Actor|TokenDocument} targetActor - The target actor or token document receiving items.
+   * @param {PreparedTransaction} targetUpdates - The prepared transaction data for the target actor.
+   * @param {string|boolean} interactionId - The unique identifier for the interaction, or `false` if none was provided.
+   * @returns {boolean|void}
    */
   static preTransferItems(
     _source,

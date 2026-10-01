@@ -1,25 +1,45 @@
-<li class="item grid-card {{ifThen data.img " img-grid" "" }}" data-entry-id="{{id}}"
+<li class="item grid-card {{ifThen data.img ' img-grid' ''}}" data-entry-id="{{id}}"
     data-document-type="{{documentName}}">
+
+    <div class="card-header">
+        <div class="header-left">
+            <a class="icon-button fa-solid fa-rotate-left" data-action="restoreEntry" data-tooltip="{{restoreTooltip}}"
+                {{disabled (not canRestore)}}>
+            </a>
+        </div>
+
+        <div class="header-center">
+            <div class="item-source">
+                {{user.name}}
+            </div>
+
+            <div class="sub-header-info">
+                <div class="item-deleted-time" data-tooltip="{{fullDeletedDate}}" data-timestamp="{{deletedAt}}">
+                    <i class="fa-regular fa-calendar-clock"></i>
+                    <span>{{timeSinceDeleted}}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <a class="icon-button danger fa-solid fa-trash" data-action="deleteEntry" data-tooltip="Permanently Delete">
+            </a>
+        </div>
+    </div>
     {{#if data.img}}
-    <div class="card-image-wrapper">
-        <img class="item-image gold-icon" loading="lazy" src="{{data.img}}" alt="{{name}}" draggable="false">
+    <div class="card-image-wrapper" data-action="openEntry">
+        <img class="item-image gold-icon" loading="lazy"
+            src="{{data.img}}" alt="{{name}}" draggable="false">
     </div>
     {{/if}}
 
-    <div class="card-content">
+    <div class="card-footer">
         <div class="name name-stacked" data-action="openEntry">
             {{#if isPack}}
             <i class="icon {{packType.icon}}" data-tooltip="{{packType.label}}"></i>
             {{/if}}
             <span class="title">{{name}}</span>
         </div>
-
-        {{#if userAnchor}}
-        <div class="item-source">
-            Deleted by:
-            {{{userAnchor}}}
-        </div>
-        {{/if}}
 
         {{#if (not isPack)}}
         <div class="card-tags">
@@ -36,25 +56,13 @@
             {{/unless}}
         </div>
         {{/if}}
-    </div>
 
-    <div class="card-controls">
-        <a class="icon-button fa-solid fa-rotate-left" data-action="restoreEntry" data-tooltip="{{restoreTooltip}}"
-            {{disabled (not canRestore)}}>
-        </a>
-        <a class="icon-button danger fa-solid fa-trash" data-action="deleteEntry" data-tooltip="Permanently Delete">
-        </a>
-    </div>
-    <div class="card-footer">
         {{#if isPack}}
         <div class="pack-source" data-tooltip="{{sourceType.label}} Pack">
             <i class="fa-regular {{sourceType.icon}}"></i>
             <span>{{data.name}}</span>
         </div>
         {{/if}}
-        <div class="item-deleted-time" data-tooltip="{{fullDeletedDate}}" data-timestamp="{{deletedAt}}" >
-            <i class="fa-regular fa-calendar-clock"></i>
-            <span>{{timeSinceDeleted}}</span>
-        </div>
     </div>
+
 </li>
