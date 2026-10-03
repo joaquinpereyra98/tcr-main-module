@@ -555,7 +555,7 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
    * @returns {Promise<void>}
    */
   async _renderIssues() {
-    let issues = Array.from(JiraIssueManager.issues.values());
+    let issues = this.issues =  Array.from(JiraIssueManager.issues.values());
     const { searchQuery, showOnlySelf, activeFilters } = this.#filters;
     if (searchQuery) {
       const fuse = new Fuse(issues, {
@@ -585,13 +585,19 @@ export default class MainHud extends InteractiveMixin(ApplicationV2) {
       let valB = b[key] ?? "";
 
       if (key === "priority") {
-        valA = PRIORITY[valA].sort ?? 0;
-        valB = PRIORITY[valB].sort ?? 0;
+        valA = PRIORITY[valA]?.sort ?? 0;
+        valB = PRIORITY[valB]?.sort ?? 0;
       }
 
-      if (valA < valB) return -1 * direction;
-      if (valA > valB) return 1 * direction;
-      return 0;
+      let result = 0;
+
+      if (typeof valA === "number" && typeof valB === "number") {
+        result = valA - valB;
+      } else {
+        result = String(valA).localeCompare(String(valB), game.i18n.lang);
+      }
+
+      return result * direction;
     });
 
     this.#issueIndex = 0;

@@ -70,6 +70,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       openEntry: TrashBin.#onOpenEntry,
       restoreEntry: TrashBin.#onRestoreEntry,
       deleteEntry: TrashBin.#onDeleteEntry,
+      toggleSort: TrashBin.#onToggleSort,
     },
   };
 
@@ -89,11 +90,11 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   /* -------------------------------------------- */
 
   /**
-   * Batching configuration ported from CompendiumBrowser.
+   * Batching configuration.
    */
   static BATCHING = {
     MARGIN: 50,
-    SIZE: 50,
+    SIZE: 25,
   };
 
   /**
@@ -161,6 +162,12 @@ export default class TrashBin extends HandlebarsApplicationMixin(
 
   /** @type {Promise<Set<string>>|null} Promise lock to prevent concurrent redundant fetches */
   static #initPromise = null;
+
+  /**@enum {Number} */
+  static SORT_DIRECTIONS = {
+    ASCENDING: 1,
+    DESCENDING: -1,
+  };
 
   /**
    * Supported Foundry VTT Document types tracked by the trash bin.
@@ -251,6 +258,9 @@ export default class TrashBin extends HandlebarsApplicationMixin(
 
   /** @type {string} */
   #searchQuery = "";
+
+  /**@type { 1 | -1 } */
+  #sortDirection = TrashBin.SORT_DIRECTIONS.DESCENDING;
 
   /** @type {Record<string, TrashStoreEntry[] | Promise<TrashStoreEntry[]>>} */
   #trashStores = Object.fromEntries(
@@ -443,6 +453,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       rootId: this.id,
       store,
       gridSize: this._gridSize,
+      isSortAsc: this.#sortDirection === TrashBin.SORT_DIRECTIONS.ASCENDING,
     };
   }
 
@@ -468,10 +479,19 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     }
 
     let entries = await this.#trashStores[type];
+
+    // Filter by search query
     if (this.#searchQuery?.trim()) {
       const q = this.#searchQuery.toLowerCase();
       entries = entries.filter((e) => e.name?.toLowerCase().includes(q));
     }
+
+    // Sort by deletedAt timestamp
+    entries.sort((a, b) => {
+      const timeA = a.deletedAt ?? 0;
+      const timeB = b.deletedAt ?? 0;
+      return (timeA - timeB) * this.#sortDirection;
+    });
 
     this.#results = entries;
     return context;
@@ -488,15 +508,13 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   /* -------------------------------------------- */
 
   /**
-   * Render a single item entry.
-   * @param {TrashStoreEntry} entry  The entry.
-   * @param {string} documentClass   The entry's Document class.
-   * @returns {Promise<HTMLElement>}
+   * Prepares render context data for a single entry.
+   * @param {TrashStoreEntry} entry
+   * @returns {Promise<object>}
    * @protected
    */
-  async _renderItem(entry) {
+  async _prepareItemContext(entry) {
     const user = game.users.get(entry.deletedBy) ?? entry.deletedBy;
-
     const inCompendium = !!entry.pack;
     const isPack = this.#currentType === "Compendium";
     const inEmbedded = !!entry?.parent;
@@ -555,11 +573,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       };
     }
 
-    const path = `${TRASH_TEMPLATE_PATH}/store-entry.hbs`;
-    const html = await renderTemplate(path, context);
-    const template = document.createElement("template");
-    template.innerHTML = html;
-    return template.content.firstElementChild;
+    return context;
   }
 
   /**
@@ -604,6 +618,8 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     )
       return;
 
+    const templatePath = `${TRASH_TEMPLATE_PATH}/store-entry.hbs`;
+
     while (
       this.#resultIndex < this.#results.length &&
       (target.scrollHeight <= target.clientHeight ||
@@ -612,22 +628,30 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     ) {
       this.#renderThrottle = true;
 
-      const rendered = [];
       const batchStart = this.#resultIndex;
+
       const batchEnd = Math.min(
         batchStart + this.constructor.BATCHING.SIZE,
         this.#results.length,
       );
 
-      for (let i = batchStart; i < batchEnd; i++) {
-        const entry = this.#results[i];
-        if (entry) rendered.push(this._renderItem(entry));
-      }
+      const batchEntries = this.#results.slice(batchStart, batchEnd);
+      const contexts = await Promise.all(
+        batchEntries.map((entry) => this._prepareItemContext(entry)),
+      );
+
+      const htmlStrings = await Promise.all(
+        contexts.map((ctx) => renderTemplate(templatePath, ctx)),
+      );
 
       const container = this.element.querySelector(".bin-list");
-      if (container) {
-        container.append(...(await Promise.all(rendered)));
+      if (container && htmlStrings.length > 0) {
+        const range = document.createRange();
+        range.selectNodeContents(container);
+        const fragment = range.createContextualFragment(htmlStrings.join(""));
+        container.appendChild(fragment);
       }
+
       this.#resultIndex = batchEnd;
 
       await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -860,13 +884,28 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     if (!confirmed) return;
 
     if (this.#currentType === "Compendium") {
-      await TrashBin.deleteCompendiumContentStore(pack.id);
+      await TrashBin.deleteCompendiumContentStore(entry.id);
     }
 
     entries.splice(entryIndex, 1);
     await TrashBin.saveTrashStore(this.#currentType, entries);
 
     ui.notifications.info(`Permanently deleted "${entry.name}" from trash.`);
+    this.render({ parts: ["store"] });
+  }
+
+  /**
+   * @type {ApplicationClickAction}
+   * @this {TrashBin}
+   */
+  static async #onToggleSort(_, target) {
+    this.#sortDirection = this.#sortDirection * -1;
+    
+    target.querySelector("i").className =
+      this.#sortDirection === TrashBin.SORT_DIRECTIONS.ASCENDING
+        ? "fa-solid fa-arrow-down-wide-short"
+        : "fa-solid fa-arrow-up-wide-short";
+
     this.render({ parts: ["store"] });
   }
 
@@ -1134,9 +1173,18 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    * @param {string} packKey
    */
   static async deleteCompendiumContentStore(packKey) {
-    const filePath = `${TRASH_STORE_PATH}/compendium-store/${packKey}.json`;
     try {
-      await FilePicker.deleteFile(filePath, { storage: "data" });
+      const file = new File([JSON.stringify({}, null, 2)], `${packKey}.json`, {
+        type: "application/json",
+      });
+
+      await FilePicker.uploadPersistent(
+        MODULE_ID,
+        "trash-store/compendium-store",
+        file,
+        {},
+        { notify: false },
+      );
     } catch (err) {}
   }
 

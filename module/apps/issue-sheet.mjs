@@ -496,9 +496,8 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
    * @this IssueSheet
    */
   static async onPasteFile(event) {
-    const isAppActive = ui.activeWindow === this;
     const items = event.clipboardData?.items;
-    if (!items || !isAppActive) return;
+    if (!items) return;
 
     const grid = this.element.querySelector(".attachments-grid");
     if (!grid) return;

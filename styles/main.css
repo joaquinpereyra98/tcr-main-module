@@ -3112,7 +3112,7 @@
       margin-bottom: 0.5rem;
       .doc-type-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        grid-template-columns: repeat(8, minmax(50px, 1fr));
         gap: 0.5rem;
         padding: 0.5rem;
         background: var(--card-bg, #1e1e1e);
@@ -3191,22 +3191,62 @@
         }
       }
 
-      .slider-section {
+      .tools-section {
         display: flex;
         align-items: center;
-        gap: 0.8rem;
-        justify-content: flex-end;
-        padding: 0.5rem 0.75rem;
-        color: var(--dnd5e-color-blue-white, #fff);
-        font-family: var(--dnd5e-font-roboto, sans-serif);
+        justify-content: space-between;
+        padding: 0.25rem 0.5rem;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--hud-white-01, rgba(255, 255, 255, 0.1));
+        border-radius: 4px;
 
-        label {
-          font-size: var(--font-size-13, 13px);
-          font-weight: 500;
-          color: var(--dnd5e-color-blue-white, #fff);
-          white-space: nowrap;
+        .sort-btn-section {
+          display: flex;
+          align-items: center;
+  
+          .sort-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--dnd5e-color-blue-white, #fff);
+            cursor: pointer;
+            transition: all 0.2s ease;
+  
+            &:hover {
+              background: rgba(255, 255, 255, 0.15);
+              border-color: var(--accent-gold, #c2a373);
+            }
+  
+            i {
+              font-size: var(--font-size-18);
+            }
+          }
+        }
+  
+        .slider-section {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          font-family: var(--dnd5e-font-roboto, sans-serif);
+  
+          label {
+            font-size: var(--font-size-12, 12px);
+            letter-spacing: 0.5px;
+            color: rgba(255, 255, 255, 0.7);
+            white-space: nowrap;
+          }
+  
+          .size-range-picker {
+            --range-track-background: rgba(0, 0, 0, 0.4);
+            --range-thumb-background: var(--accent-gold, #c2a373);
+          }
         }
       }
+
     }
     .trash-store {
       display: flex;
@@ -3270,13 +3310,19 @@
 
         .bin-list {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(var(--grid-size), 1fr));
+          grid-template-columns: repeat(
+            auto-fill,
+            minmax(var(--grid-size), 1fr)
+          );
           gap: 0.5rem;
           margin: 0;
           padding: 0;
           list-style: none;
 
           .grid-card {
+            content-visibility: auto;
+            contain-intrinsic-size: 0 180px;
+
             gap: 0.4rem 0.5rem;
             background: rgba(0, 0, 0, 0.25);
             border: 1px solid rgba(255, 255, 255, 0.1);

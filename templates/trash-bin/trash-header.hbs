@@ -11,8 +11,20 @@
     <search class="trash-search" aria-label="{{localize 'DND5E.CompendiumBrowser.Filters.SearchResults'}}">
         <input type="search" placeholder="{{localize 'DND5E.CompendiumBrowser.Filters.SearchResults'}}">
     </search>
-    <div class="slider-section">
-        <label class="flex0">Grid Size</label>
-        <range-picker class="size-range-picker" name="size" min="0" value="{{gridSize}}" max="100" step="1"></range-picker>
+    <div class="tools-section">
+        <div class="sort-btn-section">
+            <a class="sort-btn icon" data-action="toggleSort" data-tooltip="Toggle Sort Direction">
+                {{#if isSortAsc}}
+                <i class="fa-solid fa-arrow-down-wide-short"></i>
+                {{else}}
+                <i class="fa-solid fa-arrow-up-wide-short"></i>
+                {{/if}}
+            </a>
+        </div>
+        <div class="slider-section">
+            <label class="flex0">Grid Size</label>
+            <range-picker class="size-range-picker" name="size" min="0" value="{{gridSize}}" max="100"
+                step="1"></range-picker>
+        </div>
     </div>
 </section>

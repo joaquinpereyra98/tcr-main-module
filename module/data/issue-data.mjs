@@ -131,10 +131,10 @@ export default class IssueData extends foundry.abstract.DataModel {
 
   /**
    * Extracts only the numeric portion of the Jira key.
-   * @returns {string}
+   * @returns {Number}
    */
   get numericID() {
-    return this.key.replace(/\D/g, "");
+    return Number(this.key.replace(/\D/g, ""));
   }
 
   /**
