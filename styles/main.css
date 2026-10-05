@@ -3203,7 +3203,7 @@
         .sort-btn-section {
           display: flex;
           align-items: center;
-  
+
           .sort-btn {
             display: inline-flex;
             align-items: center;
@@ -3215,38 +3215,37 @@
             color: var(--dnd5e-color-blue-white, #fff);
             cursor: pointer;
             transition: all 0.2s ease;
-  
+
             &:hover {
               background: rgba(255, 255, 255, 0.15);
               border-color: var(--accent-gold, #c2a373);
             }
-  
+
             i {
               font-size: var(--font-size-18);
             }
           }
         }
-  
+
         .slider-section {
           display: flex;
           align-items: center;
           gap: 0.6rem;
           font-family: var(--dnd5e-font-roboto, sans-serif);
-  
+
           label {
             font-size: var(--font-size-12, 12px);
             letter-spacing: 0.5px;
             color: rgba(255, 255, 255, 0.7);
             white-space: nowrap;
           }
-  
+
           .size-range-picker {
             --range-track-background: rgba(0, 0, 0, 0.4);
             --range-thumb-background: var(--accent-gold, #c2a373);
           }
         }
       }
-
     }
     .trash-store {
       display: flex;
@@ -3294,17 +3293,34 @@
         padding-right: 0.75rem;
 
         .store-loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
           position: absolute;
           inset: 0;
           font-size: var(--font-size-24, 24px);
           color: var(--accent-gold, #c2a373);
-          background: rgba(0, 0, 0, 0.4);
           z-index: 2;
 
-          &:not([hidden]) {
-            display: flex;
-            justify-content: center;
-            align-items: center;
+          &[hidden] {
+            display: none;
+          }
+        }
+
+        .store-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+
+          position: absolute;
+          inset: 0;
+          font-size: var(--font-size-24, 24px);
+          color: var(--accent-gold, #c2a373);
+          z-index: 2;
+
+          &[hidden] {
+            display: none;
           }
         }
 

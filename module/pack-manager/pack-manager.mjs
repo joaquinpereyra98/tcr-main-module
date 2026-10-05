@@ -2,6 +2,7 @@ import LoginTracker from "../settings/login-tracker.mjs";
 import { hasDocumentsInFolder } from "../utils.mjs";
 import { MODULE_ID, SETTINGS } from "../constants.mjs";
 import WorldFolderField from "../data/fields/world-folder-field.mjs";
+import TrashBin from "../apps/trash-bin.mjs";
 
 const MS_PER_DAY = 86_400_000;
 const MS_PER_MIN = 60000;
@@ -261,6 +262,7 @@ export default class TCRPackManager {
         const docName = collection.documentClass.documentName;
 
         if (toDelete.length) {
+          for (const id of toDelete) TrashBin.ignore.add(id);
           await targetDoc.deleteEmbeddedDocuments(docName, toDelete);
         }
 
@@ -313,6 +315,8 @@ export default class TCRPackManager {
         }
 
         if (actorsToDelete.size) {
+          for (const id of actorsToDelete) TrashBin.ignore.add(id);
+          
           await Actor.deleteDocuments(Array.from(actorsToDelete));
         }
       }, items);
@@ -322,6 +326,10 @@ export default class TCRPackManager {
     await processBatchOperation(result.documentsToCreate, "createDocuments");
 
     if (!preserveFolder && !hasDocumentsInFolder(userFolder)) {
+      const folderDocIds = TCRPackManager.#getDocIds(userFolder);
+
+      for (const id of folderDocIds) TrashBin.ignore.add(id);
+
       await userFolder.delete({
         deleteSubfolders: true,
       });

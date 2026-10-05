@@ -52,6 +52,10 @@ const TRASH_STORE_PATH = `modules/${MODULE_ID}/storage/trash-store`;
 export default class TrashBin extends HandlebarsApplicationMixin(
   ApplicationV2,
 ) {
+  /* -------------------------------------------- */
+  /*  Static Properties & Constants               */
+  /* -------------------------------------------- */
+
   /**
    * Default configuration options assigned to every instance of this Application class.
    * @type {Partial<ApplicationConfiguration>}
@@ -85,10 +89,6 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     },
   };
 
-  /* -------------------------------------------- */
-  /*  Batching & Search Configuration             */
-  /* -------------------------------------------- */
-
   /**
    * Batching configuration.
    */
@@ -101,67 +101,6 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    * Delay in milliseconds between user keypresses before executing a search.
    */
   static SEARCH_DELAY = 200;
-
-  /* -------------------------------------------- */
-  /*  Socket Messaging & Syncing                  */
-  /* -------------------------------------------- */
-
-  static get socket() {
-    const module = game.modules.get(MODULE_ID);
-    return module.socket;
-  }
-
-  static get SOCKET_KEY() {
-    return `${MODULE_ID}.refreshTrashBinStore`;
-  }
-
-  static _registerSocketListeners() {
-    this.socket.register(TrashBin.SOCKET_KEY, (socketData) => {
-      this._handleRemoteRefresh(socketData);
-    });
-  }
-
-  static _handleRemoteRefresh(docType) {
-    const instance = TrashBin.instance;
-    if (!instance) return;
-
-    const formattedType = docType.capitalize();
-    instance.#reloadFlag[formattedType] = true;
-
-    if (instance.rendered && instance.#currentType === formattedType) {
-      instance.render({ parts: ["store"] });
-    }
-  }
-
-  /* -------------------------------------------- */
-  /*  Static Properties                           */
-  /* -------------------------------------------- */
-
-  /**
-   * The unique key used for the module application.
-   * @type {string}
-   * @readonly
-   */
-  static get KEY() {
-    return `${MODULE_ID}.TrashBin`;
-  }
-
-  /**@type {TrashBin} */
-  static get instance() {
-    return ui[TrashBin.KEY];
-  }
-
-  /**
-   * Set of document types that currently have an existing JSON trash store file.
-   * @type {Set<string>}
-   */
-  static #storeNames = new Set();
-
-  /** @type {boolean} Flag indicating whether store paths have been fetched once */
-  static #isInitialized = false;
-
-  /** @type {Promise<Set<string>>|null} Promise lock to prevent concurrent redundant fetches */
-  static #initPromise = null;
 
   /**@enum {Number} */
   static SORT_DIRECTIONS = {
@@ -242,94 +181,94 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     },
   };
 
-  /**@type {Set<string>} */
+  /**
+   * Set of document IDs ignored during deletion handling.
+   * @type {Set<string>}
+   */
   static ignore = new Set();
 
+  /**
+   * Set of document types that currently have an existing JSON trash store file.
+   * @type {Set<string>}
+   */
+  static #storeNames = new Set();
+
+  /** @type {boolean} Flag indicating whether store paths have been fetched once */
+  static #isInitialized = false;
+
+  /** @type {Promise<Set<string>>|null} Promise lock to prevent concurrent redundant fetches */
+  static #initPromise = null;
+
   /* -------------------------------------------- */
-  /*  Instance Properties                         */
+  /*  Static Getters                              */
   /* -------------------------------------------- */
-
-  #reloadFlag = Object.fromEntries(
-    Object.keys(TrashBin.DOC_TYPES).map((k) => [k, true]),
-  );
-
-  /** @type {string} */
-  #currentType = "Actor";
-
-  /** @type {string} */
-  #searchQuery = "";
-
-  /**@type { 1 | -1 } */
-  #sortDirection = TrashBin.SORT_DIRECTIONS.DESCENDING;
-
-  /** @type {Record<string, TrashStoreEntry[] | Promise<TrashStoreEntry[]>>} */
-  #trashStores = Object.fromEntries(
-    Object.keys(TrashBin.DOC_TYPES).map((type) => [type, []]),
-  );
-
-  /** @type {Promise<TrashStoreEntry[]>|TrashStoreEntry[]} */
-  #results = [];
-
-  /** @type {number} */
-  #resultIndex = -1;
-
-  /** @type {boolean} */
-  #renderThrottle = false;
-
-  #contentScroll = {};
-
-  /** @type {number|null} Store the timer ID for interval updates */
-  #timeUpdateInterval = null;
 
   /**
-   * Debounced search function.
-   * @type {Function}
+   * Retrieves the current active module socket instance.
+   * @type {object}
+   * @readonly
    */
-  _debouncedSearch = foundry.utils.debounce(
-    this._onSearchName.bind(this),
-    this.constructor.SEARCH_DELAY,
-  );
+  static get socket() {
+    const module = game.modules.get(MODULE_ID);
+    return module.socket;
+  }
 
   /**
-   * Debounced callback to recalculate scroll position for results.
-   * @type {Function}
+   * Unique identifier key used for socket event messaging.
+   * @type {string}
+   * @readonly
    */
-  _debouncedResizeResults = foundry.utils.debounce(() => {
-    const storeEl = this.element?.querySelector(".store-section");
-    if (storeEl) {
-      this._onScrollResults({ target: storeEl });
+  static get SOCKET_KEY() {
+    return `${MODULE_ID}.refreshTrashBinStore`;
+  }
+
+  /**
+   * The unique key used for the module application.
+   * @type {string}
+   * @readonly
+   */
+  static get KEY() {
+    return `${MODULE_ID}.TrashBin`;
+  }
+
+  /**
+   * Retrieves the active singleton application instance`.
+   * @type {TrashBin|undefined}
+   * @readonly
+   */
+  static get instance() {
+    return ui[TrashBin.KEY];
+  }
+
+  /* -------------------------------------------- */
+  /*  Static Setup & Event Listeners              */
+  /* -------------------------------------------- */
+
+  /**
+   * Registers socket listeners for cross-client store synchronization.
+   */
+  static _registerSocketListeners() {
+    this.socket.register(TrashBin.SOCKET_KEY, (socketData) => {
+      this._handleRemoteRefresh(socketData);
+    });
+  }
+
+  /**
+   * Handles remote socket updates triggered when another user mutates a trash store.
+   * @param {string} docType - The document type name sent via socket message.
+   * @protected
+   */
+  static _handleRemoteRefresh(docType) {
+    const instance = TrashBin.instance;
+    if (!instance) return;
+
+    const formattedType = docType.capitalize();
+    instance.#reloadFlag[formattedType] = true;
+
+    if (instance.rendered && instance.#currentType === formattedType) {
+      instance.render({ parts: ["store"] });
     }
-  }, 50);
-
-  /**
-   * Extracted document type names from cached store file paths.
-   */
-  get storeNames() {
-    if (!TrashBin.#isInitialized) TrashBin.getStorePaths();
-    return TrashBin.#storeNames;
   }
-
-  /**
-   * Mapping of tracked trash store entries by document type.
-   */
-  get trashStores() {
-    return this.#trashStores;
-  }
-
-  #gridSize = 100;
-
-  get _gridSize() {
-    const userFlag = game.user.getFlag(MODULE_ID, "tashBinGridSize");
-    return Number.isNumeric(userFlag) ? Number(userFlag) : this.#gridSize;
-  }
-
-  set _gridSize(val) {
-    this.#gridSize = val;
-  }
-
-  /* -------------------------------------------- */
-  /*  Initialization & Settings                   */
-  /* -------------------------------------------- */
 
   /**
    * Registers module configuration settings for retention management.
@@ -383,9 +322,107 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /* -------------------------------------------- */
+  /*  Instance Properties                         */
+  /* -------------------------------------------- */
+
+  /** @type {Record<string, boolean>} Internal flags indicating whether a document type store needs reloading */
+  #reloadFlag = Object.fromEntries(
+    Object.keys(TrashBin.DOC_TYPES).map((k) => [k, true]),
+  );
+
+  /** @type {string} Currently selected document type filter */
+  #currentType = "Actor";
+
+  /** @type {string} Active search string query filter */
+  #searchQuery = "";
+
+  /** @type { 1 | -1 } Active direction sorting multiplier */
+  #sortDirection = TrashBin.SORT_DIRECTIONS.DESCENDING;
+
+  /** @type {Record<string, TrashStoreEntry[] | Promise<TrashStoreEntry[]>>} Cached trash store lists by document type */
+  #trashStores = Object.fromEntries(
+    Object.keys(TrashBin.DOC_TYPES).map((type) => [type, []]),
+  );
+
+  /** @type {Promise<TrashStoreEntry[]>|TrashStoreEntry[]} Active filtered and sorted results array */
+  #results = [];
+
+  /** @type {number} Current index marker for batch rendering */
+  #resultIndex = -1;
+
+  /** @type {boolean} Throttle flag for scroll handling */
+  #renderThrottle = false;
+
+  /** @type {object} Scroll position cache */
+  #contentScroll = {};
+
+  /** @type {number|null} Store the timer ID for interval updates */
+  #timeUpdateInterval = null;
+
+  /** @type {number} Default item card size in pixels */
+  #gridSize = 100;
+
+  /**
+   * Debounced search function.
+   * @type {Function}
+   */
+  _debouncedSearch = foundry.utils.debounce(
+    this._onSearchName.bind(this),
+    this.constructor.SEARCH_DELAY,
+  );
+
+  /**
+   * Debounced callback to recalculate scroll position for results.
+   * @type {Function}
+   */
+  _debouncedResizeResults = foundry.utils.debounce(() => {
+    const storeEl = this.element?.querySelector(".store-section");
+    if (storeEl) {
+      this._onScrollResults({ target: storeEl });
+    }
+  }, 50);
+
+  /* -------------------------------------------- */
+  /*  Instance Getters & Setters                  */
+  /* -------------------------------------------- */
+
+  /**
+   * Extracted document type names from cached store file paths.
+   * @type {Set<string>}
+   * @readonly
+   */
+  get storeNames() {
+    if (!TrashBin.#isInitialized) TrashBin.getStorePaths();
+    return TrashBin.#storeNames;
+  }
+
+  /**
+   * Mapping of tracked trash store entries by document type.
+   * @type {Record<string, TrashStoreEntry[]|Promise<TrashStoreEntry[]>>}
+   * @readonly
+   */
+  get trashStores() {
+    return this.#trashStores;
+  }
+
+  /**
+   * Active grid icon size pulled from user settings flags or default fallback.
+   * @type {number}
+   */
+  get _gridSize() {
+    const userFlag = game.user.getFlag(MODULE_ID, "tashBinGridSize");
+    return Number.isNumeric(userFlag) ? Number(userFlag) : this.#gridSize;
+  }
+
+  set _gridSize(val) {
+    this.#gridSize = val;
+  }
+
+  /* -------------------------------------------- */
   /*  Application Lifecycle                       */
   /* -------------------------------------------- */
 
+  /**@inheritdoc */
   _replaceHTML(result, content, options) {
     const { scrollTop, scrollLeft } = content;
     Object.assign(this.#contentScroll, { scrollTop, scrollLeft });
@@ -430,6 +467,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     this._startTimeSinceInterval();
   }
 
+  /** @inheritDoc */
   _onClose(options = {}) {
     this._stopTimeSinceInterval();
     super._onClose(options);
@@ -458,24 +496,29 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /** @inheritDoc */
-  async _preparePartContext(partId, context, options) {
-    await super._preparePartContext(partId, context, options);
+  _attachPartListeners(partId, htmlElement, options) {
+    super._attachPartListeners(partId, htmlElement, options);
     if (partId === "store") {
-      return this._prepareStoreContext(context, options);
+      this._renderResults();
     }
-    return context;
   }
 
+  /* -------------------------------------------- */
+  /*  Results Rendering & Processing              */
+  /* -------------------------------------------- */
+
   /**
-   * Prepare store context and filter data by search query.
-   * @protected
+   * Fetches, filters, and sorts trash store entries for the active document type.
+   * @returns {Promise<void>}
    */
-  async _prepareStoreContext(context, options) {
+  async prepareStoresEntries() {
     const type = this.#currentType;
     if (this.#reloadFlag[type]) {
       this.#trashStores[type] = this.storeNames.has(type)
         ? TrashBin.loadTrashStore(type)
         : [];
+
+      this.#reloadFlag[type] = false;
     }
 
     let entries = await this.#trashStores[type];
@@ -494,21 +537,10 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     });
 
     this.#results = entries;
-    return context;
   }
-
-  /** @inheritDoc */
-  _attachPartListeners(partId, htmlElement, options) {
-    super._attachPartListeners(partId, htmlElement, options);
-    if (partId === "store") this._renderResults();
-  }
-
-  /* -------------------------------------------- */
-  /*  Results Rendering & Scroll Processing       */
-  /* -------------------------------------------- */
 
   /**
-   * Prepares render context data for a single entry.
+   * Prepares render context data for a single store entry item.
    * @param {TrashStoreEntry} entry
    * @returns {Promise<object>}
    * @protected
@@ -577,7 +609,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /**
-   * Process and render initial results or reset on fresh load.
+   * Process and render initial store list results or reset on fresh load.
    * @protected
    */
   async _renderResults() {
@@ -585,27 +617,32 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     const storeEl = this.element?.querySelector(
       '[data-application-part="store"]',
     );
+
     if (!storeEl) return;
 
-    const itemList = storeEl.querySelector(".bin-list, .item-list");
+    const itemList = storeEl.querySelector(".bin-list");
     if (itemList) itemList.replaceChildren();
 
     const loadingEl = this.element.querySelector(".store-loading");
     if (loadingEl) loadingEl.hidden = false;
 
-    this.#results = await this.#results;
+    const emptyEl = this.element.querySelector(".store-empty");
+    if (emptyEl) emptyEl.hidden = true;
+
+    await this.prepareStoresEntries();
 
     if (loadingEl) loadingEl.hidden = true;
+    if (emptyEl) emptyEl.hidden = this.#results.length > 0;
 
     const scrollContainer = this.element.querySelector(".store-section");
     if (scrollContainer) {
-      Object.assign(scrollContainer, this.#contentScroll);
       await this._onScrollResults({ target: scrollContainer });
     }
   }
 
   /**
-   * Handles batching results when the user scrolls near the bottom of the container.
+   * Handles batching entries into DOM nodes when the user scrolls near the bottom of the container.
+   * @param {Event|HTMLElement} event - The DOM scroll event or scrollable HTML container element.
    * @protected
    */
   async _onScrollResults(event) {
@@ -660,6 +697,37 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     this.#renderThrottle = false;
   }
 
+  /* -------------------------------------------- */
+  /*  Event Handlers & UI Updates                 */
+  /* -------------------------------------------- */
+
+  /**
+   * Debounced callback to update search input.
+   * @param {Event} event - Input keyboard or search event.
+   * @protected
+   */
+  _onSearchName(event) {
+    if (!event.target.matches('input[type="search"]')) return;
+    this.#searchQuery = event.target.value;
+    this.render({ parts: ["store"] });
+  }
+
+  /**
+   * Event handler for grid size range slider changes.
+   * @param {Event} event - HTML range input event.
+   */
+  onSliderChange(event) {
+    const val = Number(event.target.value ?? 0);
+    this._gridSize = val;
+
+    this.updateGridSizeCSS();
+    game.user.setFlag(MODULE_ID, "tashBinGridSize", val);
+    this._debouncedResizeResults();
+  }
+
+  /**
+   * Updates CSS custom properties on the container element to adjust grid item rendering width.
+   */
   updateGridSizeCSS() {
     this.element.style.setProperty("--grid-size", `${this._gridSize + 140}px`);
   }
@@ -709,27 +777,8 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /* -------------------------------------------- */
-  /*  Event Handlers & Actions                     */
+  /*  Private Application Actions                 */
   /* -------------------------------------------- */
-
-  /**
-   * Debounced callback to update search input.
-   * @protected
-   */
-  _onSearchName(event) {
-    if (!event.target.matches('input[type="search"]')) return;
-    this.#searchQuery = event.target.value;
-    this.render({ parts: ["store"] });
-  }
-
-  onSliderChange(event) {
-    const val = Number(event.target.value ?? 0);
-    this._gridSize = val;
-
-    this.updateGridSizeCSS();
-    game.user.setFlag(MODULE_ID, "tashBinGridSize", val);
-    this._debouncedResizeResults();
-  }
 
   /**
    * Action handler to switch visible document type tab.
@@ -739,10 +788,16 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   static #selectDocType(_, target) {
     this.#currentType = target.dataset.docType.capitalize() ?? "Actor";
     this.#searchQuery = "";
+    this.#resultIndex = 0;
+    this.#results = [];
+
+    const storeSection = this.element?.querySelector(".store-section");
+    if (storeSection) storeSection.scrollTop = 0;
     this.render({ parts: ["header", "store"] });
   }
 
   /**
+   * Action handler to preview or open a read-only sheet for a deleted entry.
    * @type {ApplicationClickAction}
    * @this {TrashBin}
    */
@@ -895,12 +950,13 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /**
+   * Action handler to toggle the entry sorting order (ascending / descending).
    * @type {ApplicationClickAction}
    * @this {TrashBin}
    */
   static async #onToggleSort(_, target) {
     this.#sortDirection = this.#sortDirection * -1;
-    
+
     target.querySelector("i").className =
       this.#sortDirection === TrashBin.SORT_DIRECTIONS.ASCENDING
         ? "fa-solid fa-arrow-down-wide-short"
@@ -908,9 +964,8 @@ export default class TrashBin extends HandlebarsApplicationMixin(
 
     this.render({ parts: ["store"] });
   }
-
   /* -------------------------------------------- */
-  /*  Document Interception & Maintenance          */
+  /*  Document Interception Hooks                 */
   /* -------------------------------------------- */
 
   /**

@@ -24,6 +24,16 @@ export function toCamelCase(str) {
 }
 
 /**
+ * Delays execution for a specified duration.
+ *
+ * @param {number} ms - The number of milliseconds to wait.
+ * @returns {Promise<void>} A promise that resolves after the specified delay.
+ */
+export function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * Retrieves the donation membership levels formatted for schema fields.
  * * @returns {{k: string, label: string}[] | null}
  */
@@ -99,7 +109,9 @@ export function hasDocumentsInFolder(folder) {
  * @returns {Folder[]}
  */
 export function getSubfoldersInCompenidum(folder) {
-  return folder.compendium.folders.filter(f => f.ancestors.some(f => f.id === folder.id));
+  return folder.compendium.folders.filter((f) =>
+    f.ancestors.some((f) => f.id === folder.id),
+  );
 }
 
 /**
@@ -114,16 +126,16 @@ export function formatIdentifier(identifier) {
 
 /**
  * Wait for a CSS transition to complete on an element.
- * @param {HTMLElement} element 
+ * @param {HTMLElement} element
  * @returns {Promise<void>}
  */
-export function waitForTransition(element){
-  return new Promise(resolve => {
+export function waitForTransition(element) {
+  return new Promise((resolve) => {
     const onEnd = () => {
       element.removeEventListener("transitionend", onEnd);
       resolve();
     };
     element.addEventListener("transitionend", onEnd);
-        setTimeout(resolve, 500); 
+    setTimeout(resolve, 500);
   });
 }
