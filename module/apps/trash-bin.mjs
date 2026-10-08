@@ -199,6 +199,12 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   /** @type {Promise<Set<string>>|null} Promise lock to prevent concurrent redundant fetches */
   static #initPromise = null;
 
+  /**
+   * Queue mapping for save operations per document type to avoid race conditions.
+   * @type {Map<string, { isSaving: boolean, pendingMutators: Array<Function|TrashStoreEntry[]> }>}
+   */
+  static #saveQueue = new Map();
+
   /* -------------------------------------------- */
   /*  Static Getters                              */
   /* -------------------------------------------- */
@@ -839,10 +845,8 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   static async #onRestoreEntry(_, target) {
     const { entryId } = target.closest("[data-entry-id]")?.dataset ?? {};
     const entries = await this.#trashStores[this.#currentType];
-    const entryIndex = entries?.findIndex((e) => e.id === entryId);
-    if (entryIndex === -1 || entryIndex === undefined) return;
-
-    const entry = entries[entryIndex];
+    const entry = entries?.find((e) => e.id === entryId);
+    if (!entry) return;
 
     try {
       if (this.#currentType === "Compendium") {
@@ -904,8 +908,9 @@ export default class TrashBin extends HandlebarsApplicationMixin(
         await cls.create(entry.data, { keepId: true });
       }
 
-      entries.splice(entryIndex, 1);
-      await TrashBin.saveTrashStore(this.#currentType, entries);
+      await TrashBin.saveTrashStore(this.#currentType, (currentStore) => {
+        return currentStore.filter((e) => e.id !== entryId);
+      });
 
       ui.notifications.info(
         `Restored ${this.#currentType}: "${entry.name ?? entry.text}"`,
@@ -925,10 +930,8 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   static async #onDeleteEntry(_, target) {
     const { entryId } = target.closest("[data-entry-id]")?.dataset ?? {};
     const entries = await this.#trashStores[this.#currentType];
-    const entryIndex = entries?.findIndex((e) => e.id === entryId);
-    if (entryIndex === -1 || entryIndex === undefined) return;
-
-    const entry = entries[entryIndex];
+    const entry = entries?.find((e) => e.id === entryId);
+    if (!entry) return;
 
     const confirmed = await foundry.applications.api.DialogV2.confirm({
       window: { title: "Permanently Delete Document" },
@@ -942,9 +945,10 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       await TrashBin.deleteCompendiumContentStore(entry.id);
     }
 
-    entries.splice(entryIndex, 1);
-    await TrashBin.saveTrashStore(this.#currentType, entries);
-
+    await TrashBin.saveTrashStore(this.#currentType, (currentStore) => {
+      return currentStore.filter((e) => e.id !== entryId);
+    });
+    
     ui.notifications.info(`Permanently deleted "${entry.name}" from trash.`);
     this.render({ parts: ["store"] });
   }
@@ -979,9 +983,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     await TrashBin.getStorePaths();
 
     const now = Date.now();
-    const store = TrashBin.#storeNames.has(this.documentName)
-      ? await TrashBin.loadTrashStore(this.documentName)
-      : [];
+    const newEntries = [];
 
     for (const doc of documents) {
       const id = doc.id ?? doc._id;
@@ -990,7 +992,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
         continue;
       }
 
-      store.push({
+      newEntries.push({
         id,
         name: doc.name,
         uuid: doc.uuid,
@@ -1007,8 +1009,13 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       });
     }
 
+    if (!newEntries.length) return;
+
     const docType = this.documentName.capitalize();
-    await TrashBin.saveTrashStore(docType, store);
+
+    await TrashBin.saveTrashStore(docType, (currentStore) => {
+      return [...currentStore, ...newEntries];
+    });
     TrashBin.#storeNames.add(docType);
     TrashBin.instance.render({ parts: ["store"] });
   }
@@ -1040,19 +1047,18 @@ export default class TrashBin extends HandlebarsApplicationMixin(
       documents,
     });
 
-    const store = TrashBin.#storeNames.has("Compendium")
-      ? await TrashBin.loadTrashStore("Compendium")
-      : [];
-
-    store.push({
+    const newEntry = {
       id: this.collection,
       name: this.title ?? metadata.label,
       deletedAt: Date.now(),
       deletedBy: game.user.id,
       data: metadata,
+    };
+
+    await TrashBin.saveTrashStore("Compendium", (currentStore) => {
+      return [...currentStore, newEntry];
     });
 
-    await TrashBin.saveTrashStore("Compendium", store);
     TrashBin.#storeNames.add("Compendium");
 
     if (TrashBin.instance) {
@@ -1142,36 +1148,69 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /**
-   * Writes the updated array of documents for a document type to its persistent JSON file.
+   * Writes updated document entries for a document type to its persistent JSON file.
+   * Accepts either an array of entries or a mutation callback `(currentStore) => updatedStore`.
+   * Queues concurrent calls per document type to batch/merge writes safely.
+   *
    * @param {string} docType - The document type key to save.
-   * @param {TrashStoreEntry[]} store - The updated list of trash store entries.
+   * @param {TrashStoreEntry[] | ((currentStore: TrashStoreEntry[]) => TrashStoreEntry[])} storeOrMutator - The updated entries or mutation function.
    * @returns {Promise<void>}
    */
-  static async saveTrashStore(docType, store) {
-    const file = new File(
-      [JSON.stringify(store, null, 2)],
-      `${docType.capitalize()}.json`,
-      {
-        type: "application/json",
-      },
-    );
+  static async saveTrashStore(docType, storeOrMutator) {
+    const formattedType = docType.capitalize();
+
+    if (!this.#saveQueue.has(formattedType)) {
+      this.#saveQueue.set(formattedType, {
+        isSaving: false,
+        pendingMutators: [],
+      });
+    }
+
+    const queue = this.#saveQueue.get(formattedType);
+    queue.pendingMutators.push(storeOrMutator);
+
+    if (queue.isSaving) return;
+    queue.isSaving = true;
+
     try {
-      await FilePicker.uploadPersistent(
-        MODULE_ID,
-        "trash-store",
-        file,
-        {},
-        { notify: false },
-      );
-      TrashBin.socket.executeForOthers(
-        TrashBin.SOCKET_KEY,
-        docType.capitalize(),
-      );
-    } catch (err) {
-      console.error(
-        `${MODULE_ID} | Failed to upload JSON store for ${docType}:`,
-        err,
-      );
+      while (queue.pendingMutators.length > 0) {
+        const batch = queue.pendingMutators.splice(
+          0,
+          queue.pendingMutators.length,
+        );
+
+        let currentStore = await TrashBin.loadTrashStore(formattedType);
+
+        for (const mutator of batch) {
+          currentStore =
+            typeof mutator === "function" ? mutator(currentStore) : mutator;
+        }
+
+        const file = new File(
+          [JSON.stringify(currentStore, null, 2)],
+          `${formattedType}.json`,
+          { type: "application/json" },
+        );
+
+        try {
+          await FilePicker.uploadPersistent(
+            MODULE_ID,
+            "trash-store",
+            file,
+            {},
+            { notify: false },
+          );
+
+          TrashBin.socket.executeForOthers(TrashBin.SOCKET_KEY, formattedType);
+        } catch (err) {
+          console.error(
+            `${MODULE_ID} | Failed to upload JSON store for ${formattedType}:`,
+            err,
+          );
+        }
+      }
+    } finally {
+      queue.isSaving = false;
     }
   }
 
