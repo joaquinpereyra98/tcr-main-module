@@ -466,8 +466,12 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     }
 
     /**@type {HTMLInputElement} */
-    const rangeInput = this.element.querySelector(".size-range-picker");
-    rangeInput.addEventListener("input", this.onSliderChange.bind(this));
+    const rangeInput = this.element.querySelector(
+      ".size-range-picker > input[type=range]",
+    );
+    if (rangeInput) {
+      rangeInput.addEventListener("input", this.onSliderChange.bind(this));
+    }
     this.updateGridSizeCSS();
 
     this._startTimeSinceInterval();
@@ -719,6 +723,14 @@ export default class TrashBin extends HandlebarsApplicationMixin(
   }
 
   /**
+   * Debounced function to save the grid size flag to avoid write spam while dragging.
+   * @type {Function}
+   */
+  _debouncedSaveGridSize = foundry.utils.debounce((val) => {
+    game.user.setFlag(MODULE_ID, "tashBinGridSize", val);
+  }, 100);
+
+  /**
    * Event handler for grid size range slider changes.
    * @param {Event} event - HTML range input event.
    */
@@ -726,16 +738,15 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     const val = Number(event.target.value ?? 0);
     this._gridSize = val;
 
-    this.updateGridSizeCSS();
-    game.user.setFlag(MODULE_ID, "tashBinGridSize", val);
-    this._debouncedResizeResults();
+    this.updateGridSizeCSS(val);
+    this._debouncedSaveGridSize(val);
   }
 
   /**
    * Updates CSS custom properties on the container element to adjust grid item rendering width.
    */
-  updateGridSizeCSS() {
-    this.element.style.setProperty("--grid-size", `${this._gridSize + 140}px`);
+  updateGridSizeCSS(val = this._gridSize) {
+    this.element.style.setProperty("--grid-size", `${val + 140}px`);
   }
 
   /* -------------------------------------------- */
@@ -948,7 +959,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
     await TrashBin.saveTrashStore(this.#currentType, (currentStore) => {
       return currentStore.filter((e) => e.id !== entryId);
     });
-    
+
     ui.notifications.info(`Permanently deleted "${entry.name}" from trash.`);
     this.render({ parts: ["store"] });
   }
@@ -1312,7 +1323,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
         TrashBin.#storeNames.add(docType);
         storeChanged = true;
 
-        socket?.executeForOthers("refreshTrashBinStore", docType);
+        TrashBin.socket?.executeForOthers("refreshTrashBinStore", docType);
       }
     }
 
