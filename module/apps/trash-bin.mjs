@@ -416,7 +416,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    * @type {number}
    */
   get _gridSize() {
-    const userFlag = game.user.getFlag(MODULE_ID, "tashBinGridSize");
+    const userFlag = game.user.getFlag(MODULE_ID, "trashBinGridSize");
     return Number.isNumeric(userFlag) ? Number(userFlag) : this.#gridSize;
   }
 
@@ -727,7 +727,7 @@ export default class TrashBin extends HandlebarsApplicationMixin(
    * @type {Function}
    */
   _debouncedSaveGridSize = foundry.utils.debounce((val) => {
-    game.user.setFlag(MODULE_ID, "tashBinGridSize", val);
+    game.user.setFlag(MODULE_ID, "trashBinGridSize", val);
   }, 100);
 
   /**

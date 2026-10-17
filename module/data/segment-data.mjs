@@ -35,6 +35,27 @@ export default class SegmentData extends foundry.abstract.DataModel {
           label: "Z-Index",
           initial: 0,
         }),
+        shadowColor: new f.ColorField({
+          initial: "#000000",
+          nullable: true,
+          label: "Shadow Color",
+        }),
+        shadowOpacity: new f.NumberField({
+          min: 0,
+          max: 1,
+          step: 0.1,
+          initial: 0.5,
+          nullable: false,
+          required: true,
+          label: "Shadow Opacity",
+        }),
+        shadowSize: new f.NumberField({
+          label: "Shadow Size",
+          initial: 20,
+          min: 0,
+          max: 20,
+          step: 1,
+        }),
       }),
 
       geometry: new f.SchemaField({
@@ -171,6 +192,12 @@ export default class SegmentData extends foundry.abstract.DataModel {
     if (display.textColor) styles.push(`color: ${display.textColor}`);
     if (display.textSize) styles.push(`--font-size: ${display.textSize}`);
     if (display.zIndex) styles.push(`--zIndex: ${display.zIndex}`);
+    if (display.shadowColor) {
+      const shadowColor = display.shadowColor.toRGBA(display.shadowOpacity);
+      styles.push(`--shadowColor: ${shadowColor}`);
+    }
+    if (display.shadowSize)
+      styles.push(`--shadowSize: ${display.shadowSize}px`);
 
     // --- Content Background ---
     if (content.src) {
@@ -200,7 +227,8 @@ export default class SegmentData extends foundry.abstract.DataModel {
    * @type {boolean}
    */
   get isClickable() {
-    return !!(this.actions.click || this.actions.contextMenu);
+    const { docContextMenu, docClick, contextMenu, click } = this.actions;
+    return !!(docContextMenu || docClick || click || contextMenu);
   }
 
   /**
@@ -214,7 +242,7 @@ export default class SegmentData extends foundry.abstract.DataModel {
     if (isContext && !game.user.isGM) return;
 
     const { docContextMenu, docClick, contextMenu, click } = this.actions;
-    
+
     try {
       const uuid = isContext ? docContextMenu : docClick;
       if (uuid) {

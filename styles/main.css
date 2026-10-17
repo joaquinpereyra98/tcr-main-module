@@ -691,9 +691,7 @@
         border: var(--border-width, 0px) solid var(--wow-panel-border);
         z-index: var(--zIndex);
         border-radius: 4px;
-        box-shadow:
-          0 0 20px var(--hud-black-05),
-          var(--wow-glow);
+        box-shadow: 0 0 var(--shadowSize) var(--shadowColor);
         transition:
           transform 300ms ease,
           box-shadow 300ms ease,
@@ -703,24 +701,20 @@
         container-type: size;
 
         &::before {
-          margin: 5px;
-          pointer-events: none;
           content: "";
           position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          inset: 5px;
+          z-index: -1;
+          pointer-events: none;
           background-image: var(--bg-image, none);
           opacity: var(--bg-opacity, 1);
           background-size: var(--bg-size, auto auto);
           background-position: center;
           background-repeat: no-repeat;
-          z-index: -1;
           transition: opacity 300ms ease;
         }
 
-        .wrappler {
+        .wrapper {
           display: flex;
           align-items: center;
           justify-content: center;
@@ -731,9 +725,6 @@
 
         &:hover {
           border-color: var(--wow-gold-bright);
-          box-shadow:
-            0 10px 15px -3px var(--hud-black-03),
-            var(--wow-glow);
 
           &.clickable {
             cursor: pointer;
@@ -1792,8 +1783,7 @@
           padding: 10px;
           border-radius: 4px;
 
-          prose-mirror [data-action="image"],
-          prose-mirror .source-code-edit {
+          prose-mirror [data-action="image"] {
             display: none;
           }
         }
@@ -2005,7 +1995,7 @@
       justify-content: space-between;
       margin-bottom: 10px;
 
-      .time-mode-contianer {
+      .time-mode-container {
         display: flex;
         align-items: center;
         justify-content: center;

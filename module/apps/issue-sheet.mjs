@@ -13,6 +13,7 @@ const { ApplicationV2, HandlebarsApplicationMixin } = foundry.applications.api;
  * @import {ApplicationClickAction, ApplicationConfiguration, ApplicationFormSubmission} from "../../foundry/resources/app/client-esm/applications/_types.mjs";
  * @import ApplicationV2 from "../../foundry/resources/app/client-esm/applications/api/application.mjs";
  * @import {HandlebarsTemplatePart} from "../../foundry/resources/app/client-esm/applications/api/handlebars-application.mjs"
+ * @import {HTMLProseMirrorElement} from "../../foundry/resources/app/client-esm/applications/elements/_module.mjs"
  */
 
 /**
@@ -141,6 +142,7 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
    */
   _addProsemirrorListener(element) {
     if (!this.isEditable) return;
+    /**@type {NodeListOf<HTMLProseMirrorElement} */
     const prosemirrors = element.querySelectorAll("prose-mirror");
 
     prosemirrors.forEach((el) => {
@@ -171,16 +173,15 @@ export default class IssueSheet extends HandlebarsApplicationMixin(
           }
         }
       });
-
-      el.addEventListener("change", async (ev) => {
+      el.addEventListener("close", async (ev) => {
         const value = ev.target.value;
-        const enrichedHTML = await TextEditor.enrichHTML(value, {
-          links: true,
-        });
-        setTimeout(() => {
-          ev.target.querySelector("div.editor-content").innerHTML =
-            enrichedHTML;
-        }, 50);
+        const editorContent = ev.target.querySelector("div.editor-content");
+
+        if (editorContent) {
+          editorContent.innerHTML = await TextEditor.enrichHTML(value, {
+            links: true,
+          });
+        }
       });
     });
   }
