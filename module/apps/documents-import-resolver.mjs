@@ -1,5 +1,6 @@
 import { MODULE_ID } from "../constants.mjs";
-import { delay, getSubfoldersInCompenidum } from "../utils.mjs";
+import TCRPackManager from "../pack-manager/pack-manager.mjs";
+import FolderDropWorkflow from "./workflows/folders-drop-workflows.mjs";
 
 const { HandlebarsApplicationMixin: HAM, ApplicationV2 } =
   foundry.applications.api;
@@ -851,325 +852,43 @@ export default class TCRDocumentsImportResolver extends HAM(ApplicationV2) {
     closestFolderId,
     sortData,
   ) {
-    const collection = this.collection;
     if (!game.user.isGM) return callOriginal(folder, closestFolderId, sortData);
 
-    if (collection instanceof CompendiumCollection) {
-      return TCRDocumentsImportResolver._handleDroppedForeignFolderInCompenidum.call(
-        this,
-        folder,
-        closestFolderId,
-      );
-    }
-
-    const targetFolder = collection.folders.get(closestFolderId);
-
-    let { foldersToCreate, documentsToCreate } =
-      await this._organizeDroppedFoldersAndDocuments(folder, targetFolder);
-
-    if (!foldersToCreate.length && !documentsToCreate.length) return null;
-
-    let createdFolders = [];
-    try {
-      createdFolders = await Folder.createDocuments(foldersToCreate, {
-        keepId: true,
-      });
-    } catch (err) {
-      ui.notifications.error(err.message);
-      throw err;
-    }
-
-    const targetFolderId = closestFolderId ?? createdFolders[0]?.id ?? null;
-
-    const processedSourceDocs =
-      await TCRDocumentsImportResolver._processDocumentsInBatches(
-        documentsToCreate,
-        targetFolderId,
-        collection,
-        folder.compendium ?? null,
-      );
-
-    if (processedSourceDocs.length && folder.pack) {
-      await TCRDocumentsImportResolver.#deleteSourceDocuments.call(
-        this,
-        processedSourceDocs,
-      );
-
-      await TCRDocumentsImportResolver.#deleteSourceFolders(
-        folder,
-        processedSourceDocs,
-      );
-    }
-
-    return {
-      sortNeeded: true,
-      folder: createdFolders.length ? createdFolders[0] : folder,
-    };
-  }
-
-  /**
-   * @param {Folder} folder - The Folder being dropped
-   * @param {string} closestFolderId - Target parent folder ID
-   * @returns {Promise<{folder: Folder|null, sortNeeded: boolean}>}
-   * @this {Compendium}
-   */
-  static async _handleDroppedForeignFolderInCompenidum(
-    folder,
-    closestFolderId,
-  ) {
-    const collection = this.collection;
     const isFromCompendium = !!folder.pack;
-    let processedSourceDocs = [];
+    const isToCompendium = this.collection instanceof CompendiumCollection;
+    const playersFolder = TCRPackManager._unpackingFolder;
 
-    const targetFolderId =
-      closestFolderId ??
-      (await TCRDocumentsImportResolver.getOrCreateUnsortedFolder(collection))
-        .id;
-
-    let createdFolder = null;
-
-    if (isFromCompendium) {
-      /* ---------------------- From Compendium to Compendium --------------------- */
-      const { foldersToCreate, documentsToCreate } =
-        await this._organizeDroppedFoldersAndDocuments(
-          folder,
-          collection.folders.get(targetFolderId),
-        );
-
-      if (!foldersToCreate.length && !documentsToCreate.length) return null;
-
-      if (foldersToCreate.length) {
-        const createdFolders = await Folder.createDocuments(foldersToCreate, {
-          pack: collection.collection,
-          keepId: true,
-        });
-
-        createdFolder =
-          createdFolders[0] ?? collection.folders.get(targetFolderId) ?? null;
-      }
-
-      processedSourceDocs =
-        await TCRDocumentsImportResolver._processDocumentsInBatches(
-          documentsToCreate,
-          targetFolderId,
-          collection,
-          folder.compendium,
-        );
-    } else {
-      /* ---------------------- From Directory to Compendium ---------------------- */
-
-      const flattenFolder = (node) => [
-        ...(node.contents || []).map((doc) =>
-          doc.toObject ? doc.toObject() : foundry.utils.deepClone(doc),
-        ),
-        ...(node.children || []).flatMap(flattenFolder),
-      ];
-
-      const rawDocuments = flattenFolder(folder);
-      if (!rawDocuments.length) return null;
-
-      processedSourceDocs =
-        await TCRDocumentsImportResolver._processDocumentsInBatches(
-          rawDocuments,
-          targetFolderId,
-          collection,
-          null,
-        );
-    }
-
-    if (processedSourceDocs.length) {
-      await TCRDocumentsImportResolver.#deleteSourceDocuments.call(
-        this,
-        processedSourceDocs,
-      );
-
-      await TCRDocumentsImportResolver.#deleteSourceFolders(
-        folder,
-        processedSourceDocs,
-      );
-    }
-
-    return {
-      folder: createdFolder ?? collection.folders.get(targetFolderId) ?? null,
-      sortNeeded: isFromCompendium,
-    };
-  }
-
-  /**
-   * Process a list of raw document data objects in batches to optimize network calls and UI response time.
-   * @param {Array<Object>} rawDocuments Array of document data objects or Document instances.
-   * @param {string} targetFolderId Default target folder ID.
-   * @param {CompendiumCollection} targetCollection Target compendium collection.
-   * @param {CompendiumCollection|null} fromCompendium Whether source items originate from a compendium.
-   * @returns {Promise<Array<Document>>} Array of processed source documents.
-   */
-  static async _processDocumentsInBatches(
-    rawDocuments,
-    targetFolderId,
-    targetCollection,
-    fromCompendium = null,
-  ) {
-    const documentClass = targetCollection.documentClass;
-    const isItem = targetCollection.documentName === "Item";
-    const isScene = targetCollection.documentName === "Scene";
-    const CHUNK_SIZE = 50;
-    const processedSourceDocs = [];
-    const isFromCompendium = !!fromCompendium;
-    const totalDocs = rawDocuments.length;
-
-    /**@type {Collection<string,any>|Null} */
-    let cachedIndex = null;
-    if (targetCollection instanceof CompendiumCollection) {
-      const fields = isScene
-        ? ["background.src"]
-        : isItem
-          ? ["system.container"]
-          : [];
-      cachedIndex = await targetCollection.getIndex({ fields });
-    }
-    const labelPlural = game.i18n.format(documentClass.metadata.labelPlural);
-    const label = `Importing ${labelPlural} Documents...`;
-    SceneNavigation.displayProgressBar({
-      label,
-      pct: 0,
+    const packingCompendium = await TCRPackManager._getCompendium({
+      unlock: false,
     });
 
-    try {
-      for (let i = 0; i < rawDocuments.length; i += CHUNK_SIZE) {
-        const chunk = rawDocuments.slice(i, i + CHUNK_SIZE);
-        const batchToCreate = [];
-        const batchSourceDocs = [];
-
-        for (let docData of chunk) {
-          // Hydrate from compendium if needed
-          if (isFromCompendium && !docData.toObject) {
-            const doc = await fromCompendium.getDocument(docData._id);
-            if (doc) docData = doc.toObject();
-          }
-
-          const sourceDoc =
-            docData instanceof documentClass
-              ? docData
-              : new documentClass(
-                  docData,
-                  isFromCompendium ? { pack: fromCompendium.collection } : {},
-                );
-
-          const folderId = docData.folder || targetFolderId;
-
-          const resolution =
-            await TCRDocumentsImportResolver._resolveDroppedEntry(
-              targetCollection,
-              sourceDoc,
-              folderId,
-              cachedIndex,
-            );
-
-          if (!resolution) continue;
-
-          const { resolvedEntry, targetFolderId: finalFolderId } = resolution;
-          let toCreate = [];
-
-          const contents = await sourceDoc.system?.contents;
-
-          if (isItem && contents?.size) {
-            toCreate = await CONFIG.Item.documentClass.createWithContents(
-              [sourceDoc],
-              { transformAll: (item) => item.toCompendium(item) },
-            );
-
-            const resolvedData = resolvedEntry.toCompendium(resolvedEntry);
-            const rootIndex =
-              toCreate.findIndex((d) => d._id === sourceDoc.id) ?? 0;
-
-            if (rootIndex !== -1) {
-              toCreate[rootIndex] = foundry.utils.mergeObject(
-                toCreate[rootIndex],
-                resolvedData,
-              );
-              toCreate[rootIndex]._id = resolvedEntry._id;
-            }
-          } else {
-            toCreate = [resolvedEntry.toCompendium(resolvedEntry)];
-          }
-
-          if (finalFolderId) {
-            toCreate.forEach((d) => (d.folder = finalFolderId));
-          }
-
-          batchToCreate.push(...toCreate);
-          batchSourceDocs.push(sourceDoc);
-        }
-        // Execute bulk creation for current chunk
-        if (batchToCreate.length) {
-          const createdDocs = await documentClass.createDocuments(
-            batchToCreate,
-            {
-              pack: targetCollection.collection,
-              keepId: true,
-            },
-          );
-
-          if (createdDocs.length) {
-            processedSourceDocs.push(...batchSourceDocs);
-          }
-        }
-
-        const progressPct = Math.min(
-          Math.round(((i + chunk.length) / totalDocs) * 100),
-          100,
-        );
-        SceneNavigation.displayProgressBar({ label, pct: progressPct });
-
-        await delay(5);
-      }
-    } finally {
-      SceneNavigation.displayProgressBar({ label, pct: 100 });
+    if (
+      playersFolder &&
+      folder.folder === playersFolder &&
+      !isFromCompendium &&
+      isToCompendium &&
+      this.collection === packingCompendium
+    ) {
+      return await TCRPackManager.packUserFolder(folder.name);
     }
 
-    return processedSourceDocs;
-  }
+    if (
+      isFromCompendium &&
+      !isToCompendium &&
+      this.collection instanceof Actors &&
+      folder.compendium === packingCompendium &&
+      game.users.getName(folder.name)
+    ) {
+      return await TCRPackManager.unpackUserFolder(folder.name, true);
+    }
 
-  /**
-   * Helper to clean up empty source folders after moving documents.
-   * @param {Folder} rootFolder - The root folder being dropped
-   * @param {Document[]} movedDocuments - Array of documents successfully imported
-   */
-  static async #deleteSourceFolders(rootFolder, movedDocuments) {
-    const subfolders = rootFolder.pack
-      ? getSubfoldersInCompenidum(rootFolder)
-      : rootFolder.getSubfolders(true);
-    const allFolders = [rootFolder, ...subfolders].sort(
-      (a, b) => (b.ancestors?.length ?? 0) - (a.ancestors?.length ?? 0),
+    const WorkflowClass = FolderDropWorkflow.getWorkflow(
+      isFromCompendium,
+      isToCompendium,
     );
+    if (!WorkflowClass) return callOriginal(folder, closestFolderId, sortData);
 
-    const movedDocIds = new Set(movedDocuments.map((d) => d._id ?? d.id));
-    const foldersToDelete = [];
-
-    for (const f of allFolders) {
-      const remainingContents =
-        f.contents?.filter((c) => !movedDocIds.has(c._id ?? c.id)) ?? [];
-
-      const remainingSubfolders =
-        f.children?.filter(
-          (child) =>
-            !foldersToDelete.includes(child?.folder?._id ?? child?._id),
-        ) ?? [];
-
-      if (!remainingContents.length && !remainingSubfolders.length) {
-        foldersToDelete.push(f._id);
-      }
-    }
-
-    if (foldersToDelete.length) {
-      try {
-        await CONFIG.Folder.documentClass.deleteDocuments(foldersToDelete, {
-          pack: rootFolder.pack,
-        });
-      } catch (err) {
-        console.error("Failed to delete source folders:", err);
-      }
-    }
+    return await new WorkflowClass(this, folder, closestFolderId).execute();
   }
 
   /**

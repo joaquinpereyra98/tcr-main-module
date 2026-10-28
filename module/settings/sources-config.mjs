@@ -44,8 +44,8 @@ export default class SourcesConfig extends HandlebarsApplicationMixin(
       handler: SourcesConfig.#onSubmit,
     },
     actions: {
-      addCompenidum: SourcesConfig.#onAddCompenidum,
-      removeCompendium: SourcesConfig.#onRemoveCompenidum,
+      addCompendium: SourcesConfig.#onAddCompendium,
+      removeCompendium: SourcesConfig.#onRemoveCompendium,
     },
   };
 
@@ -192,7 +192,7 @@ export default class SourcesConfig extends HandlebarsApplicationMixin(
    * @this SourcesConfig
    * @type {ApplicationClickAction}
    */
-  static #onAddCompenidum(_event, target) {
+  static #onAddCompendium(_event, target) {
     const select = target
       .closest(".add-row")
       ?.querySelector("select.new-sources");
@@ -209,7 +209,7 @@ export default class SourcesConfig extends HandlebarsApplicationMixin(
    * @this SourcesConfig
    * @type {ApplicationClickAction}
    */
-  static #onRemoveCompenidum(_event, target) {
+  static #onRemoveCompendium(_event, target) {
     const key = target.closest("[data-key]")?.dataset.key;
     delete this.#sources[key];
     this.render();

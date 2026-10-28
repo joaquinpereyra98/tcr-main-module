@@ -119,7 +119,7 @@ export default class TCRPackManager {
    * @param {boolean} [options.unlock=false] -unlock the compendium if it is locked.
    * @returns {Promise<CompendiumCollection|undefined>}
    */
-  static async #getCompendium({ unlock = false } = {}) {
+  static async _getCompendium({ unlock = false } = {}) {
     const key = game.settings.get(MODULE_ID, SETTINGS.PACKING_COMPENDIUM);
     const pack = game.packs.get(key);
     if (!pack) {
@@ -316,7 +316,7 @@ export default class TCRPackManager {
 
         if (actorsToDelete.size) {
           for (const id of actorsToDelete) TrashBin.ignore.add(id);
-          
+
           await Actor.deleteDocuments(Array.from(actorsToDelete));
         }
       }, items);
@@ -589,7 +589,7 @@ export default class TCRPackManager {
     console.log("TCR PackManager | Initializing GM Auto-Packing check...");
 
     try {
-      const pack = await this.#getCompendium({ unlock: true });
+      const pack = await this._getCompendium({ unlock: true });
 
       if (!pack)
         return void console.warn(
@@ -667,7 +667,7 @@ export default class TCRPackManager {
       );
 
     try {
-      const pack = await this.#getCompendium({ unlock: true });
+      const pack = await this._getCompendium({ unlock: true });
       if (!pack)
         return void console.warn(
           "TCR PackManager | Could not open compendium. Aborting.",
@@ -726,7 +726,7 @@ export default class TCRPackManager {
       );
 
     try {
-      const pack = await this.#getCompendium({ unlock: true });
+      const pack = await this._getCompendium({ unlock: true });
       if (!pack)
         return void console.warn(
           "TCR PackManager | Could not open compendium. Aborting.",
@@ -774,7 +774,7 @@ export default class TCRPackManager {
       );
     }
 
-    const pack = await this.#getCompendium();
+    const pack = await this._getCompendium();
     if (!pack) {
       return void console.warn(
         "TCR PackManager | Could not open compendium. Aborting unpacking process.",

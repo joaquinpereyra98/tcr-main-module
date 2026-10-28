@@ -4,7 +4,7 @@ import {
   formatIdentifier,
   getAllRankFolderNames,
   getRankFolderNames,
-  getSubfoldersInCompenidum,
+  getSubfoldersInCompendium,
   hasDocumentsInFolder,
 } from "../utils.mjs";
 
@@ -219,7 +219,7 @@ export default class CompendiumBrowser extends HandlebarsApplicationMixin(
 
           return isUnauthorizedRank || isRestrictedGMFolder;
         })
-        .flatMap((f) => [f, ...getSubfoldersInCompenidum(f)].map((f) => f.id)),
+        .flatMap((f) => [f, ...getSubfoldersInCompendium(f)].map((f) => f.id)),
     );
 
     return restrictedRankFolderIds;
